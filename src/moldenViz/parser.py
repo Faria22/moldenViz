@@ -39,9 +39,9 @@ class GaussianPrimitive:
 
 
 class GtoShell:
-    def __init__(self, atom: 'Atom', lval: int, prims: list[GaussianPrimitive]) -> None:
+    def __init__(self, atom: 'Atom', l: int, prims: list[GaussianPrimitive]) -> None:
         self.atom = atom
-        self.lval = lval
+        self.l = l
         self.prims = prims
         self.norm = 0
 
@@ -49,7 +49,7 @@ class GtoShell:
         # See (Jiyun Kuang and C D Lin 1997 J. Phys. B: At. Mol. Opt. Phys. 30 2529)
         # equation 18 and 20 for the normalization factor
         for prim in self.prims:
-            prim.normalize(self.lval)
+            prim.normalize(self.l)
 
         overlap = 0.0
         for i_prim in self.prims:
@@ -57,7 +57,7 @@ class GtoShell:
                 overlap += (
                     i_prim.coeff
                     * j_prim.coeff
-                    * (2 * np.sqrt(i_prim.exp * j_prim.exp) / i_prim.exp + j_prim.exp) ** (self.lval + 1.5)
+                    * (2 * np.sqrt(i_prim.exp * j_prim.exp) / i_prim.exp + j_prim.exp) ** (self.l + 1.5)
                 )
 
         self.norm = 1 / overlap
@@ -188,7 +188,7 @@ class Parser:
         """
         logger.info('Parsing MO coefficients...')
 
-        num_shell_funcs = sum(2 * shell.lval + 1 for shell in self.gto_shells)
+        num_shell_funcs = sum(2 * shell.l + 1 for shell in self.gto_shells)
         order = self.shell_func_order()
 
         lines = self.molden_lines[self.mo_ind + 1 :]
@@ -237,7 +237,7 @@ class Parser:
         order = []
         ind = 0
         for shell in self.gto_shells:
-            l = shell.lval
+            l = shell.l
             if l == 1:
                 order.extend([ind + 1, ind + 2, ind])
             else:
