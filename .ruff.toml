@@ -1,0 +1,43 @@
+preview = true
+builtins = ['reveal_type']
+line-length = 120
+
+[format]
+quote-style = "single"
+skip-magic-trailing-comma = false
+
+[lint.flake8-quotes]
+inline-quotes = "single"
+
+[lint]
+select = ["ALL"]
+fixable = ["ALL"]
+ignore = [
+    "E251",
+    "FURB140",
+    "ANN002",
+    "ANN003",
+    "ANN401",
+    "RUF012",
+    "TRY400",
+    "PLR0904",
+    "PLR0911",
+    "PLR0912",
+    "PLR0913",
+    "PLR0914",
+    "PLR0915",
+    "PLR0917",
+    "PLR1702",
+    "PLW1514",
+    "C901",
+    "CPY001",
+    "TC006",
+    "TRY003",
+    "INP001",
+    "EM",
+    "S",
+    "FBT",
+    "TD",
+    "FIX",
+    "FA",
+]

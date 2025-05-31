@@ -49,10 +49,3 @@ tests = ["tests", "*/moldenViz/tests"]
 
 [tool.coverage.report]
 exclude_lines = ["no cov", "if __name__ == .__main__.:", "if TYPE_CHECKING:"]
-
-[tool.ruff]
-line-length = 120
-lint.flake8-quotes.inline-quotes = "single"
-lint.ignore = ["E741"]
-format.quote-style = "single"
-format.skip-magic-trailing-comma = false
