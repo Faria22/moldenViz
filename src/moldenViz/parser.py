@@ -109,8 +109,8 @@ class Parser:
         if not any('[MO]' in line for line in self.molden_lines):
             raise ValueError("No '[MO]' section found in the molden file.")
 
-        if not any(funcs in line for funcs in ['5D', '7F', '9G'] for line in self.molden_lines):
-            raise ValueError('Cartesian D, F, or G functions are not currently supported.')
+        if not any(orbs in line for orbs in ['5D', '7F', '9G'] for line in self.molden_lines):
+            raise ValueError('Cartesian D, F, or G orbitals are not currently supported.')
 
         logger.info('Molden format check passed.')
 
@@ -188,8 +188,8 @@ class Parser:
         """
         logger.info('Parsing MO coefficients...')
 
-        num_shell_funcs = sum(2 * shell.l + 1 for shell in self.gto_shells)
-        order = self.shell_func_order()
+        num_atomic_orbs = sum(2 * shell.l + 1 for shell in self.gto_shells)
+        order = self.atomic_orbs_order()
 
         lines = self.molden_lines[self.mo_ind + 1 :]
         num_mos = sum('Sym=' in line for line in lines)
@@ -208,7 +208,7 @@ class Parser:
                 next(lines)
 
             coeffs = []
-            for _ in range(num_shell_funcs):
+            for _ in range(num_atomic_orbs):
                 _, coeff = next(lines).split()
                 coeffs.append(float(coeff))
 
@@ -223,9 +223,9 @@ class Parser:
         logger.info('Parsed MO coefficients.')
         return mos
 
-    def shell_func_order(self) -> None:
+    def atomic_orbs_order(self) -> None:
         """
-        Return the order of the shell functions in the molden file.
+        Return the order of the atomic orbitals in the molden file.
 
         Molden defines the order of the orbitals as 0, 1, -1, 2, -2, ...
         We want it to be -l, -l + 1, ..., l - 1, l.
