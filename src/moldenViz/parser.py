@@ -1,6 +1,7 @@
+"""Read and parse a molden file."""
+
 import logging
 from dataclasses import dataclass
-
 from pathlib import Path
 from typing import Optional
 
@@ -12,20 +13,20 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class Atom:
+class _Atom:
     label: str
     atomic_number: int
     position: NDArray[np.float64]
 
 
-class MolecularOrbital:
-    def __init__(self, symmetry: str, energy: float, coeffs: NDArray[np.float64]) -> None:
-        self.symmetry = symmetry
-        self.energy = energy
-        self.coeffs = coeffs
+@dataclass
+class _MolecularOrbital:
+    symmetry: str
+    energy: float
+    coeffs: NDArray[np.float64]
 
 
-class GaussianPrimitive:
+class _GaussianPrimitive:
     def __init__(self, exp: float, coeff: float) -> None:
         self.exp = exp
         self.coeff = coeff
@@ -38,8 +39,8 @@ class GaussianPrimitive:
         self.norm = np.sqrt(2 * (2 * l) ** (l + 1.5) / gamma(l + 1.5))
 
 
-class GtoShell:
-    def __init__(self, atom: 'Atom', l: int, prims: list[GaussianPrimitive]) -> None:
+class _GtoShell:
+    def __init__(self, atom: '_Atom', l: int, prims: list[_GaussianPrimitive]) -> None:
         self.atom = atom
         self.l = l
         self.prims = prims
@@ -64,11 +65,24 @@ class GtoShell:
 
 
 class Parser:
+    """Parser for molden files."""
+
     def __init__(
         self,
         filename: Optional[str] = None,
         molden_lines: Optional[list[str]] = None,
     ) -> None:
+        """Initialize the Parser with either a filename or molden lines.
+
+        Args:
+            filename (Optional[str]): The path to the molden file.
+            molden_lines (Optional[list[str]]): A list of lines from a molden file.
+
+        Raises:
+            ValueError: If both 'filename' and 'molden_lines' are provided,
+                        or if neither is provided.
+
+        """
         if filename and molden_lines is not None:
             raise ValueError("Provide either 'filename' or 'molden_lines', not both.")
 
@@ -96,6 +110,13 @@ class Parser:
         self.mo_coeffs = self.get_mos()
 
     def check_molden_format(self) -> None:
+        """Check if the provided molden lines conform to the expected format.
+
+        Raises:
+            ValueError: If the molden lines do not contain the required sections
+                        or if they are in an unsupported format.
+
+        """
         logger.info('Checking molden format...')
         if not self.molden_lines:
             raise ValueError('The provided molden lines are empty.')
@@ -115,6 +136,15 @@ class Parser:
         logger.info('Molden format check passed.')
 
     def divide_molden_lines(self) -> tuple[int, int, int]:
+        """Divide the molden lines into sections for atoms, GTOs, and MOs.
+
+        Returns:
+            tuple[int, int, int]: Indices of the '[Atoms]', '[GTO]', and '[MO]' lines.
+
+        Raises:
+            ValueError: If the molden lines do not contain the required sections.
+
+        """
         logger.info('Dividing molden lines into sections...')
         if '[Atoms] AU' in self.molden_lines:
             atom_ind = self.molden_lines.index('[Atoms] AU')
@@ -130,7 +160,14 @@ class Parser:
         logger.info('Finished dividing molden lines.')
         return atom_ind, gto_ind, mo_ind
 
-    def get_atoms(self) -> list[Atom]:
+    def get_atoms(self) -> list[_Atom]:
+        """Parse the atoms from the molden file.
+
+        Returns:
+            list[Atom]: A list of Atom objects containing the label, atomic number,
+            and position for each atom.
+
+        """
         logger.info('Parsing atoms...')
         atoms = []
         for line in self.molden_lines[self.atom_ind + 1 : self.gto_ind]:
@@ -138,12 +175,23 @@ class Parser:
 
             position = np.array([float(coord) for coord in coords], dtype=np.float64)
 
-            atoms.append(Atom(label, int(atomic_number), position))
+            atoms.append(_Atom(label, int(atomic_number), position))
 
-        logger.info(f'Parsed {len(atoms)} atoms.')
+        logger.info('Parsed %s atoms.', len(atoms))
         return atoms
 
-    def get_gto_shells(self) -> list[GtoShell]:
+    def get_gto_shells(self) -> list[_GtoShell]:
+        """Parse the Gaussian-type orbitals (GTOs) from the molden file.
+
+        Returns:
+            list[GtoShell]: A list of GtoShell objects containing the atom, angular
+            momentum quantum number (l), and Gaussian primitives for each shell.
+
+        Raises:
+            ValueError: If the shell label is not supported or if the GTOs are not
+            formatted correctly in the molden file.
+
+        """
         logger.info('Parsing GTO lines...')
 
         shell_lables = ['s', 'p', 'd', 'f', 'g']
@@ -168,19 +216,18 @@ class Parser:
                 prims = []
                 for _ in range(int(number_of_primitives)):
                     exp, coeff = next(lines).split()
-                    prims.append(GaussianPrimitive(float(exp), float(coeff)))
+                    prims.append(_GaussianPrimitive(float(exp), float(coeff)))
 
-                gto_shell = GtoShell(atom, shell_lables.index(shell_label), prims)
+                gto_shell = _GtoShell(atom, shell_lables.index(shell_label), prims)
                 gto_shell.normalize()
 
                 gto_shells.append(gto_shell)
 
-        logger.info(f'Parsed {len(gto_shells)} GTO shells.')
+        logger.info('Parsed %s GTO shells.', len(gto_shells))
         return gto_shells
 
-    def get_mos(self, mo_list: Optional[list[int]] = None) -> list[MolecularOrbital]:
-        """
-        Parses the molecular orbitals (MOs) from the molden file.
+    def get_mos(self, mo_list: Optional[list[int]] = None) -> list[_MolecularOrbital]:
+        """Parse the molecular orbitals (MOs) from the molden file.
 
         Args:
             mo_list (Optional[list[int]]): A list of MO indices to parse. If None,
@@ -189,14 +236,18 @@ class Parser:
         Returns:
             list[MolecularOrbital]: A list of MolecularOrbital objects containing
             the symmetry, energy, and coefficients for each MO.
+
+        Raises:
+            ValueError: If the provided 'mo_list' is empty or if no MOs are found
+            in the molden file.
+
         """
         logger.info('Parsing MO coefficients...')
 
         num_atomic_orbs = sum(2 * shell.l + 1 for shell in self.gto_shells)
 
-        if mo_list is not None:
-            if not mo_list:
-                raise ValueError("The provided 'mo_list' is empty.")
+        if mo_list is not None and not mo_list:
+            raise ValueError("The provided 'mo_list' is empty.")
 
         order = self.atomic_orbs_order()
 
@@ -206,9 +257,8 @@ class Parser:
 
         mos = []
         for mo_ind in range(total_num_mos):
-            if mo_list:
-                if mo_ind not in mo_list:
-                    continue
+            if mo_list and mo_ind not in mo_list:
+                continue
 
             logger.debug('Parsing MO %d', mo_ind + 1)
             _, sym = next(lines).split()
@@ -225,7 +275,7 @@ class Parser:
                 _, coeff = next(lines).split()
                 coeffs.append(float(coeff))
 
-            mo = MolecularOrbital(
+            mo = _MolecularOrbital(
                 symmetry=sym,
                 energy=energy,
                 coeffs=np.array(coeffs, dtype=np.float64)[order],
@@ -237,8 +287,7 @@ class Parser:
         return mos
 
     def atomic_orbs_order(self) -> None:
-        """
-        Return the order of the atomic orbitals in the molden file.
+        """Return the order of the atomic orbitals in the molden file.
 
         Molden defines the order of the orbitals as 0, 1, -1, 2, -2, ...
         We want it to be -l, -l + 1, ..., l - 1, l.
@@ -246,7 +295,6 @@ class Parser:
         Note: For l = 1, the order is 1, -1, 0, which is different from the
         general pattern. This is handled separately.
         """
-
         order = []
         ind = 0
         for shell in self.gto_shells:
