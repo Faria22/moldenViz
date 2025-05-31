@@ -109,8 +109,8 @@ class Parser:
         if not any('[MO]' in line for line in self.molden_lines):
             raise ValueError("No '[MO]' section found in the molden file.")
 
-        if not any(orbs in line for orbs in ['5D', '7F', '9G'] for line in self.molden_lines):
-            raise ValueError('Cartesian D, F, or G orbitals are not currently supported.')
+        if not any(orbs in line for orbs in ['5D', '9G'] for line in self.molden_lines):
+            raise ValueError('Cartesian orbitals functions are not currently supported.')
 
         logger.info('Molden format check passed.')
 
