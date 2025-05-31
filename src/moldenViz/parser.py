@@ -178,9 +178,13 @@ class Parser:
         logger.info(f'Parsed {len(gto_shells)} GTO shells.')
         return gto_shells
 
-    def get_mos(self) -> list[MolecularOrbital]:
+    def get_mos(self, mo_list: Optional[list[int]] = None) -> list[MolecularOrbital]:
         """
         Parses the molecular orbitals (MOs) from the molden file.
+
+        Args:
+            mo_list (Optional[list[int]]): A list of MO indices to parse. If None,
+            all MOs will be parsed.
 
         Returns:
             list[MolecularOrbital]: A list of MolecularOrbital objects containing
@@ -189,14 +193,23 @@ class Parser:
         logger.info('Parsing MO coefficients...')
 
         num_atomic_orbs = sum(2 * shell.l + 1 for shell in self.gto_shells)
+
+        if mo_list is not None:
+            if not mo_list:
+                raise ValueError("The provided 'mo_list' is empty.")
+
         order = self.atomic_orbs_order()
 
         lines = self.molden_lines[self.mo_ind + 1 :]
-        num_mos = sum('Sym=' in line for line in lines)
+        total_num_mos = sum('Sym=' in line for line in lines)
         lines = iter(lines)
 
         mos = []
-        for mo_ind in range(num_mos):
+        for mo_ind in range(total_num_mos):
+            if mo_list:
+                if mo_ind not in mo_list:
+                    continue
+
             logger.debug('Parsing MO %d', mo_ind + 1)
             _, sym = next(lines).split()
 
