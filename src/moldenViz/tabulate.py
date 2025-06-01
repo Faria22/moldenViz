@@ -170,11 +170,11 @@ class Tabulator(Parser):
         We define the real spherical harmonics, Xlms
         (see eq.6, M.A. Blanco et al./Journal of Molecular Structure (Theochem) 419 (1997) 19-27), as:
 
-        Xlms = sqrt(2)*Plms*sin(|m|\phi), m<0
-        Xlms = sqrt(2)*Plms*cos(|m|\phi), m>0
+        Xlms = sqrt(2)*Pl|m|(\theta)*sin(|m|\phi), m<0
+        Xlms = sqrt(2)*Plms(\theta)*cos(|m|\phi), m>0
         Xlms =         Plms             , m=0
 
-        Note: Above, the Plms are normalized
+        Note: Above, the Plms are normalized, i.e, \Theta_{lm}(\theta) in eq 1 of the paper.
 
         Args:
             theta (NDArray[np.floating]): Array of theta values.
@@ -190,7 +190,7 @@ class Tabulator(Parser):
 
         for m in range(-lmax, lmax + 1):
             if m < 0:
-                xlms[:, m, :] *= np.sqrt(2) * np.sin(-m * phi)
+                xlms[:, m, :] = xlms[:, -m, :] * np.sqrt(2) * np.sin(-m * phi)
             elif m > 0:
                 xlms[:, m, :] *= np.sqrt(2) * np.cos(m * phi)
 
