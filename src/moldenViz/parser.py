@@ -16,14 +16,15 @@ logger = logging.getLogger(__name__)
 class _Atom:
     label: str
     atomic_number: int
-    position: NDArray[np.float64]
+    position: NDArray[np.floating]
+    gtos: list['_Gto']
 
 
 @dataclass
 class _MolecularOrbital:
     symmetry: str
     energy: float
-    coeffs: NDArray[np.float64]
+    coeffs: NDArray[np.floating]
 
 
 class _GaussianPrimitive:
@@ -40,8 +41,7 @@ class _GaussianPrimitive:
 
 
 class _Gto:
-    def __init__(self, atom: '_Atom', l: int, prims: list[_GaussianPrimitive]) -> None:
-        self.atom = atom
+    def __init__(self, l: int, prims: list[_GaussianPrimitive]) -> None:
         self.l = l
         self.prims = prims
 
@@ -176,9 +176,9 @@ class Parser:
         for line in self.molden_lines[self.atom_ind + 1 : self.gto_ind]:
             label, _, atomic_number, *coords = line.split()
 
-            position = np.array([float(coord) for coord in coords], dtype=np.float64)
+            position = np.array([float(coord) for coord in coords], dtype=np.floating)
 
-            atoms.append(_Atom(label, int(atomic_number), position))
+            atoms.append(_Atom(label, int(atomic_number), position, []))
 
         logger.info('Parsed %s atoms.', len(atoms))
         return atoms
@@ -202,7 +202,7 @@ class Parser:
         lines = iter(self.molden_lines[self.gto_ind + 1 : self.mo_ind])
 
         gtos = []
-        for atom in self.get_atoms():
+        for atom in self.atoms:
             logger.debug('Parsing GTOs for atom: %s', atom.label)
             _ = next(lines)  # Skip atom index
 
@@ -221,9 +221,10 @@ class Parser:
                     exp, coeff = next(lines).split()
                     prims.append(_GaussianPrimitive(float(exp), float(coeff)))
 
-                gto = _Gto(atom, shell_lables.index(shell_label), prims)
+                gto = _Gto(shell_lables.index(shell_label), prims)
                 gto.normalize()
 
+                atom.gtos.append(gto)
                 gtos.append(gto)
 
         logger.info('Parsed %s GTOs.', len(gtos))
@@ -267,7 +268,7 @@ class Parser:
             mo = _MolecularOrbital(
                 symmetry=sym,
                 energy=energy,
-                coeffs=np.array(coeffs, dtype=np.float64)[order],
+                coeffs=np.array(coeffs, dtype=np.floating)[order],
             )
 
             mos.append(mo)
@@ -275,7 +276,7 @@ class Parser:
         logger.info('Parsed MO coefficients.')
         return mos
 
-    def atomic_orbs_order(self) -> None:
+    def atomic_orbs_order(self) -> list[int]:
         """Return the order of the atomic orbitals in the molden file.
 
         Molden defines the order of the orbitals as 0, 1, -1, 2, -2, ...
@@ -283,6 +284,10 @@ class Parser:
 
         Note: For l = 1, the order is 1, -1, 0, which is different from the
         general pattern. This is handled separately.
+
+        Returns:
+            list[int]: The order of the atomic orbitals.
+
         """
         order = []
         ind = 0
@@ -294,6 +299,8 @@ class Parser:
                 order.extend([ind + i for i in range(2 * l, -1, -2)])
                 order.extend([ind + i for i in range(1, 2 * l, 2)])
             ind += 2 * l + 1
+
+        return order
 
     def sort_mos(self) -> None:
         """Sort the MOs by energy."""
