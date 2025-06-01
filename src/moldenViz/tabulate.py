@@ -1,12 +1,13 @@
 """Tabulator module for creating grids and tabulating Gaussian-type orbitals (GTOs) from Molden files."""
 
 import logging
-from parser import Parser
 from typing import Optional
 
 import numpy as np
 from numpy.typing import NDArray
 from scipy.special import assoc_legendre_p_all as leg_p_all
+
+from .parser import Parser
 
 logger = logging.getLogger(__name__)
 
@@ -147,17 +148,19 @@ class Tabulator(Parser):
         ind = 0
         for atom in self.atoms:
             centered_grid = self.grid - atom.position
-            max_l = max(gto.l for gto in atom.gtos)
+            max_l = atom.gtos[-1].l
 
             r, theta, phi = _cartesian_to_spherical(*centered_grid.T)
             xlms = self._tabulate_xlms(theta, phi, max_l)
+
             for gto in atom.gtos:
                 l = gto.l
-                inds = ind + np.arange(2 * l + 1)
+                mo_inds = np.arange(-l, l + 1)
+                gto_inds = ind + l + mo_inds
 
-                data = gto.norm * r**l * sum(prim.coeff * np.exp(-prim.exp * r**2) for prim in gto.prims)
+                radial = gto.norm * r**l * sum(prim.coeff * np.exp(-prim.exp * r**2) for prim in gto.prims)
 
-                gto_data[:, inds] = data[:, None] * xlms[l, range(-l, l + 1), ...].T
+                gto_data[:, gto_inds] = radial[:, None] * xlms[l, mo_inds, ...].T
 
                 ind += 2 * l + 1
 
