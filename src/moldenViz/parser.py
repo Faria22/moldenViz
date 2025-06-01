@@ -39,12 +39,13 @@ class _GaussianPrimitive:
         self.norm = np.sqrt(2 * (2 * l) ** (l + 1.5) / gamma(l + 1.5))
 
 
-class _GtoShell:
+class _Gto:
     def __init__(self, atom: '_Atom', l: int, prims: list[_GaussianPrimitive]) -> None:
         self.atom = atom
         self.l = l
         self.prims = prims
-        self.norm = 0
+
+        self.norm = 0.0
 
     def normalize(self) -> None:
         # See (Jiyun Kuang and C D Lin 1997 J. Phys. B: At. Mol. Opt. Phys. 30 2529)
@@ -106,8 +107,10 @@ class Parser:
         self.atom_ind, self.gto_ind, self.mo_ind = self.divide_molden_lines()
 
         self.atoms = self.get_atoms()
-        self.gto_shells = self.get_gto_shells()
+        self.gtos = self.get_gtos()
         self.mo_coeffs = self.get_mos()
+
+        self.sort_mos()
 
     def check_molden_format(self) -> None:
         """Check if the provided molden lines conform to the expected format.
@@ -180,12 +183,12 @@ class Parser:
         logger.info('Parsed %s atoms.', len(atoms))
         return atoms
 
-    def get_gto_shells(self) -> list[_GtoShell]:
+    def get_gtos(self) -> list[_Gto]:
         """Parse the Gaussian-type orbitals (GTOs) from the molden file.
 
         Returns:
-            list[GtoShell]: A list of GtoShell objects containing the atom, angular
-            momentum quantum number (l), and Gaussian primitives for each shell.
+            list[_Gto]: A list of Gto objects containing the atom, angular
+            momentum quantum number (l), and Gaussian primitives for each gto.
 
         Raises:
             ValueError: If the shell label is not supported or if the GTOs are not
@@ -198,7 +201,7 @@ class Parser:
 
         lines = iter(self.molden_lines[self.gto_ind + 1 : self.mo_ind])
 
-        gto_shells = []
+        gtos = []
         for atom in self.get_atoms():
             logger.debug('Parsing GTOs for atom: %s', atom.label)
             _ = next(lines)  # Skip atom index
@@ -218,36 +221,25 @@ class Parser:
                     exp, coeff = next(lines).split()
                     prims.append(_GaussianPrimitive(float(exp), float(coeff)))
 
-                gto_shell = _GtoShell(atom, shell_lables.index(shell_label), prims)
-                gto_shell.normalize()
+                gto = _Gto(atom, shell_lables.index(shell_label), prims)
+                gto.normalize()
 
-                gto_shells.append(gto_shell)
+                gtos.append(gto)
 
-        logger.info('Parsed %s GTO shells.', len(gto_shells))
-        return gto_shells
+        logger.info('Parsed %s GTOs.', len(gtos))
+        return gtos
 
-    def get_mos(self, mo_list: Optional[list[int]] = None) -> list[_MolecularOrbital]:
+    def get_mos(self) -> list[_MolecularOrbital]:
         """Parse the molecular orbitals (MOs) from the molden file.
-
-        Args:
-            mo_list (Optional[list[int]]): A list of MO indices to parse. If None,
-            all MOs will be parsed.
 
         Returns:
             list[MolecularOrbital]: A list of MolecularOrbital objects containing
             the symmetry, energy, and coefficients for each MO.
 
-        Raises:
-            ValueError: If the provided 'mo_list' is empty or if no MOs are found
-            in the molden file.
-
         """
         logger.info('Parsing MO coefficients...')
 
-        num_atomic_orbs = sum(2 * shell.l + 1 for shell in self.gto_shells)
-
-        if mo_list is not None and not mo_list:
-            raise ValueError("The provided 'mo_list' is empty.")
+        num_atomic_orbs = sum(2 * gto.l + 1 for gto in self.gtos)
 
         order = self.atomic_orbs_order()
 
@@ -257,9 +249,6 @@ class Parser:
 
         mos = []
         for mo_ind in range(total_num_mos):
-            if mo_list and mo_ind not in mo_list:
-                continue
-
             logger.debug('Parsing MO %d', mo_ind + 1)
             _, sym = next(lines).split()
 
@@ -297,11 +286,17 @@ class Parser:
         """
         order = []
         ind = 0
-        for shell in self.gto_shells:
-            l = shell.l
+        for gto in self.gtos:
+            l = gto.l
             if l == 1:
                 order.extend([ind + 1, ind + 2, ind])
             else:
                 order.extend([ind + i for i in range(2 * l, -1, -2)])
                 order.extend([ind + i for i in range(1, 2 * l, 2)])
             ind += 2 * l + 1
+
+    def sort_mos(self) -> None:
+        """Sort the MOs by energy."""
+        logger.info('Sorting MOs by energy...')
+        self.mo_coeffs.sort(key=lambda mo: mo.energy)
+        logger.info('MOs sorted by energy.')
