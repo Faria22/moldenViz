@@ -1,4 +1,5 @@
-# ruff: noqa: D100, D101, D107
+"""Tabulator module for creating grids and tabulating Gaussian-type orbitals (GTOs) from Molden files."""
+
 import logging
 from parser import Parser
 from typing import Optional
@@ -15,6 +16,17 @@ def _spherical_to_cartersian(
     theta: NDArray[np.floating],
     phi: NDArray[np.floating],
 ) -> tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]:
+    """Convert spherical coordinates to Cartesian coordinates.
+
+    Args:
+        r (NDArray[np.floating]): Radial distances.
+        theta (NDArray[np.floating]): Polar angles (in radians).
+        phi (NDArray[np.floating]): Azimuthal angles (in radians).
+
+    Returns:
+        tuple: Arrays of x, y, z Cartesian coordinates.
+
+    """
     x = r * np.sin(theta) * np.cos(phi)
     y = r * np.sin(theta) * np.sin(phi)
     z = r * np.cos(theta)
@@ -27,6 +39,17 @@ def _cartesian_to_spherical(
     y: NDArray[np.floating],
     z: NDArray[np.floating],
 ) -> tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]:
+    """Convert Cartesian coordinates to spherical coordinates.
+
+    Args:
+        x (NDArray[np.floating]): X coordinates.
+        y (NDArray[np.floating]): Y coordinates.
+        z (NDArray[np.floating]): Z coordinates.
+
+    Returns:
+        tuple: Arrays of r (radius), theta (polar angle), phi (azimuthal angle).
+
+    """
     r = np.sqrt(x**2 + y**2 + z**2)
     theta = np.arccos(z / r)
     phi = np.arctan2(y, x)
@@ -35,11 +58,29 @@ def _cartesian_to_spherical(
 
 
 class Tabulator(Parser):
+    """Tabulator class for creating grids and tabulating Gaussian-type orbitals (GTOs) from Molden files.
+
+    Inherits from:
+        Parser: Parses Molden files to extract molecular and orbital information.
+    """
+
     def __init__(
         self,
         filename: Optional[str] = None,
         molden_lines: Optional[list[str]] = None,
     ) -> None:
+        """Initialize the Tabulator with a Molden file or its content.
+
+        Args:
+            filename (Optional[str]): Path to the Molden file.
+            molden_lines (Optional[list[str]]): Lines of a Molden file.
+
+
+        Note: If both `filename` and `molden_lines` are provided, or if neither is provided,
+              the class will raise a ValueError. Only one of them should be provided. See the
+              `Parser` class for more details on how it handles these parameters.
+
+        """
         super().__init__(filename, molden_lines)
 
         self.grid: Optional[NDArray[np.floating]] = None
@@ -65,7 +106,7 @@ class Tabulator(Parser):
         self.grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
 
         if tabulate_gtos:
-            self._tabulate_gtos()
+            self.tabulate_gtos()
 
     def spherical_grid(
         self,
@@ -89,12 +130,17 @@ class Tabulator(Parser):
         self.grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
 
         if tabulate_gtos:
-            self._tabulate_gtos()
+            self.tabulate_gtos()
 
-    def _tabulate_gtos(self) -> None:
+    def tabulate_gtos(self) -> None:
+        """Tabulate Gaussian-type orbitals (GTOs) on the current grid.
+
+        Raises:
+            ValueError: If the grid is not defined before tabulating GTOs.
+
+        """
         if self.grid is None:
-            logger.error('Grid is not defined. Please create a grid before tabulating GTOs.')
-            return
+            raise ValueError('Grid is not defined. Please create a grid before tabulating GTOs.')
 
         # Having a predefined array makes it faster to fill the data
         gto_data = np.empty((self.grid.shape[0], len(self.mo_coeffs[0].coeffs)))
