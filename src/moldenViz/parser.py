@@ -250,7 +250,6 @@ class Parser:
 
         mos = []
         for mo_ind in range(total_num_mos):
-            logger.debug('Parsing MO %d', mo_ind + 1)
             _, sym = next(lines).split()
 
             energy_line = next(lines)
