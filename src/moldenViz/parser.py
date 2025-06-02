@@ -22,7 +22,7 @@ class _Atom:
 
 @dataclass
 class _MolecularOrbital:
-    symmetry: str
+    sym: str
     energy: float
     spin: str
     occ: int
@@ -277,7 +277,7 @@ class Parser:
                 coeffs.append(coeff)
 
             mo = _MolecularOrbital(
-                symmetry=sym,
+                sym=sym,
                 energy=energy,
                 spin=spin,
                 occ=occ,
