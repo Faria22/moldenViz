@@ -24,6 +24,8 @@ class _Atom:
 class _MolecularOrbital:
     symmetry: str
     energy: float
+    spin: str
+    occ: int
     coeffs: NDArray[np.floating]
 
 
@@ -37,7 +39,7 @@ class _GaussianPrimitive:
     def normalize(self, l: int) -> None:
         # See (Jiyun Kuang and C D Lin 1997 J. Phys. B: At. Mol. Opt. Phys. 30 2529)
         # page 2532 for the normalization factor
-        self.norm = np.sqrt(2 * (2 * l) ** (l + 1.5) / gamma(l + 1.5))
+        self.norm = np.sqrt(2 * (2 * self.exp) ** (l + 1.5) / gamma(l + 1.5))
 
 
 class _Gto:
@@ -59,10 +61,10 @@ class _Gto:
                 overlap += (
                     i_prim.coeff
                     * j_prim.coeff
-                    * (2 * np.sqrt(i_prim.exp * j_prim.exp) / i_prim.exp + j_prim.exp) ** (self.l + 1.5)
+                    * (2 * np.sqrt(i_prim.exp * j_prim.exp) / (i_prim.exp + j_prim.exp)) ** (self.l + 1.5)
                 )
 
-        self.norm = 1 / overlap
+        self.norm = 1 / np.sqrt(overlap)
 
 
 class Parser:
@@ -76,10 +78,12 @@ class Parser:
         """Initialize the Parser with either a filename or molden lines.
 
         Args:
+        ----
             filename (Optional[str]): The path to the molden file.
             molden_lines (Optional[list[str]]): A list of lines from a molden file.
 
         Raises:
+        ------
             ValueError: If both 'filename' and 'molden_lines' are provided,
                         or if neither is provided.
 
@@ -108,14 +112,15 @@ class Parser:
 
         self.atoms = self.get_atoms()
         self.gtos = self.get_gtos()
-        self.mo_coeffs = self.get_mos()
+        self.mos = self.get_mos()
 
-        self.sort_mos()
+        self._sort_mos()
 
     def check_molden_format(self) -> None:
         """Check if the provided molden lines conform to the expected format.
 
-        Raises:
+        Raises
+        ------
             ValueError: If the molden lines do not contain the required sections
                         or if they are in an unsupported format.
 
@@ -141,10 +146,12 @@ class Parser:
     def divide_molden_lines(self) -> tuple[int, int, int]:
         """Divide the molden lines into sections for atoms, GTOs, and MOs.
 
-        Returns:
+        Returns
+        -------
             tuple[int, int, int]: Indices of the '[Atoms]', '[GTO]', and '[MO]' lines.
 
-        Raises:
+        Raises
+        ------
             ValueError: If the molden lines do not contain the required sections.
 
         """
@@ -166,7 +173,8 @@ class Parser:
     def get_atoms(self) -> list[_Atom]:
         """Parse the atoms from the molden file.
 
-        Returns:
+        Returns
+        -------
             list[Atom]: A list of Atom objects containing the label, atomic number,
             and position for each atom.
 
@@ -176,7 +184,7 @@ class Parser:
         for line in self.molden_lines[self.atom_ind + 1 : self.gto_ind]:
             label, _, atomic_number, *coords = line.split()
 
-            position = np.array([float(coord) for coord in coords], dtype=np.floating)
+            position = np.array([float(coord) for coord in coords], dtype=float)
 
             atoms.append(_Atom(label, int(atomic_number), position, []))
 
@@ -186,11 +194,13 @@ class Parser:
     def get_gtos(self) -> list[_Gto]:
         """Parse the Gaussian-type orbitals (GTOs) from the molden file.
 
-        Returns:
+        Returns
+        -------
             list[_Gto]: A list of Gto objects containing the atom, angular
             momentum quantum number (l), and Gaussian primitives for each gto.
 
-        Raises:
+        Raises
+        ------
             ValueError: If the shell label is not supported or if the GTOs are not
             formatted correctly in the molden file.
 
@@ -233,7 +243,8 @@ class Parser:
     def get_mos(self) -> list[_MolecularOrbital]:
         """Parse the molecular orbitals (MOs) from the molden file.
 
-        Returns:
+        Returns
+        -------
             list[MolecularOrbital]: A list of MolecularOrbital objects containing
             the symmetry, energy, and coefficients for each MO.
 
@@ -242,32 +253,35 @@ class Parser:
 
         num_atomic_orbs = sum(2 * gto.l + 1 for gto in self.gtos)
 
-        order = self.atomic_orbs_order()
+        order = self._atomic_orbs_order()
 
         lines = self.molden_lines[self.mo_ind + 1 :]
         total_num_mos = sum('Sym=' in line for line in lines)
         lines = iter(lines)
 
         mos = []
-        for mo_ind in range(total_num_mos):
+        for _ in range(total_num_mos):
             _, sym = next(lines).split()
 
             energy_line = next(lines)
             energy = float(energy_line.split()[1])
 
-            # Skip the next two lines which are not needed
-            for _ in range(2):
-                next(lines)
+            _, spin = next(lines).split()
+
+            occ_line = next(lines)
+            occ = int(float(occ_line.split()[1]))
 
             coeffs = []
             for _ in range(num_atomic_orbs):
                 _, coeff = next(lines).split()
-                coeffs.append(float(coeff))
+                coeffs.append(coeff)
 
             mo = _MolecularOrbital(
                 symmetry=sym,
                 energy=energy,
-                coeffs=np.array(coeffs, dtype=np.floating)[order],
+                spin=spin,
+                occ=occ,
+                coeffs=np.array(coeffs, dtype=float)[order],
             )
 
             mos.append(mo)
@@ -275,7 +289,7 @@ class Parser:
         logger.info('Parsed MO coefficients.')
         return mos
 
-    def atomic_orbs_order(self) -> list[int]:
+    def _atomic_orbs_order(self) -> list[int]:
         """Return the order of the atomic orbitals in the molden file.
 
         Molden defines the order of the orbitals as 0, 1, -1, 2, -2, ...
@@ -284,7 +298,8 @@ class Parser:
         Note: For l = 1, the order is 1, -1, 0, which is different from the
         general pattern. This is handled separately.
 
-        Returns:
+        Returns
+        -------
             list[int]: The order of the atomic orbitals.
 
         """
@@ -301,8 +316,8 @@ class Parser:
 
         return order
 
-    def sort_mos(self) -> None:
+    def _sort_mos(self) -> None:
         """Sort the MOs by energy."""
         logger.info('Sorting MOs by energy...')
-        self.mo_coeffs.sort(key=lambda mo: mo.energy)
+        self.mos.sort(key=lambda mo: mo.energy)
         logger.info('MOs sorted by energy.')
