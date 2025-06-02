@@ -172,12 +172,12 @@ class Tabulator(Parser):
 
             for gto in atom.gtos:
                 l = gto.l
-                mo_inds = np.arange(-l, l + 1)
-                gto_inds = ind + l + mo_inds
+                m_inds = np.arange(-l, l + 1)
+                gto_inds = ind + l + m_inds
 
                 radial = gto.norm * r**l * sum(prim.norm * prim.coeff * np.exp(-prim.exp * r**2) for prim in gto.prims)
 
-                gto_data[:, gto_inds] = radial[:, None] * xlms[l, mo_inds, ...].T
+                gto_data[:, gto_inds] = radial[:, None] * xlms[l, m_inds, ...].T
 
                 ind += 2 * l + 1
 
@@ -227,11 +227,11 @@ class Tabulator(Parser):
             raise ValueError('Provided mo_inds contains invalid indices. Please provide valid indices.')
 
         if isinstance(mo_inds, int):
-            mo_data = np.sum(self.gtos_data[:, mo_inds, None] * self.mos[mo_inds].coeffs[None, :], axis=1)
+            mo_data = np.sum(self.gtos_data * self.mos[mo_inds].coeffs[None, :], axis=1)
         else:
             mo_coeffs = np.stack([self.mos[i].coeffs for i in mo_inds])
 
-            mo_data = np.sum(self.gtos_data[:, mo_inds, None] * mo_coeffs[None, ...], axis=2)
+            mo_data = np.sum(self.gtos_data[:, None, :] * mo_coeffs[None, ...], axis=2)
             logger.debug('MO data shape: %s', mo_data.shape)
 
         return mo_data
