@@ -22,7 +22,7 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
-dependencies = []
+dependencies = ["numpy", "pytest", "pyvista", "pyvistaqt", "scipy"]
 
 [project.urls]
 Documentation = "https://github.com/Faria22/moldenViz#readme"
@@ -36,6 +36,9 @@ path = "src/moldenViz/__about__.py"
 extra-dependencies = ["mypy>=1.0.0"]
 [tool.hatch.envs.types.scripts]
 check = "mypy --install-types --non-interactive {args:src/moldenViz tests}"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/moldenViz"]
 
 [tool.coverage.run]
 source_pkgs = ["moldenViz", "tests"]
