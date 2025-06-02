@@ -16,6 +16,7 @@
 pip install moldenViz
 ```
 
-## License
-
-`moldenViz` is distributed under the terms of the [MIT](https://spdx.org/licenses/MIT.html) license.
+## Roadmap
+- [x] 0.1: Basic commands inside python.
+- [ ] 0.2: GUI integration.
+- [ ] 0.3: CLI options.
