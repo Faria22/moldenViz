@@ -22,7 +22,7 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
-dependencies = ["numpy", "pytest", "pyvista", "pyvistaqt", "scipy"]
+dependencies = ["numpy", "pyvista", "pyvistaqt", "scipy"]
 
 [project.urls]
 Documentation = "https://github.com/Faria22/moldenViz#readme"
