@@ -114,8 +114,6 @@ class Parser:
         self.gtos = self.get_gtos()
         self.mos = self.get_mos()
 
-        self._sort_mos()
-
     def check_molden_format(self) -> None:
         """Check if the provided molden lines conform to the expected format.
 
@@ -240,10 +238,17 @@ class Parser:
         logger.info('Parsed %s GTOs.', len(gtos))
         return gtos
 
-    def get_mos(self) -> list[_MolecularOrbital]:
+    def get_mos(self, sort: bool = True) -> list[_MolecularOrbital]:
         """Parse the molecular orbitals (MOs) from the molden file.
 
-        Returns
+        Args:
+        ----
+            mo_inds (Optional[int | ArrayLike]): Indices of the MOs to tabulate. If None, all MOs are tabulated.
+            sort (Bool): If true (default), returns the mos sorted by energy. If false, returns the mos in the order
+            given in the molden file.
+
+
+        Returns:
         -------
             list[MolecularOrbital]: A list of MolecularOrbital objects containing
             the symmetry, energy, and coefficients for each MO.
@@ -287,6 +292,10 @@ class Parser:
             mos.append(mo)
 
         logger.info('Parsed MO coefficients.')
+
+        if sort:
+            mos = self.sort_mos(mos)
+
         return mos
 
     def _atomic_orbs_order(self) -> list[int]:
@@ -316,8 +325,22 @@ class Parser:
 
         return order
 
-    def _sort_mos(self) -> None:
-        """Sort the MOs by energy."""
+    @staticmethod
+    def sort_mos(mos: list[_MolecularOrbital]) -> list[_MolecularOrbital]:
+        """Sort the MOs by energy.
+
+        Args:
+        ----
+            mos (list[_MolecularOrbital]): A list of `_MolecularOrbital` objects to be sorted.
+
+        Returns:
+        -------
+            list[_MolecularOrbital]: A new list containing the `_MolecularOrbital` objects sorted
+            by their energy in ascending order.
+
+        """
         logger.info('Sorting MOs by energy...')
-        self.mos.sort(key=lambda mo: mo.energy)
+        mos = sorted(mos, key=lambda mo: mo.energy)
         logger.info('MOs sorted by energy.')
+
+        return mos
