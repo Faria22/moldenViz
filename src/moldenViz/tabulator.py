@@ -90,9 +90,9 @@ class Tabulator(Parser):
         """
         super().__init__(filename, molden_lines)
 
-        self.grid: NDArray[np.floating] | None = None
-        self.gtos_data: NDArray[np.floating] | None = None
-        self.mos_data: NDArray[np.floating] | None = None
+        self.grid: NDArray[np.floating]
+        self.gtos_data: NDArray[np.floating]
+        self.mos_data: NDArray[np.floating]
 
     def cartesian_grid(
         self,
@@ -157,7 +157,7 @@ class Tabulator(Parser):
             ValueError: If the grid is not defined before tabulating GTOs.
 
         """
-        if self.grid is None:
+        if not hasattr(self, 'grid'):
             raise ValueError('Grid is not defined. Please create a grid before tabulating GTOs.')
 
         # Having a predefined array makes it faster to fill the data
@@ -205,10 +205,10 @@ class Tabulator(Parser):
             ValueError: If provided mo_inds invalid.
 
         """
-        if self.grid is None:
+        if not hasattr(self, 'grid'):
             raise ValueError('Grid is not defined. Please create a grid before tabulating MOs.')
 
-        if self.gtos_data is None:
+        if not hasattr(self, 'gtos_data'):
             raise ValueError('GTOs are not tabulated. Please tabulate GTOs before tabulating MOs.')
 
         if mo_inds is None:
