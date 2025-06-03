@@ -102,9 +102,8 @@ class Parser:
         else:
             raise ValueError("Must provide either 'filename' or 'molden_lines'.")
 
-        self.molden_lines = [
-            line.strip() for line in self.molden_lines
-        ]  # Remove leading/trailing whitespace and newlines
+        # Remove leading/trailing whitespace and newline characters
+        self.molden_lines = [line.strip() for line in self.molden_lines]
 
         self.check_molden_format()
 
