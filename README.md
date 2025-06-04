@@ -13,5 +13,6 @@ pip install moldenViz
 
 ## Roadmap
 - [x] 0.1: Basic commands inside python.
+  - [ ] 0.1.5: Documentation support
 - [ ] 0.2: GUI integration.
 - [ ] 0.3: CLI options.
