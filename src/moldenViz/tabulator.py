@@ -65,7 +65,9 @@ def _cartesian_to_spherical(
     return r, theta, phi
 
 
-class _GridType(Enum):
+class GridType(Enum):
+    """Grid types allowed."""
+
     SPHERICAL = 'spherical'
     CARTESIAN = 'cartesian'
     UNKNOWN = 'unknown'
@@ -114,7 +116,7 @@ class Tabulator(Parser):
         super().__init__(filename, molden_lines, only_molecule)
 
         self.only_molecule = only_molecule
-        self.grid_type = _GridType.UNKNOWN
+        self.grid_type = GridType.UNKNOWN
 
         self.grid: NDArray[np.floating]
         self.grid_dimensions: tuple[int, int, int]
@@ -148,7 +150,7 @@ class Tabulator(Parser):
 
         xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
         self.grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
-        self.grid_type = _GridType.CARTESIAN
+        self.grid_type = GridType.CARTESIAN
         self.grid_dimensions = (len(x), len(y), len(z))
 
         if tabulate_gtos:
@@ -186,7 +188,7 @@ class Tabulator(Parser):
         rr, tt, pp = np.meshgrid(r, theta, phi, indexing='ij')
         xx, yy, zz = _spherical_to_cartersian(rr, tt, pp)
         self.grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
-        self.grid_type = _GridType.SPHERICAL
+        self.grid_type = GridType.SPHERICAL
         self.grid_dimensions = (len(r), len(theta), len(phi))
 
         if tabulate_gtos:
