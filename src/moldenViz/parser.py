@@ -74,8 +74,13 @@ class Parser:
     ----
         filename: str | None
             The path to the molden file.
+
         molden_lines: list[str]]
             A list of lines from a molden file.
+
+        only_molecule: bool, optional
+            Only parse the atoms and skip molecular orbitals.
+            Default is `False`.
 
     Raises
     ------
@@ -87,6 +92,7 @@ class Parser:
         self,
         filename: Optional[str] = None,
         molden_lines: Optional[list[str]] = None,
+        only_molecule: bool = False,
     ) -> None:
         """Initialize the Parser with either a filename or molden lines."""
         if filename and molden_lines is not None:
@@ -111,6 +117,10 @@ class Parser:
         self.atom_ind, self.gto_ind, self.mo_ind = self.divide_molden_lines()
 
         self.atoms = self.get_atoms()
+
+        if only_molecule:
+            return
+
         self.gtos = self.get_gtos()
         self.mos = self.get_mos()
 

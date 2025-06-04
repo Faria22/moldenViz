@@ -75,6 +75,10 @@ class Tabulator(Parser):
         molden_lines: list[str] | None
             Lines of a Molden file.
 
+        only_molecule: bool, optional
+            Only parse the atoms and skip molecular orbitals.
+            Default is `False`.
+
     Note
     ----
         If both `filename` and `molden_lines` are provided, or if neither is provided,
@@ -86,6 +90,7 @@ class Tabulator(Parser):
         self,
         filename: Optional[str] = None,
         molden_lines: Optional[list[str]] = None,
+        only_molecule: bool = False,
     ) -> None:
         """Initialize the Tabulator with a Molden file or its content.
 
@@ -99,7 +104,9 @@ class Tabulator(Parser):
               `Parser` class for more details on how it handles these parameters.
 
         """
-        super().__init__(filename, molden_lines)
+        super().__init__(filename, molden_lines, only_molecule)
+
+        self.only_molecule = only_molecule
 
         self.grid: NDArray[np.floating]
         self.gtos_data: NDArray[np.floating]
@@ -127,6 +134,9 @@ class Tabulator(Parser):
                 Defaults to True.
 
         """
+        if self.only_molecule:
+            raise RuntimeError('Grid creation is not allowed when `only_molecule` is set to `True`.')
+
         xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
         self.grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
 
@@ -159,6 +169,9 @@ class Tabulator(Parser):
             Grid points are converted to Cartesian coordinates.
 
         """
+        if self.only_molecule:
+            raise RuntimeError('Grid creation is not allowed when `only_molecule` is set to `True`.')
+
         rr, tt, pp = np.meshgrid(r, theta, phi, indexing='ij')
         xx, yy, zz = _spherical_to_cartersian(rr, tt, pp)
         self.grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
@@ -180,6 +193,9 @@ class Tabulator(Parser):
                 If the grid is not defined before tabulating GTOs.
 
         """
+        if self.only_molecule:
+            raise RuntimeError('Grid creation is not allowed when `only_molecule` is set to `True`.')
+
         if not hasattr(self, 'grid'):
             raise ValueError('Grid is not defined. Please create a grid before tabulating GTOs.')
 
