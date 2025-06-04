@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 array_like_type = NDArray[np.integer] | list[int] | tuple[int, ...] | range
 
 
-def _spherical_to_cartersian(
+def _spherical_to_cartesian(
     r: NDArray[np.floating],
     theta: NDArray[np.floating],
     phi: NDArray[np.floating],
@@ -78,15 +78,8 @@ class Tabulator(Parser):
 
     Args
     ----
-        filename: str | None
-            Path to the Molden file.
-
-        molden_lines: list[str] | None
-            Lines of a Molden file.
-
-        only_molecule: bool, optional
-            Only parse the atoms and skip molecular orbitals.
-            Default is `False`.
+        source: str | list[str]
+            The path to the molden file, or the lines from the file.
 
     Note
     ----
@@ -97,23 +90,11 @@ class Tabulator(Parser):
 
     def __init__(
         self,
-        filename: Optional[str] = None,
-        molden_lines: Optional[list[str]] = None,
+        source: str | list[str],
         only_molecule: bool = False,
     ) -> None:
-        """Initialize the Tabulator with a Molden file or its content.
-
-        Args
-            filename (Optional[str]): Path to the Molden file.
-            molden_lines (Optional[list[str]]): Lines of a Molden file.
-
-
-        Note: If both `filename` and `molden_lines` are provided, or if neither is provided,
-              the class will raise a ValueError. Only one of them should be provided. See the
-              `Parser` class for more details on how it handles these parameters.
-
-        """
-        super().__init__(filename, molden_lines, only_molecule)
+        """Initialize the Tabulator with a Molden file or its content."""
+        super().__init__(source, only_molecule)
 
         self.only_molecule = only_molecule
         self.grid_type = GridType.UNKNOWN
@@ -186,7 +167,7 @@ class Tabulator(Parser):
             raise RuntimeError('Grid creation is not allowed when `only_molecule` is set to `True`.')
 
         rr, tt, pp = np.meshgrid(r, theta, phi, indexing='ij')
-        xx, yy, zz = _spherical_to_cartersian(rr, tt, pp)
+        xx, yy, zz = _spherical_to_cartesian(rr, tt, pp)
         self.grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
         self.grid_type = GridType.SPHERICAL
         self.grid_dimensions = (len(r), len(theta), len(phi))

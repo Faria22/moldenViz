@@ -15,7 +15,7 @@ MOLDEN_PATH = Path(__file__).with_name('sample_molden.inp')
 @pytest.fixture(scope='session')
 def parser_obj() -> Parser:
     """Parser built once per test session from the reference Molden file."""
-    return Parser(filename=str(MOLDEN_PATH))
+    return Parser(str(MOLDEN_PATH))
 
 
 # ----------------------------------------------------------------------
@@ -65,11 +65,11 @@ def test_file_vs_lines_consistency(tmp_path) -> None:
     """Parsing via filename or via pre-read lines must give identical results."""
     lines = MOLDEN_PATH.read_text().splitlines(True)
 
-    p_from_lines = Parser(molden_lines=lines)
+    p_from_lines = Parser(lines)
 
     tmp_file = tmp_path / 'copy.molden'
     tmp_file.write_text(''.join(lines))
-    p_from_file = Parser(filename=str(tmp_file))
+    p_from_file = Parser(str(tmp_file))
 
     # Quick invariants - if these match, deeper structures are identical
     assert [a.atomic_number for a in p_from_lines.atoms] == [a.atomic_number for a in p_from_file.atoms]

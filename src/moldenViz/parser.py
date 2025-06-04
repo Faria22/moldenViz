@@ -3,7 +3,6 @@
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 from numpy.typing import NDArray
@@ -72,11 +71,8 @@ class Parser:
 
     Args
     ----
-        filename: str | None
-            The path to the molden file.
-
-        molden_lines: list[str]]
-            A list of lines from a molden file.
+        source: str | list[str]
+            The path to the molden file, or the lines from the file.
 
         only_molecule: bool, optional
             Only parse the atoms and skip molecular orbitals.
@@ -90,24 +86,15 @@ class Parser:
 
     def __init__(
         self,
-        filename: Optional[str] = None,
-        molden_lines: Optional[list[str]] = None,
+        source: str | list[str],
         only_molecule: bool = False,
     ) -> None:
         """Initialize the Parser with either a filename or molden lines."""
-        if filename and molden_lines is not None:
-            raise ValueError("Provide either 'filename' or 'molden_lines', not both.")
-
-        if filename:
-            with Path(filename).open('r') as file:
+        if isinstance(source, str):
+            with Path(source).open('r') as file:
                 self.molden_lines = file.readlines()
-        elif molden_lines is not None:
-            if not molden_lines:
-                raise ValueError("'molden_lines' was provided but is empty.")
-
-            self.molden_lines = molden_lines
-        else:
-            raise ValueError("Must provide either 'filename' or 'molden_lines'.")
+        elif isinstance(source, list):
+            self.molden_lines = source
 
         # Remove leading/trailing whitespace and newline characters
         self.molden_lines = [line.strip() for line in self.molden_lines]
