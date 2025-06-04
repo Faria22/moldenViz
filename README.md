@@ -13,7 +13,7 @@ pip install moldenViz
 ```
 
 ## Documentation
-You can find the documentation [https://moldenviz.readthedocs.io/en/latest/](here).
+You can find the documentation [here](https://moldenviz.readthedocs.io/en/latest/).
 
 ## Usage
 
