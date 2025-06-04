@@ -9,12 +9,16 @@ skip-magic-trailing-comma = false
 [lint.flake8-quotes]
 inline-quotes = "single"
 
+[lint.pydocstyle]
+convention = "numpy"
+
 [lint]
 select = ["ALL"]
 fixable = ["ALL"]
 ignore = [
     "E251",
     "E741",
+    "DOC501",
     "FURB140",
     "ANN002",
     "ANN003",

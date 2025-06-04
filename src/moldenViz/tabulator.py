@@ -21,13 +21,13 @@ def _spherical_to_cartersian(
 ) -> tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]:
     """Convert spherical coordinates to Cartesian coordinates.
 
-    Args:
+    Args
     ----
         r (NDArray[np.floating]): Radial distances.
         theta (NDArray[np.floating]): Polar angles (in radians).
         phi (NDArray[np.floating]): Azimuthal angles (in radians).
 
-    Returns:
+    Returns
     -------
         tuple: Arrays of x, y, z Cartesian coordinates.
 
@@ -46,13 +46,13 @@ def _cartesian_to_spherical(
 ) -> tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]:
     """Convert Cartesian coordinates to spherical coordinates.
 
-    Args:
+    Args
     ----
         x (NDArray[np.floating]): X coordinates.
         y (NDArray[np.floating]): Y coordinates.
         z (NDArray[np.floating]): Z coordinates.
 
-    Returns:
+    Returns
     -------
         tuple: Arrays of r (radius), theta (polar angle), phi (azimuthal angle).
 
@@ -65,10 +65,21 @@ def _cartesian_to_spherical(
 
 
 class Tabulator(Parser):
-    """Tabulator class for creating grids and tabulating Gaussian-type orbitals (GTOs) from Molden files.
+    """Extends Parses, create grids and tabulates Gaussian-type orbitals (GTOs) from Molden files.
 
-    Inherits from:
-        Parser: Parses Molden files to extract molecular and orbital information.
+    Args
+    ----
+        filename: str | None
+            Path to the Molden file.
+
+        molden_lines: list[str] | None
+            Lines of a Molden file.
+
+    Note
+    ----
+        If both `filename` and `molden_lines` are provided, or if neither is provided,
+        the class will raise a ValueError. Only one of them should be provided. See the
+        `Parser` class for more details on how it handles these parameters.
     """
 
     def __init__(
@@ -78,7 +89,7 @@ class Tabulator(Parser):
     ) -> None:
         """Initialize the Tabulator with a Molden file or its content.
 
-        Args:
+        Args
             filename (Optional[str]): Path to the Molden file.
             molden_lines (Optional[list[str]]): Lines of a Molden file.
 
@@ -103,12 +114,16 @@ class Tabulator(Parser):
     ) -> None:
         r"""Create cartesian grid from x, y, z arrays and tabulate GTOs.
 
-        Args:
+        Args
         ----
-            x (NDArray[np.floating]): Array of x coordinates.
-            y (NDArray[np.floating]): Array of y coordinates.
-            z (NDArray[np.floating]): Array of z coordinates.
-            tabulate_gtos (bool, optional): Whether to tabulate Gaussian-type orbitals (GTOs) after creating the grid.
+            x: NDArray[np.floating]
+                Array of x coordinates.
+            y: NDArray[np.floating]
+                Array of y coordinates.
+            z: NDArray[np.floating]
+                Array of z coordinates.
+            tabulate_gtos: bool, optional
+                Whether to tabulate Gaussian-type orbitals (GTOs) after creating the grid.
                 Defaults to True.
 
         """
@@ -127,15 +142,21 @@ class Tabulator(Parser):
     ) -> None:
         r"""Create spherical grid from r, theta, phi arrays and tabulate GTOs.
 
-        Note: Grid points are converted to Cartesian coordinates.
-
-        Args:
+        Args
         ----
-            r (NDArray[np.floating]): Array of radial coordinates.
-            theta (NDArray[np.floating]): Array of polar angles (in radians).
-            phi (NDArray[np.floating]): Array of azimuthal angles (in radians).
-            tabulate_gtos (bool, optional): Whether to tabulate Gaussian-type orbitals (GTOs) after creating the grid.
+            r: NDArray[np.floating]
+                Array of radial coordinates.
+            theta: NDArray[np.floating]
+                Array of polar angles (in radians).
+            phi: NDArray[np.floating]
+                Array of azimuthal angles (in radians).
+            tabulate_gtos: bool, optional
+                Whether to tabulate Gaussian-type orbitals (GTOs) after creating the grid.
                 Defaults to True.
+
+        Note
+        ----
+            Grid points are converted to Cartesian coordinates.
 
         """
         rr, tt, pp = np.meshgrid(r, theta, phi, indexing='ij')
@@ -150,11 +171,13 @@ class Tabulator(Parser):
 
         Returns
         -------
-            NDArray[np.floating]: Array containing the tabulated GTOs data.
+            NDArray[np.floating]:
+                Array containing the tabulated GTOs data.
 
         Raises
         ------
-            ValueError: If the grid is not defined before tabulating GTOs.
+            ValueError:
+                If the grid is not defined before tabulating GTOs.
 
         """
         if not hasattr(self, 'grid'):
@@ -187,18 +210,20 @@ class Tabulator(Parser):
     def tabulate_mos(self, mo_inds: Optional[int | array_like_type] = None) -> NDArray[np.floating]:
         """Tabulate molecular orbitals (MOs) on the current grid.
 
-        Args:
+        Args
         ----
-            mo_inds (Optional[int | ArrayLike]): Indices of the MOs to tabulate. If None, all MOs are tabulated.
+            mo_inds : int, ArrayLike, None
+                Indices of the MOs to tabulate. If None, all MOs are tabulated.
 
-        Returns:
+        Returns
         -------
-            NDArray[np.floating]: Array containing the tabulated MOs data.
+            NDArray[np.floating]:
+                Array containing the tabulated MOs data.
 
-            If an integer is provided, it will tabulate only that MO.
-            If an array-like is provided, it will tabulate the MOs at those indices.
+                If an integer is provided, it will tabulate only that MO.
+                If an array-like is provided, it will tabulate the MOs at those indices.
 
-        Raises:
+        Raises
         ------
             ValueError: If the grid is not defined before tabulating MOs.
             ValueError: If GTOs are not tabulated before tabulating MOs.
@@ -249,15 +274,19 @@ class Tabulator(Parser):
 
         Note: Above, the Plms are normalized, i.e, \Theta_{lm}(\theta) in eq 1 of the paper.
 
-        Args:
+        Args
         ----
-            theta (NDArray[np.floating]): Array of theta values.
-            phi (NDArray[np.floating]): Array of phi values.
-            lmax (int): Maximum angular momentum quantum number.
+            theta: NDArray[np.floating]
+                Array of theta values.
+            phi: NDArray[np.floating]
+                Array of phi values.
+            lmax: int
+                Maximum angular momentum quantum number.
 
-        Returns:
+        Returns
         -------
-            NDArray[np.floating]: Tabulated real spherical harmonics.
+            NDArray[np.floating]:
+                Tabulated real spherical harmonics.
 
         """
         # leg_p_all first dimension has always size = 1

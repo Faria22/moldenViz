@@ -68,26 +68,27 @@ class _Gto:
 
 
 class Parser:
-    """Parser for molden files."""
+    """Parser for molden files.
+
+    Args
+    ----
+        filename: str | None
+            The path to the molden file.
+        molden_lines: list[str]]
+            A list of lines from a molden file.
+
+    Raises
+    ------
+        ValueError: If both `filename` and `molden_lines` are provided, or if neither is provided.
+
+    """
 
     def __init__(
         self,
         filename: Optional[str] = None,
         molden_lines: Optional[list[str]] = None,
     ) -> None:
-        """Initialize the Parser with either a filename or molden lines.
-
-        Args:
-        ----
-            filename (Optional[str]): The path to the molden file.
-            molden_lines (Optional[list[str]]): A list of lines from a molden file.
-
-        Raises:
-        ------
-            ValueError: If both 'filename' and 'molden_lines' are provided,
-                        or if neither is provided.
-
-        """
+        """Initialize the Parser with either a filename or molden lines."""
         if filename and molden_lines is not None:
             raise ValueError("Provide either 'filename' or 'molden_lines', not both.")
 
@@ -240,14 +241,16 @@ class Parser:
     def get_mos(self, sort: bool = True) -> list[_MolecularOrbital]:
         """Parse the molecular orbitals (MOs) from the molden file.
 
-        Args:
+        Args
         ----
-            mo_inds (Optional[int | ArrayLike]): Indices of the MOs to tabulate. If None, all MOs are tabulated.
-            sort (Bool): If true (default), returns the mos sorted by energy. If false, returns the mos in the order
-            given in the molden file.
+            mo_inds: int, ArrayLike]
+                Indices of the MOs to tabulate. If None, all MOs are tabulated.
+            sort: bool
+                If true (default), returns the mos sorted by energy. If false, returns the mos in the order
+                given in the molden file.
 
 
-        Returns:
+        Returns
         -------
             list[MolecularOrbital]: A list of MolecularOrbital objects containing
             the symmetry, energy, and coefficients for each MO.
@@ -326,13 +329,14 @@ class Parser:
 
     @staticmethod
     def sort_mos(mos: list[_MolecularOrbital]) -> list[_MolecularOrbital]:
-        """Sort the MOs by energy.
+        """Sort a list of MOs by energy.
 
-        Args:
+        Args
         ----
-            mos (list[_MolecularOrbital]): A list of `_MolecularOrbital` objects to be sorted.
+            mos: list[_MolecularOrbital]
+                A list of `_MolecularOrbital` objects to be sorted.
 
-        Returns:
+        Returns
         -------
             list[_MolecularOrbital]: A new list containing the `_MolecularOrbital` objects sorted
             by their energy in ascending order.
