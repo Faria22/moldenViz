@@ -25,7 +25,7 @@ classifiers = [
 dependencies = ["numpy", "pyvista", "pyvistaqt", "scipy"]
 
 [project.urls]
-Documentation = "https://github.com/Faria22/moldenViz#readme"
+Documentation = "https://moldenviz.readthedocs.io/en/latest/"
 Issues = "https://github.com/Faria22/moldenViz/issues"
 Source = "https://github.com/Faria22/moldenViz"
 
