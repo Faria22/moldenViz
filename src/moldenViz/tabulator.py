@@ -117,6 +117,7 @@ class Tabulator(Parser):
         self.grid_type = _GridType.UNKNOWN
 
         self.grid: NDArray[np.floating]
+        self.grid_dimensions: tuple[int, int, int]
         self.gtos_data: NDArray[np.floating]
         self.mos_data: NDArray[np.floating]
 
@@ -148,6 +149,7 @@ class Tabulator(Parser):
         xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
         self.grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
         self.grid_type = _GridType.CARTESIAN
+        self.grid_dimensions = (len(x), len(y), len(z))
 
         if tabulate_gtos:
             self.gtos_data = self.tabulate_gtos()
@@ -185,6 +187,7 @@ class Tabulator(Parser):
         xx, yy, zz = _spherical_to_cartersian(rr, tt, pp)
         self.grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
         self.grid_type = _GridType.SPHERICAL
+        self.grid_dimensions = (len(r), len(theta), len(phi))
 
         if tabulate_gtos:
             self.gtos_data = self.tabulate_gtos()
