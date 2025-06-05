@@ -81,11 +81,9 @@ class Tabulator(Parser):
         source: str | list[str]
             The path to the molden file, or the lines from the file.
 
-    Note
-    ----
-        If both `filename` and `molden_lines` are provided, or if neither is provided,
-        the class will raise a ValueError. Only one of them should be provided. See the
-        `Parser` class for more details on how it handles these parameters.
+        only_molecule: bool, optional
+            Only parse the atoms and skip molecular orbitals.
+            Default is `False`.
     """
 
     def __init__(
@@ -237,9 +235,12 @@ class Tabulator(Parser):
 
         Raises
         ------
-            ValueError: If the grid is not defined before tabulating MOs.
-            ValueError: If GTOs are not tabulated before tabulating MOs.
-            ValueError: If provided mo_inds invalid.
+            ValueError:
+                If the grid is not defined before tabulating MOs.
+            ValueError:
+                If GTOs are not tabulated before tabulating MOs.
+            ValueError:
+                If provided mo_inds invalid.
 
         """
         if not hasattr(self, 'grid'):

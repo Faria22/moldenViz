@@ -77,11 +77,6 @@ class Parser:
         only_molecule: bool, optional
             Only parse the atoms and skip molecular orbitals.
             Default is `False`.
-
-    Raises
-    ------
-        ValueError: If both `filename` and `molden_lines` are provided, or if neither is provided.
-
     """
 
     def __init__(
