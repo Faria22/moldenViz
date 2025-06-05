@@ -4,7 +4,10 @@ from typing import cast
 
 import numpy as np
 import pyvista as pv
+from numpy.typing import NDArray
 from scipy.spatial.distance import pdist, squareform
+
+from .parser import _Atom
 
 logger = logging.getLogger(__name__)
 
@@ -52,14 +55,14 @@ ATOM_X = AtomType('X', 'black', 1, 0)
 class Atom:
     def __init__(
         self,
-        charge: int,
-        center: tuple[float, ...],
+        atomic_number: int,
+        center: NDArray[np.floating],
     ) -> None:
-        self.atom_type = ATOM_TYPES.get(charge, ATOM_X)
+        self.atom_type = ATOM_TYPES.get(atomic_number, ATOM_X)
         if self.atom_type is ATOM_X:
             logger.warning(
-                "Invalid charge value: %d. Atom type could not be determined. Using atom 'X' instead.",
-                charge,
+                "Invalid atomic number: %d. Atom type could not be determined. Using atom 'X' instead.",
+                atomic_number,
             )
 
         self.center = np.array(center)
@@ -77,7 +80,7 @@ class Atom:
 
 
 class Bond:
-    def __init__(self, atom_a: Atom, atom_b: Atom, radius: float = 0.2) -> None:
+    def __init__(self, atom_a: Atom, atom_b: Atom, radius: float = 0.15) -> None:
         center = (atom_a.center + atom_b.center) / 2
 
         bond_vec = atom_a.center - atom_b.center
@@ -87,19 +90,19 @@ class Bond:
 
         bond = pv.Cylinder(radius=radius, center=center, height=length, direction=bond_vec)
 
-        # HACK: Clipping has to be done twice for it to look right (no clue why)
-        bond = bond.clip_surface(atom_a.mesh, invert=False).clip_surface(atom_a.mesh, invert=False)  # pyright: ignore[reportAttributeAccessIssue]
-        bond = bond.clip_surface(atom_b.mesh, invert=False).clip_surface(atom_b.mesh, invert=False)
+        # Removes the ends of the bond that are going into the atoms
+        bond = bond.triangulate() - atom_a.mesh - atom_b.mesh
+
+        self.mesh = bond
 
         if bond.n_points == 0:
-            # FIX: Fix this
-            logger.error(
+            logger.warning(
                 'Error: Bond mesh is empty between atoms %s and %s.',
                 atom_a.atom_type.name,
                 atom_b.atom_type.name,
             )
+            self.mesh = None
 
-        self.mesh = bond
         self.color = 'grey'
         self.plotted = False
 
@@ -107,15 +110,19 @@ class Bond:
 class Molecule:
     ANGSTROM_TO_BOHR = 1.8897259886
 
-    def __init__(self, max_bond_length: float = 4) -> None:
+    def __init__(self, atoms: list[_Atom], max_bond_length: float = 4) -> None:
         # Max_bond_length helps the program skip over any bonds that should not exist
         self.max_bond_length = max_bond_length
 
         # Max radius is used later for plotting
         self.max_radius = 0
 
-    def get_atoms(self, charge_list: list[int], atom_centers: np.ndarray) -> None:
-        self.atoms = list(map(Atom, charge_list, atom_centers))
+        self.get_atoms(atoms)
+
+    def get_atoms(self, atoms: list[_Atom]) -> None:
+        atomic_numbers = [atom.atomic_number for atom in atoms]
+        atom_centers = [atom.position for atom in atoms]
+        self.atoms = list(map(Atom, atomic_numbers, atom_centers))
         self.max_radius = np.max(np.linalg.norm(atom_centers, axis=1))
 
         distances = squareform(pdist(atom_centers))  # Compute pairwise distances
@@ -135,7 +142,7 @@ class Molecule:
         for atom in self.atoms:
             actors.append(plotter.add_mesh(atom.mesh, color=atom.atom_type.color))
             for bond in atom.bonds:
-                if bond.plotted:
+                if bond.plotted or bond.mesh is None:
                     continue
 
                 actors.append(plotter.add_mesh(bond.mesh, color=bond.color, opacity=opacity))

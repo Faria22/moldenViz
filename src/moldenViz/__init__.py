@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 from .parser import Parser
+from .plotter import Plotter
 from .tabulator import Tabulator
 
-__all__ = ['Parser', 'Tabulator']
+__all__ = ['Parser', 'Plotter', 'Tabulator']

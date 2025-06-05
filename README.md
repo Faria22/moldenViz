@@ -20,5 +20,5 @@ You can find the documentation [here](https://moldenviz.readthedocs.io/en/latest
 ## Roadmap
 - [x] 0.1: Basic commands inside python.
   - [x] 0.1.5: Documentation support
-- [ ] 0.2: GUI integration.
+- [x] 0.2: Plotter.
 - [ ] 0.3: CLI options.
