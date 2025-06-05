@@ -109,7 +109,7 @@ class Plotter:
         if not tabulator:
             # Default is a cartesian grid
             r = 2 * self.molecule.max_radius
-            self.tab.spherical_grid(
+            self.tab.cartesian_grid(
                 np.linspace(-r, r, self.NUM_X_POINTS),
                 np.linspace(-r, r, self.NUM_Z_POINTS),
                 np.linspace(-r, r, self.NUM_Y_POINTS),
