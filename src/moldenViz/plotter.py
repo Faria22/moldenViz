@@ -107,11 +107,12 @@ class Plotter:
         assert self.tk_root is not None  # To help type hinters
 
         if not tabulator:
-            # Default is a spherical grid
+            # Default is a cartesian grid
+            r = 2 * self.molecule.max_radius
             self.tab.spherical_grid(
-                np.linspace(0, self.molecule.max_radius * 2, self.NUM_RADIUS_POINTS),
-                np.linspace(0, np.pi, self.NUM_THETA_POINTS),
-                np.linspace(0, 2 * np.pi, self.NUM_PHI_POINTS),
+                np.linspace(-r, r, self.NUM_X_POINTS),
+                np.linspace(-r, r, self.NUM_Z_POINTS),
+                np.linspace(-r, r, self.NUM_Y_POINTS),
             )
 
         self.orb_mesh = self._create_mo_mesh()
@@ -431,7 +432,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
         # Previous grid was sphesical, so use adapted default values
         if self.plotter.tab.grid_type == GridType.SPHERICAL:
-            r = self.plotter.molecule.max_radius
+            r = 2 * self.plotter.molecule.max_radius
 
             self.x_min_entry.insert(0, str(-r))
             self.y_min_entry.insert(0, str(-r))
