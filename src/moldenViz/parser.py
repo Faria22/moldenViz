@@ -79,6 +79,8 @@ class Parser:
             Default is `False`.
     """
 
+    ANGSTROM_TO_BOHR = 1.8897259886
+
     def __init__(
         self,
         source: str | list[str],
@@ -170,11 +172,15 @@ class Parser:
 
         """
         logger.info('Parsing atoms...')
+        angs = 'Angs' in self.molden_lines[self.atom_ind]
+
         atoms = []
         for line in self.molden_lines[self.atom_ind + 1 : self.gto_ind]:
             label, _, atomic_number, *coords = line.split()
 
             position = np.array([float(coord) for coord in coords], dtype=float)
+            if angs:
+                position *= self.ANGSTROM_TO_BOHR
 
             atoms.append(_Atom(label, int(atomic_number), position, []))
 

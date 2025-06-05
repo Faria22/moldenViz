@@ -108,8 +108,6 @@ class Bond:
 
 
 class Molecule:
-    ANGSTROM_TO_BOHR = 1.8897259886
-
     def __init__(self, atoms: list[_Atom], max_bond_length: float = 4) -> None:
         # Max_bond_length helps the program skip over any bonds that should not exist
         self.max_bond_length = max_bond_length
