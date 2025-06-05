@@ -76,7 +76,8 @@ class Atom:
 
         self.bonds.sort(key=lambda x: x.length)
 
-        self.bonds = self.bonds[: self.atom_type.max_bonds]
+        for bond in self.bonds[self.atom_type.max_bonds :]:
+            bond.mesh = None
 
 
 class Bond:
@@ -91,7 +92,7 @@ class Bond:
         bond = pv.Cylinder(radius=radius, center=center, height=length, direction=bond_vec)
 
         # Removes the ends of the bond that are going into the atoms
-        bond = bond.triangulate() - atom_a.mesh - atom_b.mesh
+        bond = bond.triangulate() - atom_b.mesh - atom_a.mesh
 
         self.mesh = bond
 
