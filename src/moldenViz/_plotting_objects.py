@@ -89,23 +89,27 @@ class Bond:
 
         self.length = length
 
-        bond = pv.Cylinder(radius=radius, center=center, height=length, direction=bond_vec)
-
-        # Removes the ends of the bond that are going into the atoms
-        bond = bond.triangulate() - atom_b.mesh - atom_a.mesh
-
-        self.mesh = bond
-
-        if bond.n_points == 0:
-            logger.warning(
-                'Error: Bond mesh is empty between atoms %s and %s.',
-                atom_a.atom_type.name,
-                atom_b.atom_type.name,
-            )
-            self.mesh = None
+        self.mesh = pv.Cylinder(radius=radius, center=center, height=length, direction=bond_vec)
+        self.atom_a = atom_a
+        self.atom_b = atom_b
 
         self.color = 'grey'
         self.plotted = False
+
+    def trim_ends(self) -> None:
+        """Remove the ends of the bond that are going into the atoms."""
+        if self.mesh is None:
+            return
+
+        self.mesh = self.mesh.triangulate() - self.atom_a.mesh - self.atom_b.mesh
+
+        if self.mesh.n_points == 0:
+            logger.warning(
+                'Error: Bond mesh is empty between atoms %s and %s.',
+                self.atom_a.atom_type.name,
+                self.atom_b.atom_type.name,
+            )
+            self.mesh = None
 
 
 class Molecule:
@@ -144,6 +148,7 @@ class Molecule:
                 if bond.plotted or bond.mesh is None:
                     continue
 
+                bond.trim_ends()
                 actors.append(plotter.add_mesh(bond.mesh, color=bond.color, opacity=opacity))
                 bond.plotted = True
 
