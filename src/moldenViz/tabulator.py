@@ -2,11 +2,11 @@
 
 import logging
 from enum import Enum
+from math import factorial
 from typing import Optional
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.special import assoc_legendre_p_all as leg_p_all
 
 from .parser import Parser
 
@@ -63,6 +63,42 @@ def _cartesian_to_spherical(
     phi = np.arctan2(y, x)
 
     return r, theta, phi
+
+
+def _binomial(r: float, k: int) -> float:
+    """
+    Calculate the generalized binomial coefficient (r over k).
+
+    This function supports real or complex 'r' and non-negative integer 'k'.
+    The formula is: C(r, k) = r * (r-1) * ... * (r-k+1) / k!
+
+    Args:
+        r: A real or complex number.
+        k: A non-negative integer.
+
+    Returns
+    -------
+        The value of the generalized binomial coefficient as a float or complex number.
+
+    Raises
+    ------
+        ValueError: If k is a negative integer.
+    """
+    if not isinstance(k, int) or k < 0:
+        raise ValueError('k must be a non-negative integer.')
+
+    if k == 0:
+        return 1
+    if k == 1:
+        return r
+
+    numerator = 1
+    for i in range(k):
+        numerator *= r - i
+
+    denominator = factorial(k)
+
+    return numerator / denominator
 
 
 class GridType(Enum):
@@ -281,8 +317,8 @@ class Tabulator(Parser):
         We define the real spherical harmonics, Xlms
         (see eq.6, M.A. Blanco et al./Journal of Molecular Structure (Theochem) 419 (1997) 19-27), as:
 
-        Xlms = sqrt(2)*Pl|m|(\theta)*sin(|m|\phi), m<0
-        Xlms = sqrt(2)*Plms(\theta)*cos(|m|\phi), m>0
+        Xlms = sqrt(2)*Pl|m|s(\theta)*sin(|m|\phi), m<0
+        Xlms = sqrt(2)*Plms(\theta)*cos(m\phi), m>0
         Xlms =         Plms             , m=0
 
         Note: Above, the Plms are normalized, i.e, \Theta_{lm}(\theta) in eq 1 of the paper.
@@ -302,12 +338,55 @@ class Tabulator(Parser):
                 Tabulated real spherical harmonics.
 
         """
-        # leg_p_all first dimension has always size = 1
-        xlms = leg_p_all(lmax, lmax, np.cos(theta), norm=True)[0, ...] / np.sqrt(np.pi)
-        xlms[:, 0, :] /= np.sqrt(2)
+        plms = Tabulator._tabulate_plms(np.cos(theta), lmax)
+
+        xlms = np.empty((lmax + 1, 2 * lmax + 1, theta.size), dtype=float)
+        xlms[:, 0, :] = plms[:, 0, :]
 
         for m in range(1, lmax + 1):
-            xlms[:, -m, :] = (-1) ** m * xlms[:, m, :] * np.sin(m * phi)
-            xlms[:, m, :] *= (-1) ** m * np.cos(m * phi)
+            xlms[:, -m, :] = np.sqrt(2) * plms[:, m, :] * np.sin(m * phi)
+            xlms[:, m, :] = np.sqrt(2) * plms[:, m, :] * np.cos(m * phi)
 
         return xlms
+
+    @staticmethod
+    def _tabulate_plms(x: NDArray[np.floating], lmax: int) -> NDArray[np.floating]:
+        """Tabulate normalized associated Legendre polynomials (without Condon-Shortley phase).
+
+        Returns an array of shape (`lmax+1`, `lmax+1`, `x.size`), where:
+            The first index is 0 <= l <= lmax
+            The second index is 0 <= m <= lmax
+            The third index goes over the x points
+
+        Using closed form outlined here:
+        https://en.m.wikipedia.org/wiki/Associated_Legendre_polynomials#Closed_Form
+
+        Args
+        ----
+            x: NDArray[np.floating]
+                Array of x values.
+            lmax: int
+                Maximum angular momentum quantum number.
+
+        Returns
+        -------
+            NDArray[np.floating]:
+                Tabulated associated Legendre polynomials.
+
+
+        """
+        plms = np.zeros((lmax + 1, lmax + 1, x.size), dtype=float)
+
+        for l in range(lmax + 1):
+            for m in range(l + 1):
+                plms[l, m, :] = (
+                    np.sqrt((2 * l + 1) * factorial(l - m) / factorial(l + m) / 4 / np.pi)
+                    * 2**l
+                    * (1 - x**2) ** (m / 2)
+                    * sum(
+                        factorial(k) * x ** (k - m) * _binomial(l, k) * _binomial((l + k - 1) / 2, l) / factorial(k - m)
+                        for k in range(m, l + 1)
+                    )
+                )
+
+        return plms
