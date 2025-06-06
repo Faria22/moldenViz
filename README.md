@@ -35,7 +35,7 @@ from moldenViz.examples import co
 
 Plotter(co)
 ```
-the total list of examples is:
+the list of examples is:
 - co
 - o2
 - co2
