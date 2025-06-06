@@ -29,7 +29,7 @@ sudo apt-get install python-tk
 ```
 
 ## Usage
-If you don't have a molden file (then why are you using this package?) you can get some examples by doing
+If you don't have a molden file (then why are you using this package?), you can get some examples by doing
 ```python
 from moldenViz.examples import co
 
@@ -46,7 +46,7 @@ the list of examples is:
 - furan
 - acrolein
 
-In the next examples, I'll be using `'molden.inp'`, but you can replace it with you molden-file path, or one of the examples.
+In the next examples, I'll be using `'molden.inp'`, but you can replace it with your molden file path, or one of the examples.
 
 ### Plotter
 You can use the plotter to plot just the molecule
