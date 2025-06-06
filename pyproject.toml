@@ -30,6 +30,9 @@ Documentation = "https://moldenviz.readthedocs.io/en/latest/"
 Issues = "https://github.com/Faria22/moldenViz/issues"
 Source = "https://github.com/Faria22/moldenViz"
 
+[project.scripts]
+moldenViz = "moldenViz._cli:main"
+
 [tool.hatch.version]
 path = "src/moldenViz/__about__.py"
 

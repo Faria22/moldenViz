@@ -29,7 +29,29 @@ sudo apt-get install python-tk
 ```
 
 ## Usage
-If you don't have a molden file (then why are you using this package?), you can get some examples by doing
+### CLI
+To run `moldenViz` with a molden file, you can do
+```console
+moldenViz molden.inp
+```
+you can instead use examples
+```console
+moldenViz -e co
+```
+a full list of examples can be found [bellow](#inside-python).
+
+You can also choose to only plot the molecule
+```console
+moldenViz molden.inp -m
+```
+
+For more details, you can do
+```console
+moldenViz -h
+```
+
+### Inside python
+If you don't have a molden file, you can get examples by doing
 ```python
 from moldenViz import Plotter
 from moldenViz.examples import co
