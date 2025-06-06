@@ -17,7 +17,7 @@ pip install moldenViz
 python3 -m tkinter
 ```
 
-If python doesn't have access to `tkinter`, then you can install it with
+If python doesn't have access to `tkinter`, then you can get it from the [latest python version](https://www.python.org/downloads/), or
 ### macOS
 ```console
 brew install python-tk
