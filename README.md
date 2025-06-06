@@ -135,4 +135,4 @@ You can find the documentation [here](https://moldenviz.readthedocs.io/en/latest
 - [x] 0.1: Basic commands inside python.
   - [x] 0.1.5: Documentation support
 - [x] 0.2: Plotter.
-- [ ] 0.3: CLI options.
+- [x] 0.3: CLI.
