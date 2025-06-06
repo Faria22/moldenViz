@@ -19,3 +19,15 @@ prismane = _read_file(molden_files_folder / 'prismane.inp')
 pyridine = _read_file(molden_files_folder / 'pyridine.inp')
 furan = _read_file(molden_files_folder / 'furan.inp')
 acrolein = _read_file(molden_files_folder / 'acrolein.inp')
+
+all_examples = {
+    'co': co,
+    'o2': o2,
+    'co2': co2,
+    'h2o': h2o,
+    'benzene': benzene,
+    'prismane': prismane,
+    'pyridine': pyridine,
+    'furan': furan,
+    'acrolein': acrolein,
+}
