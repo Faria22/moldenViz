@@ -54,6 +54,9 @@ class Plotter:
     OPACITY = 1.0
     MOLECULE_OPACITY = 1.0
 
+    MIN_THETA = 1.0e-5
+    MAX_THETA = 2 * np.pi - 1.0e-5
+
     NUM_RADIUS_POINTS = 100
     NUM_THETA_POINTS = 60
     NUM_PHI_POINTS = 120
@@ -107,12 +110,11 @@ class Plotter:
         assert self.tk_root is not None  # To help type hinters
 
         if not tabulator:
-            # Default is a cartesian grid
-            r = 2 * self.molecule.max_radius
-            self.tab.cartesian_grid(
-                np.linspace(-r, r, self.NUM_X_POINTS),
-                np.linspace(-r, r, self.NUM_Z_POINTS),
-                np.linspace(-r, r, self.NUM_Y_POINTS),
+            # Default is a spherical grid
+            self.tab.spherical_grid(
+                np.linspace(0, 2 * self.molecule.max_radius, self.NUM_RADIUS_POINTS),
+                np.linspace(self.MIN_THETA, self.MAX_THETA, self.NUM_THETA_POINTS),
+                np.linspace(0, 2 * np.pi, self.NUM_PHI_POINTS),
             )
 
         self.orb_mesh = self._create_mo_mesh()
@@ -504,7 +506,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
                 raise ValueError('Invalid number of points: Must be greater than zero.')
 
             r = np.linspace(0, radius, num_r_points)
-            theta = np.linspace(0, np.pi, num_theta_points)
+            theta = np.linspace(self.plotter.MIN_THETA, self.plotter.MAX_THETA, num_theta_points)
             phi = np.linspace(0, 2 * np.pi, num_phi_points)
 
             rr, tt, pp = np.meshgrid(r, theta, phi, indexing='ij')
