@@ -31,6 +31,7 @@ sudo apt-get install python-tk
 ## Usage
 If you don't have a molden file (then why are you using this package?), you can get some examples by doing
 ```python
+from moldenViz import Plotter
 from moldenViz.examples import co
 
 Plotter(co)
