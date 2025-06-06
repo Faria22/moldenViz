@@ -105,6 +105,7 @@ class Plotter:
         # If we want to have the molecular orbitals, we need to initiate Tk before Qt
         # That is why we have this weird if statement separated this way
         if only_molecule:
+            self.pv_plotter.app.exec_()  # pyright: ignore[reportAttributeAccessIssue]
             return
 
         assert self.tk_root is not None  # To help type hinters
