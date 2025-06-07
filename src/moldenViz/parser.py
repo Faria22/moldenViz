@@ -16,7 +16,7 @@ class _Atom:
     label: str
     atomic_number: int
     position: NDArray[np.floating]
-    gtos: list['_Gto']
+    shells: list['_Shell']
 
 
 @dataclass
@@ -28,7 +28,7 @@ class _MolecularOrbital:
     coeffs: NDArray[np.floating]
 
 
-class _GaussianPrimitive:
+class _GTO:
     def __init__(self, exp: float, coeff: float) -> None:
         self.exp = exp
         self.coeff = coeff
@@ -41,26 +41,26 @@ class _GaussianPrimitive:
         self.norm = np.sqrt(2 * (2 * self.exp) ** (l + 1.5) / gamma(l + 1.5))
 
 
-class _Gto:
-    def __init__(self, l: int, prims: list[_GaussianPrimitive]) -> None:
+class _Shell:
+    def __init__(self, l: int, gtos: list[_GTO]) -> None:
         self.l = l
-        self.prims = prims
+        self.gtos = gtos
 
         self.norm = 0.0
 
     def normalize(self) -> None:
         # See (Jiyun Kuang and C D Lin 1997 J. Phys. B: At. Mol. Opt. Phys. 30 2529)
         # equation 18 and 20 for the normalization factor
-        for prim in self.prims:
-            prim.normalize(self.l)
+        for gto in self.gtos:
+            gto.normalize(self.l)
 
         overlap = 0.0
-        for i_prim in self.prims:
-            for j_prim in self.prims:
+        for i_gto in self.gtos:
+            for j_gto in self.gtos:
                 overlap += (
-                    i_prim.coeff
-                    * j_prim.coeff
-                    * (2 * np.sqrt(i_prim.exp * j_prim.exp) / (i_prim.exp + j_prim.exp)) ** (self.l + 1.5)
+                    i_gto.coeff
+                    * j_gto.coeff
+                    * (2 * np.sqrt(i_gto.exp * j_gto.exp) / (i_gto.exp + j_gto.exp)) ** (self.l + 1.5)
                 )
 
         self.norm = 1 / np.sqrt(overlap)
@@ -105,7 +105,7 @@ class Parser:
         if only_molecule:
             return
 
-        self.gtos = self.get_gtos()
+        self.shells = self.get_shells()
         self.mos = self.get_mos()
 
     def check_molden_format(self) -> None:
@@ -187,13 +187,13 @@ class Parser:
         logger.info('Parsed %s atoms.', len(atoms))
         return atoms
 
-    def get_gtos(self) -> list[_Gto]:
+    def get_shells(self) -> list[_Shell]:
         """Parse the Gaussian-type orbitals (GTOs) from the molden file.
 
         Returns
         -------
-            list[_Gto]: A list of Gto objects containing the atom, angular
-            momentum quantum number (l), and Gaussian primitives for each gto.
+            list[_Shell]: A list of `_Shell` objects containing the atom, angular
+            momentum quantum number (l), and GTOs for each shell.
 
         Raises
         ------
@@ -207,7 +207,7 @@ class Parser:
 
         lines = iter(self.molden_lines[self.gto_ind + 1 : self.mo_ind])
 
-        gtos = []
+        shells = []
         for atom in self.atoms:
             logger.debug('Parsing GTOs for atom: %s', atom.label)
             _ = next(lines)  # Skip atom index
@@ -218,23 +218,23 @@ class Parser:
                 if not line:
                     break
 
-                shell_label, number_of_primitives, _ = line.split()
+                shell_label, num_gtos, _ = line.split()
                 if shell_label not in shell_lables:
                     raise ValueError(f"Shell label '{shell_label}' is currently not supported.")
 
-                prims = []
-                for _ in range(int(number_of_primitives)):
+                gtos = []
+                for _ in range(int(num_gtos)):
                     exp, coeff = next(lines).split()
-                    prims.append(_GaussianPrimitive(float(exp), float(coeff)))
+                    gtos.append(_GTO(float(exp), float(coeff)))
 
-                gto = _Gto(shell_lables.index(shell_label), prims)
-                gto.normalize()
+                shell = _Shell(shell_lables.index(shell_label), gtos)
+                shell.normalize()
 
-                atom.gtos.append(gto)
-                gtos.append(gto)
+                atom.shells.append(shell)
+                shells.append(shell)
 
-        logger.info('Parsed %s GTOs.', len(gtos))
-        return gtos
+        logger.info('Parsed %s GTOs.', len(shells))
+        return shells
 
     def get_mos(self, sort: bool = True) -> list[_MolecularOrbital]:
         """Parse the molecular orbitals (MOs) from the molden file.
@@ -256,9 +256,9 @@ class Parser:
         """
         logger.info('Parsing MO coefficients...')
 
-        num_atomic_orbs = sum(2 * gto.l + 1 for gto in self.gtos)
+        num_total_gtos = sum(2 * gto.l + 1 for gto in self.shells)
 
-        order = self._atomic_orbs_order()
+        order = self._gto_order()
 
         lines = self.molden_lines[self.mo_ind + 1 :]
         total_num_mos = sum('Sym=' in line for line in lines)
@@ -277,7 +277,7 @@ class Parser:
             occ = int(float(occ_line.split()[1]))
 
             coeffs = []
-            for _ in range(num_atomic_orbs):
+            for _ in range(num_total_gtos):
                 _, coeff = next(lines).split()
                 coeffs.append(coeff)
 
@@ -298,11 +298,11 @@ class Parser:
 
         return mos
 
-    def _atomic_orbs_order(self) -> list[int]:
-        """Return the order of the atomic orbitals in the molden file.
+    def _gto_order(self) -> list[int]:
+        """Return the order of the GTOs in the molden file.
 
-        Molden defines the order of the orbitals as 0, 1, -1, 2, -2, ...
-        We want it to be -l, -l + 1, ..., l - 1, l.
+        Molden defines the order of the orbitals as m = 0, 1, -1, 2, -2, ...
+        We want it to be m = -l, -l + 1, ..., l - 1, l.
 
         Note: For l = 1, the order is 1, -1, 0, which is different from the
         general pattern. This is handled separately.
@@ -314,8 +314,8 @@ class Parser:
         """
         order = []
         ind = 0
-        for gto in self.gtos:
-            l = gto.l
+        for shell in self.shells:
+            l = shell.l
             if l == 1:
                 order.extend([ind + 1, ind + 2, ind])
             else:

@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from moldenViz.parser import Parser, _GaussianPrimitive, _Gto
+from moldenViz.parser import Parser, _GTO, _Shell
 
 # ----------------------------------------------------------------------
 # utilities
@@ -26,15 +26,15 @@ def test_section_indices_order(parser_obj: Parser) -> None:
 
 
 def test_gaussian_normalization_positive() -> None:
-    prim = _GaussianPrimitive(0.8, 0.5)
-    prim.normalize(l=2)
-    gto = _Gto(2, [prim])
-    gto.normalize()
-    assert prim.norm > 0.0 and gto.norm > 0.0
+    gto = _GTO(0.8, 0.5)
+    gto.normalize(l=2)
+    shell = _Shell(2, [gto])
+    shell.normalize()
+    assert gto.norm > 0.0 and shell.norm > 0.0
 
 
 def test_atomic_orbital_permutation(parser_obj: Parser) -> None:
-    order = parser_obj._atomic_orbs_order()
+    order = parser_obj._gto_order()
     assert sorted(order) == list(range(len(order)))
 
 
@@ -44,7 +44,7 @@ def test_atom_labels(parser_obj: Parser) -> None:
 
 
 def test_basis_and_mo_dimensions(parser_obj: Parser) -> None:
-    n_basis = sum(2 * gto.l + 1 for gto in parser_obj.gtos)
+    n_basis = sum(2 * shell.l + 1 for shell in parser_obj.shells)
 
     assert len(parser_obj.mos) == 177
 

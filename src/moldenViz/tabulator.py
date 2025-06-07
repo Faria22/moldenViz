@@ -234,17 +234,17 @@ class Tabulator(Parser):
         ind = 0
         for atom in self.atoms:
             centered_grid = self.grid - atom.position
-            max_l = atom.gtos[-1].l
+            max_l = atom.shells[-1].l
 
             r, theta, phi = _cartesian_to_spherical(*centered_grid.T)
             xlms = self._tabulate_xlms(theta, phi, max_l)
 
-            for gto in atom.gtos:
-                l = gto.l
+            for shell in atom.shells:
+                l = shell.l
                 m_inds = np.arange(-l, l + 1)
                 gto_inds = ind + l + m_inds
 
-                radial = gto.norm * r**l * sum(prim.norm * prim.coeff * np.exp(-prim.exp * r**2) for prim in gto.prims)
+                radial = shell.norm * r**l * sum(gto.norm * gto.coeff * np.exp(-gto.exp * r**2) for gto in shell.gtos)
 
                 gto_data[:, gto_inds] = radial[:, None] * xlms[l, m_inds, ...].T
 
