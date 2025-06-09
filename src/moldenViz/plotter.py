@@ -2,7 +2,7 @@
 
 import logging
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 from typing import Optional
 
 import numpy as np
@@ -494,14 +494,16 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         if self.grid_type_radio_var.get() == GridType.SPHERICAL.value:
             radius = float(self.radius_entry.get())
             if radius <= 0:
-                raise ValueError('Invalid radius value: Must be greater than zero.')
+                messagebox.showerror('Invalid input', 'Radius must be greater than zero.')
+                return
 
             num_r_points = int(self.radius_points_entry.get())
             num_theta_points = int(self.theta_points_entry.get())
             num_phi_points = int(self.phi_points_entry.get())
 
             if num_r_points <= 0 or num_theta_points <= 0 or num_phi_points <= 0:
-                raise ValueError('Invalid number of points: Must be greater than zero.')
+                messagebox.showerror('Invalid input', 'Number of points must be greater than zero.')
+                return
 
             r = np.linspace(0, radius, num_r_points)
             theta = np.linspace(0, np.pi, num_theta_points)
@@ -529,7 +531,8 @@ class _OrbitalSelectionScreen(tk.Toplevel):
             z_num = int(self.z_num_points_entry.get())
 
             if x_num <= 0 or y_num <= 0 or z_num <= 0:
-                raise ValueError('Invalid number of points: Must be greater than zero.')
+                messagebox.showerror('Invalid input', 'Number of points must be greater than zero.')
+                return
 
             x = np.linspace(x_min, x_max, x_num)
             y = np.linspace(y_min, y_max, y_num)
