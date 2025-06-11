@@ -236,7 +236,7 @@ class Tabulator(Parser):
             centered_grid = self.grid - atom.position
             max_l = atom.shells[-1].l
 
-            r, theta, phi = _cartesian_to_spherical(*centered_grid.T)
+            r, theta, phi = _cartesian_to_spherical(*centered_grid.T)  # pyright: ignore[reportArgumentType]
             xlms = self._tabulate_xlms(theta, phi, max_l)
 
             for shell in atom.shells:

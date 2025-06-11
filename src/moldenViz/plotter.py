@@ -412,7 +412,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         num_r, num_theta, num_phi = self.plotter.tab.grid_dimensions
 
         # The last point of the grid for sure has the largest r
-        r, _, _ = _cartesian_to_spherical(*self.plotter.tab.grid[-1, :])
+        r, _, _ = _cartesian_to_spherical(*self.plotter.tab.grid[-1, :])  # pyright: ignore[reportArgumentType]
 
         self.radius_entry.insert(0, str(r))
         self.radius_points_entry.insert(0, str(num_r))
