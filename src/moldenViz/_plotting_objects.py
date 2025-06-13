@@ -218,7 +218,7 @@ class Molecule:
     def add_meshes(self, plotter: pv.Plotter, opacity: float = 1) -> list[pv.Actor]:
         actors = []
         for atom in self.atoms:
-            actors.append(plotter.add_mesh(atom.mesh, color=atom.atom_type.color))
+            actors.append(plotter.add_mesh(atom.mesh, color=atom.atom_type.color, smooth_shading=True))
             for bond in atom.bonds:
                 if bond.plotted or bond.mesh is None:
                     continue
