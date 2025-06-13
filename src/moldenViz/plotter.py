@@ -112,7 +112,7 @@ class Plotter:
         if not tabulator:
             # Default is a spherical grid
             self.tab.spherical_grid(
-                np.linspace(0, min(2 * self.molecule.max_radius, self.MIN_RADIUS), self.NUM_RADIUS_POINTS),
+                np.linspace(0, max(2 * self.molecule.max_radius, self.MIN_RADIUS), self.NUM_RADIUS_POINTS),
                 np.linspace(0, np.pi, self.NUM_THETA_POINTS),
                 np.linspace(0, 2 * np.pi, self.NUM_PHI_POINTS),
             )
@@ -403,7 +403,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
         # Previous grid was cartesian, so use default values
         if self.plotter.tab.grid_type == GridType.CARTESIAN:
-            self.radius_entry.insert(0, str(min(self.plotter.molecule.max_radius * 2, self.plotter.MIN_RADIUS)))
+            self.radius_entry.insert(0, str(max(self.plotter.molecule.max_radius * 2, self.plotter.MIN_RADIUS)))
             self.radius_points_entry.insert(0, str(self.plotter.NUM_RADIUS_POINTS))
             self.theta_points_entry.insert(0, str(self.plotter.NUM_THETA_POINTS))
             self.phi_points_entry.insert(0, str(self.plotter.NUM_PHI_POINTS))
@@ -434,7 +434,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
         # Previous grid was sphesical, so use adapted default values
         if self.plotter.tab.grid_type == GridType.SPHERICAL:
-            r = min(2 * self.plotter.molecule.max_radius, self.plotter.MIN_RADIUS)
+            r = max(2 * self.plotter.molecule.max_radius, self.plotter.MIN_RADIUS)
 
             self.x_min_entry.insert(0, str(-r))
             self.y_min_entry.insert(0, str(-r))
@@ -477,7 +477,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.grid_type_radio_var.set(GridType.SPHERICAL.value)
 
         self.radius_entry.delete(0, tk.END)
-        self.radius_entry.insert(0, str(min(self.plotter.molecule.max_radius * 2, self.plotter.MIN_RADIUS)))
+        self.radius_entry.insert(0, str(max(self.plotter.molecule.max_radius * 2, self.plotter.MIN_RADIUS)))
 
         self.radius_points_entry.delete(0, tk.END)
         self.radius_points_entry.insert(0, str(self.plotter.NUM_RADIUS_POINTS))
