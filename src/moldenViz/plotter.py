@@ -590,7 +590,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
                 opacity=self.plotter.opacity,
                 show_scalar_bar=False,
                 cmap='bwr',
-                smooth_shadding=True,
+                smooth_shading=True,
             )
 
 
