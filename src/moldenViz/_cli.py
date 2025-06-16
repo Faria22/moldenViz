@@ -15,7 +15,6 @@ def main() -> None:
     source.add_argument(
         '-e',
         '--example',
-        nargs='?',
         type=str,
         metavar='molecule',
         choices=all_examples.keys(),
