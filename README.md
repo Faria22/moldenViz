@@ -136,3 +136,4 @@ You can find the documentation [here](https://moldenviz.readthedocs.io/en/latest
   - [x] 0.1.5: Documentation support
 - [x] 0.2: Plotter.
 - [x] 0.3: CLI.
+- [ ] 0.4: Support for cartesian functions.
