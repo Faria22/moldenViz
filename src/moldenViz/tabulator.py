@@ -3,7 +3,7 @@
 import logging
 from enum import Enum
 from math import factorial
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 from numpy.typing import NDArray
@@ -131,12 +131,33 @@ class Tabulator(Parser):
         super().__init__(source, only_molecule)
 
         self.only_molecule = only_molecule
-        self.grid_type = GridType.UNKNOWN
+        self._grid_type = GridType.UNKNOWN
 
-        self.grid: NDArray[np.floating]
+        self._grid: NDArray[np.floating]
         self.grid_dimensions: tuple[int, int, int]
         self.gtos_data: NDArray[np.floating]
         self.mos_data: NDArray[np.floating]
+
+    @property
+    def grid(self) -> NDArray[np.floating]:  # noqa: D102
+        return self._grid
+
+    @grid.setter
+    def grid(self, new_grid: Any) -> None:
+        if not isinstance(new_grid, np.ndarray):
+            raise TypeError(f"Expected a NumPy array for 'grid', but got {type(new_grid).__name__}.")
+
+        if new_grid.ndim != 2:  # noqa: PLR2004
+            raise ValueError(f"'grid' must be a 2D array, but got shape {new_grid.shape}.")
+
+        if new_grid.shape[0] < 1:
+            raise ValueError("'grid' must have at least one row (one point in space).")
+
+        if new_grid.shape[1] != 3:  # noqa: PLR2004
+            raise ValueError(f"'grid' must have exactly 3 columns, but got {new_grid.shape[1]} columns.")
+
+        self._grid = new_grid
+        self._grid_type = GridType.UNKNOWN
 
     def cartesian_grid(
         self,
@@ -164,8 +185,8 @@ class Tabulator(Parser):
             raise RuntimeError('Grid creation is not allowed when `only_molecule` is set to `True`.')
 
         xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
-        self.grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
-        self.grid_type = GridType.CARTESIAN
+        self._grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
+        self._grid_type = GridType.CARTESIAN
         self.grid_dimensions = (len(x), len(y), len(z))
 
         if tabulate_gtos:
@@ -202,8 +223,8 @@ class Tabulator(Parser):
 
         rr, tt, pp = np.meshgrid(r, theta, phi, indexing='ij')
         xx, yy, zz = _spherical_to_cartesian(rr, tt, pp)
-        self.grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
-        self.grid_type = GridType.SPHERICAL
+        self._grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
+        self._grid_type = GridType.SPHERICAL
         self.grid_dimensions = (len(r), len(theta), len(phi))
 
         if tabulate_gtos:
@@ -230,10 +251,10 @@ class Tabulator(Parser):
             raise ValueError('Grid is not defined. Please create a grid before tabulating GTOs.')
 
         # Having a predefined array makes it faster to fill the data
-        gto_data = np.empty((self.grid.shape[0], len(self.mos[0].coeffs)))
+        gto_data = np.empty((self._grid.shape[0], len(self.mos[0].coeffs)))
         ind = 0
         for atom in self.atoms:
-            centered_grid = self.grid - atom.position
+            centered_grid = self._grid - atom.position
             max_l = atom.shells[-1].l
 
             r, theta, phi = _cartesian_to_spherical(*centered_grid.T)  # pyright: ignore[reportArgumentType]

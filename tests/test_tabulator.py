@@ -32,16 +32,16 @@ def test_cartesian_grid_shape() -> None:
     tab = Tabulator(str(MOLDEN_PATH))
     x, y, z = np.linspace(-1, 1, 3), np.linspace(-1, 1, 4), np.linspace(-1, 1, 2)
     tab.cartesian_grid(x, y, z, tabulate_gtos=False)
-    assert tab.grid is not None
-    assert tab.grid.shape == (len(x) * len(y) * len(z), 3)
+    assert tab._grid is not None
+    assert tab._grid.shape == (len(x) * len(y) * len(z), 3)
 
 
 def test_spherical_grid_shape() -> None:
     tab = Tabulator(str(MOLDEN_PATH))
     r, theta, phi = np.r_[1.0, 2.0], np.r_[0.0, np.pi / 2, np.pi], np.r_[-np.pi, 0.0, np.pi / 2, np.pi]
     tab.spherical_grid(r, theta, phi, tabulate_gtos=False)
-    assert tab.grid is not None
-    assert tab.grid.shape == (len(r) * len(theta) * len(phi), 3)
+    assert tab._grid is not None
+    assert tab._grid.shape == (len(r) * len(theta) * len(phi), 3)
 
 
 @pytest.mark.parametrize('lmax, num_points', [(0, 10), (3, 25), (5, 50)])

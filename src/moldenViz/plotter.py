@@ -80,7 +80,7 @@ class Plotter:
             if not hasattr(tabulator, 'gto_data') and not only_molecule:
                 raise ValueError('Tabulator does not have tabulated GTOs.')
 
-            if tabulator.grid_type == GridType.UNKNOWN:
+            if tabulator._grid_type == GridType.UNKNOWN:
                 raise ValueError('The plotter only supports spherical and cartesian grids.')
 
             self.tab = tabulator
@@ -145,7 +145,7 @@ class Plotter:
 
         """
         mesh = pv.StructuredGrid()
-        mesh.points = pv.pyvista_ndarray(self.tab.grid)
+        mesh.points = pv.pyvista_ndarray(self.tab._grid)
 
         # Pyvista needs the dimensions backwards
         # in other words, (phi, theta, r) or (z, y, x)
@@ -276,7 +276,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         ttk.Label(settings_frame, text='MO Grid parameters').grid(row=0, column=1, padx=5, pady=5, columnspan=4)
 
         self.grid_type_radio_var = tk.StringVar()
-        self.grid_type_radio_var.set(self.plotter.tab.grid_type.value)
+        self.grid_type_radio_var.set(self.plotter.tab._grid_type.value)
 
         ttk.Label(settings_frame, text='Spherical grid:').grid(row=1, column=1, padx=5, pady=5)
         sph_grid_type_button = ttk.Radiobutton(
@@ -402,7 +402,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.phi_points_entry.delete(0, tk.END)
 
         # Previous grid was cartesian, so use default values
-        if self.plotter.tab.grid_type == GridType.CARTESIAN:
+        if self.plotter.tab._grid_type == GridType.CARTESIAN:
             self.radius_entry.insert(0, str(max(self.plotter.molecule.max_radius * 2, self.plotter.MIN_RADIUS)))
             self.radius_points_entry.insert(0, str(self.plotter.NUM_RADIUS_POINTS))
             self.theta_points_entry.insert(0, str(self.plotter.NUM_THETA_POINTS))
@@ -412,7 +412,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         num_r, num_theta, num_phi = self.plotter.tab.grid_dimensions
 
         # The last point of the grid for sure has the largest r
-        r, _, _ = _cartesian_to_spherical(*self.plotter.tab.grid[-1, :])  # pyright: ignore[reportArgumentType]
+        r, _, _ = _cartesian_to_spherical(*self.plotter.tab._grid[-1, :])  # pyright: ignore[reportArgumentType]
 
         self.radius_entry.insert(0, str(r))
         self.radius_points_entry.insert(0, str(num_r))
@@ -433,7 +433,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.z_num_points_entry.delete(0, tk.END)
 
         # Previous grid was sphesical, so use adapted default values
-        if self.plotter.tab.grid_type == GridType.SPHERICAL:
+        if self.plotter.tab._grid_type == GridType.SPHERICAL:
             r = max(2 * self.plotter.molecule.max_radius, self.plotter.MIN_RADIUS)
 
             self.x_min_entry.insert(0, str(-r))
@@ -450,8 +450,8 @@ class _OrbitalSelectionScreen(tk.Toplevel):
             return
 
         x_num, y_num, z_num = self.plotter.tab.grid_dimensions
-        x_min, y_min, z_min = self.plotter.tab.grid[0, :]
-        x_max, y_max, z_max = self.plotter.tab.grid[-1, :]
+        x_min, y_min, z_min = self.plotter.tab._grid[0, :]
+        x_max, y_max, z_max = self.plotter.tab._grid[-1, :]
 
         self.x_min_entry.insert(0, str(x_min))
         self.x_max_entry.insert(0, str(x_max))
@@ -516,7 +516,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
             # Update the mesh with new points if needed
             new_grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
-            if not np.array_equal(new_grid, self.plotter.tab.grid):
+            if not np.array_equal(new_grid, self.plotter.tab._grid):
                 self.plotter.update_mesh(r, theta, phi, GridType.SPHERICAL)
 
         else:
@@ -544,7 +544,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
             # Update the mesh with new points if needed
             new_grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
-            if not np.array_equal(new_grid, self.plotter.tab.grid):
+            if not np.array_equal(new_grid, self.plotter.tab._grid):
                 self.plotter.update_mesh(x, y, z, GridType.CARTESIAN)
 
         self.plotter.contour = float(self.contour_entry.get().strip())
