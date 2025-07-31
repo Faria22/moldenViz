@@ -2,7 +2,8 @@ import json
 from pathlib import Path
 
 import toml
-from _plotting_objects import AtomType  # noqa: PLC2701
+
+from ._plotting_objects import AtomType
 
 default_configs_dir = Path(__file__).parent / 'default_configs'
 
@@ -31,7 +32,20 @@ def load_atom_types() -> dict[int, AtomType]:
     return atom_types
 
 
-def load_default_config() -> dict: ...
+def load_default_config() -> dict:
+    """Load default configuration from the TOML file.
+
+    Returns
+    -------
+        dict: The custom configuration dictionary.
+
+    """
+    default_config_path = default_configs_dir / 'config.toml'
+    if not default_config_path.exists():
+        raise FileNotFoundError(f'Default configuration file not found at {default_config_path}. ')
+
+    with default_config_path.open('r') as f:
+        return toml.load(f)
 
 
 def load_custom_congig() -> dict:
