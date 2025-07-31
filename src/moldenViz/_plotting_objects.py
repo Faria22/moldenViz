@@ -78,6 +78,7 @@ class Bond:
         self.atom_b = atom_b
 
         self.color = 'grey'
+        self.type = 'uniform'
         self.plotted = False
 
     def trim_ends(self) -> None:
