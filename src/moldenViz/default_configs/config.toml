@@ -1,0 +1,26 @@
+[plotter.grid]
+min_radius = 5
+max_radius_multiplier = 2
+
+[plotter.spherical_grid]
+num_r_points = 100
+num_theta_points = 60
+num_phi_points = 120
+
+[plotter.cartesian_grid]
+num_x_points = 100
+num_y_points = 100
+num_z_points = 100
+
+[plotter.MO]
+contour = 0.1
+opacity = 1
+
+[plotter.molecule]
+opacity = 1
+
+[plotter.molecule.bond]
+max_length = 4
+color_type = 'uniform' # Options: 'uniform', 'split'
+color = 'grey'
+radius = 0.15
