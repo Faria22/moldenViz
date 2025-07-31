@@ -86,7 +86,7 @@ Plotter('molden.inp')
 ```
 
 ### Tabulator
-You can use `moldenViz` to tabulate the GTOs and molecular orbitals
+You can use `moldenViz` to tabulate the GTOs
 ```python
 from moldenViz import Tabulator
 import numpy as np
