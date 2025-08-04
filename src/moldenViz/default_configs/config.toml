@@ -1,26 +1,32 @@
-[plotter.grid]
+smooth_shading = true
+
+[grid]
 min_radius = 5
 max_radius_multiplier = 2
 
-[plotter.spherical_grid]
+[grid.spherical]
 num_r_points = 100
 num_theta_points = 60
 num_phi_points = 120
 
-[plotter.cartesian_grid]
+[grid.cartesian]
 num_x_points = 100
 num_y_points = 100
 num_z_points = 100
 
-[plotter.MO]
+[MO]
 contour = 0.1
 opacity = 1
 
-[plotter.molecule]
+[molecule]
 opacity = 1
 
-[plotter.molecule.bond]
+[molecule.atom]
+show = true
+
+[molecule.bond]
+show = true
 max_length = 4
-color_type = 'uniform' # Options: 'uniform', 'split'
+color_type = 'uniform'
 color = 'grey'
 radius = 0.15
