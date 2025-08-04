@@ -10,11 +10,14 @@ import pyvista as pv
 from numpy.typing import NDArray
 from pyvistaqt import BackgroundPlotter
 
+from ._config_module import Config
 from ._plotting_objects import Molecule
 from .parser import _MolecularOrbital
 from .tabulator import GridType, Tabulator, _cartesian_to_spherical, _spherical_to_cartesian
 
 logger = logging.getLogger(__name__)
+
+config = Config()
 
 
 class Plotter:
@@ -49,21 +52,6 @@ class Plotter:
             (e.g., missing grid or GTO data when `only_molecule` is `False`, or has an UNKNOWN grid type).
     """
 
-    # Default values
-    CONTOUR = 0.1
-    OPACITY = 1.0
-    MOLECULE_OPACITY = 1.0
-
-    MIN_RADIUS = 5.0
-
-    NUM_RADIUS_POINTS = 100
-    NUM_THETA_POINTS = 60
-    NUM_PHI_POINTS = 120
-
-    NUM_X_POINTS = 100
-    NUM_Y_POINTS = 100
-    NUM_Z_POINTS = 100
-
     def __init__(
         self,
         source: str | list[str],
@@ -88,7 +76,7 @@ class Plotter:
             self.tab = Tabulator(source, only_molecule=only_molecule)
 
         self.molecule = Molecule(self.tab.atoms)
-        self.molecule_opacity = self.MOLECULE_OPACITY
+        self.molecule_opacity = config.molecule.opacity
 
         if not only_molecule:
             self.tk_root = tk_root
@@ -112,17 +100,21 @@ class Plotter:
         if not tabulator:
             # Default is a spherical grid
             self.tab.spherical_grid(
-                np.linspace(0, max(2 * self.molecule.max_radius, self.MIN_RADIUS), self.NUM_RADIUS_POINTS),
-                np.linspace(0, np.pi, self.NUM_THETA_POINTS),
-                np.linspace(0, 2 * np.pi, self.NUM_PHI_POINTS),
+                np.linspace(
+                    0,
+                    max(config.grig.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius),
+                    config.grig.spherical.num_r_points,
+                ),
+                np.linspace(0, np.pi, config.grig.spherical.num_theta_points),
+                np.linspace(0, 2 * np.pi, config.grig.spherical.num_phi_points),
             )
 
         self.orb_mesh = self._create_mo_mesh()
         self.orb_actor: pv.Actor | None = None
 
         # Values for MO, not the molecule
-        self.contour = self.CONTOUR
-        self.opacity = self.OPACITY
+        self.contour = config.MO.contour
+        self.opacity = config.MO.opacity
 
         _OrbitalSelectionScreen(self, self.tk_root)
 
@@ -403,10 +395,13 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
         # Previous grid was cartesian, so use default values
         if self.plotter.tab._grid_type == GridType.CARTESIAN:  # noqa: SLF001
-            self.radius_entry.insert(0, str(max(self.plotter.molecule.max_radius * 2, self.plotter.MIN_RADIUS)))
-            self.radius_points_entry.insert(0, str(self.plotter.NUM_RADIUS_POINTS))
-            self.theta_points_entry.insert(0, str(self.plotter.NUM_THETA_POINTS))
-            self.phi_points_entry.insert(0, str(self.plotter.NUM_PHI_POINTS))
+            self.radius_entry.insert(
+                0,
+                str(max(config.grig.max_radius_multiplier * self.plotter.molecule.max_radius, config.grig.min_radius)),
+            )
+            self.radius_points_entry.insert(0, str(config.grid.spherical.num_radius_points))
+            self.theta_points_entry.insert(0, str(config.grid.spherical.num_theta_points))
+            self.phi_points_entry.insert(0, str(config.grid.spherical.num_phi_points))
             return
 
         num_r, num_theta, num_phi = self.plotter.tab.grid_dimensions
@@ -434,7 +429,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
         # Previous grid was sphesical, so use adapted default values
         if self.plotter.tab._grid_type == GridType.SPHERICAL:  # noqa: SLF001
-            r = max(2 * self.plotter.molecule.max_radius, self.plotter.MIN_RADIUS)
+            r = max(config.grig.max_radius_multiplier * self.plotter.molecule.max_radius, config.grid.min_radius)
 
             self.x_min_entry.insert(0, str(-r))
             self.y_min_entry.insert(0, str(-r))
@@ -444,9 +439,9 @@ class _OrbitalSelectionScreen(tk.Toplevel):
             self.y_max_entry.insert(0, str(r))
             self.z_max_entry.insert(0, str(r))
 
-            self.x_num_points_entry.insert(0, str(self.plotter.NUM_X_POINTS))
-            self.y_num_points_entry.insert(0, str(self.plotter.NUM_Y_POINTS))
-            self.z_num_points_entry.insert(0, str(self.plotter.NUM_Z_POINTS))
+            self.x_num_points_entry.insert(0, str(config.grid.cartesian.num_x_points))
+            self.y_num_points_entry.insert(0, str(config.grid.cartesian.num_y_points))
+            self.z_num_points_entry.insert(0, str(config.grid.cartesian.num_z_points))
             return
 
         x_num, y_num, z_num = self.plotter.tab.grid_dimensions
@@ -468,25 +463,28 @@ class _OrbitalSelectionScreen(tk.Toplevel):
     def reset_settings(self) -> None:
         """Reset settings to default values."""
         self.contour_entry.delete(0, tk.END)
-        self.contour_entry.insert(0, str(self.plotter.CONTOUR))
+        self.contour_entry.insert(0, str(config.MO.contour))
 
-        self.opacity_scale.set(Plotter.OPACITY)
+        self.opacity_scale.set(config.MO.opacity)
 
-        self.molecule_opacity_scale.set(self.plotter.MOLECULE_OPACITY)
+        self.molecule_opacity_scale.set(config.molecule.opacity)
 
         self.grid_type_radio_var.set(GridType.SPHERICAL.value)
 
         self.radius_entry.delete(0, tk.END)
-        self.radius_entry.insert(0, str(max(self.plotter.molecule.max_radius * 2, self.plotter.MIN_RADIUS)))
+        self.radius_entry.insert(
+            0,
+            str(max(config.grig.max_radius_multiplier * self.plotter.molecule.max_radius, config.grid.min_radius)),
+        )
 
         self.radius_points_entry.delete(0, tk.END)
-        self.radius_points_entry.insert(0, str(self.plotter.NUM_RADIUS_POINTS))
+        self.radius_points_entry.insert(0, str(config.grid.spherical.num_radius_points))
 
         self.theta_points_entry.delete(0, tk.END)
-        self.theta_points_entry.insert(0, str(self.plotter.NUM_THETA_POINTS))
+        self.theta_points_entry.insert(0, str(config.grid.spherical.num_theta_points))
 
         self.phi_points_entry.delete(0, tk.END)
-        self.phi_points_entry.insert(0, str(self.plotter.NUM_PHI_POINTS))
+        self.phi_points_entry.insert(0, str(config.grid.spherical.num_phi_points))
 
     def apply_settings(self) -> None:
         self.plotter.molecule_opacity = round(self.molecule_opacity_scale.get(), 2)
