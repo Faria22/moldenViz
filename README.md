@@ -12,7 +12,8 @@
 pip install moldenViz
 ```
 
-**Note:** If you want to use the plotter, make sure python has access to `tkinter`
+### Note
+If you want to use the plotter, make sure python has access to `tkinter`
 ```console
 python3 -m tkinter
 ```
