@@ -69,21 +69,25 @@ class Bond:
             )
             self.color = config.molecule.bond.color
         elif config.molecule.bond.color_type.lower() == self.ColorType.SPLIT.value:
-            center = atom_a.center + atom_b.center
-            center_a = center / 4
-            center_b = center * 3 / 4
+            atom_radii_adjustement = bond_vec * (atom_b.atom_type.radius - atom_a.atom_type.radius) / length
+
+            center_a = (atom_a.center + center + atom_radii_adjustement / 2) / 2
+            center_b = (atom_b.center + center + atom_radii_adjustement / 2) / 2
+
+            atom_radii_adjustement_length = cast(float, np.linalg.norm(atom_radii_adjustement))
+            sign = 1 if atom_b.atom_type.radius <= atom_a.atom_type.radius else -1
 
             mesh_a = pv.Cylinder(
                 radius=config.molecule.bond.radius,
                 center=center_a,
-                height=length / 2,
+                height=(length + sign * atom_radii_adjustement_length) / 2,
                 direction=bond_vec,
             )
 
             mesh_b = pv.Cylinder(
                 radius=config.molecule.bond.radius,
                 center=center_b,
-                height=length / 2,
+                height=(length - sign * atom_radii_adjustement_length) / 2,
                 direction=bond_vec,
             )
 
@@ -107,7 +111,7 @@ class Bond:
 
         warning = False
         if isinstance(self.mesh, list):
-            self.mesh = [mesh.triangulate() - atom.mesh for mesh, atom in zip(self.mesh, [self.atom_a, self.atom_b])]
+            self.mesh = [mesh.triangulate() - atom.mesh for mesh, atom in zip(self.mesh, (self.atom_a, self.atom_b))]
             if any(mesh.n_points == 0 for mesh in self.mesh):
                 warning = True
         else:
@@ -154,7 +158,12 @@ class Molecule:
         for atom in self.atoms:
             if config.molecule.atom.show:
                 actors.append(
-                    plotter.add_mesh(atom.mesh, color=atom.atom_type.color, smooth_shading=config.smooth_shading),
+                    plotter.add_mesh(
+                        atom.mesh,
+                        color=atom.atom_type.color,
+                        smooth_shading=config.smooth_shading,
+                        opacity=opacity,
+                    ),
                 )
             for bond in atom.bonds:
                 if bond.plotted or bond.mesh is None or not config.molecule.bond.show:
