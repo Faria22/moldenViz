@@ -11,8 +11,6 @@ from scipy.spatial.distance import pdist, squareform
 from ._config_module import Config
 from .parser import _Atom
 
-logger = logging.getLogger(__name__)
-
 
 @dataclass
 class AtomType:
@@ -22,8 +20,9 @@ class AtomType:
     max_num_bonds: int
 
 
-config = Config()
+logger = logging.getLogger(__name__)
 
+config = Config()
 
 ATOM_TYPES = config.atom_types
 
