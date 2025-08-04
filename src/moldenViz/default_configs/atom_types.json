@@ -3,600 +3,600 @@
     "name": "H",
     "color": "FFFFFF",
     "radius": 0.2,
-    "maxBonds": 1
+    "max_num_bonds": 1
   },
   "2": {
     "name": "He",
     "color": "D9FFFF",
     "radius": 0.286,
-    "maxBonds": 0
+    "max_num_bonds": 0
   },
   "3": {
     "name": "Li",
     "color": "CC80FF",
     "radius": 0.34,
-    "maxBonds": 1
+    "max_num_bonds": 1
   },
   "4": {
     "name": "Be",
     "color": "C2FF00",
     "radius": 0.589,
-    "maxBonds": 2
+    "max_num_bonds": 2
   },
   "5": {
     "name": "B",
     "color": "FFB5B5",
     "radius": 0.415,
-    "maxBonds": 3
+    "max_num_bonds": 3
   },
   "6": {
     "name": "C",
     "color": "909090",
     "radius": 0.4,
-    "maxBonds": 4
+    "max_num_bonds": 4
   },
   "7": {
     "name": "N",
     "color": "3050F8",
     "radius": 0.4,
-    "maxBonds": 3
+    "max_num_bonds": 3
   },
   "8": {
     "name": "O",
     "color": "FF0D0D",
     "radius": 0.4,
-    "maxBonds": 2
+    "max_num_bonds": 2
   },
   "9": {
     "name": "F",
     "color": "90E050",
     "radius": 0.32,
-    "maxBonds": 1
+    "max_num_bonds": 1
   },
   "10": {
     "name": "Ne",
     "color": "B3E3F5",
     "radius": 0.423,
-    "maxBonds": 0
+    "max_num_bonds": 0
   },
   "11": {
     "name": "Na",
     "color": "AB5CF2",
     "radius": 0.485,
-    "maxBonds": 1
+    "max_num_bonds": 1
   },
   "12": {
     "name": "Mg",
     "color": "8AFF00",
     "radius": 0.55,
-    "maxBonds": 2
+    "max_num_bonds": 2
   },
   "13": {
     "name": "Al",
     "color": "BFA6A6",
     "radius": 0.675,
-    "maxBonds": 3
+    "max_num_bonds": 3
   },
   "14": {
     "name": "Si",
     "color": "F0C8A0",
     "radius": 0.6,
-    "maxBonds": 4
+    "max_num_bonds": 4
   },
   "15": {
     "name": "P",
     "color": "FF8000",
     "radius": 0.525,
-    "maxBonds": 5
+    "max_num_bonds": 5
   },
   "16": {
     "name": "S",
     "color": "FFFF30",
     "radius": 0.51,
-    "maxBonds": 2
+    "max_num_bonds": 2
   },
   "17": {
     "name": "Cl",
     "color": "1FF01F",
     "radius": 0.495,
-    "maxBonds": 1
+    "max_num_bonds": 1
   },
   "18": {
     "name": "Ar",
     "color": "80D1E3",
     "radius": 0.508,
-    "maxBonds": 0
+    "max_num_bonds": 0
   },
   "19": {
     "name": "K",
     "color": "8F40D4",
     "radius": 0.665,
-    "maxBonds": 1
+    "max_num_bonds": 1
   },
   "20": {
     "name": "Ca",
     "color": "3DFF00",
     "radius": 0.495,
-    "maxBonds": 2
+    "max_num_bonds": 2
   },
   "21": {
     "name": "Sc",
     "color": "E6E6E6",
     "radius": 0.72,
-    "maxBonds": 3
+    "max_num_bonds": 3
   },
   "22": {
     "name": "Ti",
     "color": "BFC2C7",
     "radius": 0.735,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "23": {
     "name": "V",
     "color": "A6A6AB",
     "radius": 0.665,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "24": {
     "name": "Cr",
     "color": "8A99C7",
     "radius": 0.675,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "25": {
     "name": "Mn",
     "color": "9C7AC7",
     "radius": 0.675,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "26": {
     "name": "Fe",
     "color": "E06633",
     "radius": 0.67,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "27": {
     "name": "Co",
     "color": "F090A0",
     "radius": 0.615,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "28": {
     "name": "Ni",
     "color": "50D050",
     "radius": 0.75,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "29": {
     "name": "Cu",
     "color": "C88033",
     "radius": 0.76,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "30": {
     "name": "Zn",
     "color": "7D80B0",
     "radius": 0.725,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "31": {
     "name": "Ga",
     "color": "C28F8F",
     "radius": 0.61,
-    "maxBonds": 3
+    "max_num_bonds": 3
   },
   "32": {
     "name": "Ge",
     "color": "668F8F",
     "radius": 0.585,
-    "maxBonds": 4
+    "max_num_bonds": 4
   },
   "33": {
     "name": "As",
     "color": "BD80E3",
     "radius": 0.605,
-    "maxBonds": 3
+    "max_num_bonds": 3
   },
   "34": {
     "name": "Se",
     "color": "FFA100",
     "radius": 0.61,
-    "maxBonds": 2
+    "max_num_bonds": 2
   },
   "35": {
     "name": "Br",
     "color": "A62929",
     "radius": 0.605,
-    "maxBonds": 1
+    "max_num_bonds": 1
   },
   "36": {
     "name": "Kr",
     "color": "5CB8D1",
     "radius": 0.524,
-    "maxBonds": 0
+    "max_num_bonds": 0
   },
   "37": {
     "name": "Rb",
     "color": "702EB0",
     "radius": 0.735,
-    "maxBonds": 1
+    "max_num_bonds": 1
   },
   "38": {
     "name": "Sr",
     "color": "00FF00",
     "radius": 0.56,
-    "maxBonds": 2
+    "max_num_bonds": 2
   },
   "39": {
     "name": "Y",
     "color": "94FFFF",
     "radius": 0.89,
-    "maxBonds": 3
+    "max_num_bonds": 3
   },
   "40": {
     "name": "Zr",
     "color": "94E0E0",
     "radius": 0.78,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "41": {
     "name": "Nb",
     "color": "73C2C9",
     "radius": 0.74,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "42": {
     "name": "Mo",
     "color": "54B5B5",
     "radius": 0.735,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "43": {
     "name": "Tc",
     "color": "3B9E9E",
     "radius": 0.675,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "44": {
     "name": "Ru",
     "color": "248F8F",
     "radius": 0.7,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "45": {
     "name": "Rh",
     "color": "0A7D8C",
     "radius": 0.725,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "46": {
     "name": "Pd",
     "color": "006985",
     "radius": 0.75,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "47": {
     "name": "Ag",
     "color": "C0C0C0",
     "radius": 0.795,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "48": {
     "name": "Cd",
     "color": "FFD98F",
     "radius": 0.845,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "49": {
     "name": "In",
     "color": "A67573",
     "radius": 0.815,
-    "maxBonds": 3
+    "max_num_bonds": 3
   },
   "50": {
     "name": "Sn",
     "color": "668080",
     "radius": 0.73,
-    "maxBonds": 4
+    "max_num_bonds": 4
   },
   "51": {
     "name": "Sb",
     "color": "9E63B5",
     "radius": 0.73,
-    "maxBonds": 3
+    "max_num_bonds": 3
   },
   "52": {
     "name": "Te",
     "color": "D47A00",
     "radius": 0.735,
-    "maxBonds": 2
+    "max_num_bonds": 2
   },
   "53": {
     "name": "I",
     "color": "940094",
     "radius": 0.7,
-    "maxBonds": 1
+    "max_num_bonds": 1
   },
   "54": {
     "name": "Xe",
     "color": "429EB0",
     "radius": 0.577,
-    "maxBonds": 0
+    "max_num_bonds": 0
   },
   "55": {
     "name": "Cs",
     "color": "57178F",
     "radius": 0.835,
-    "maxBonds": 1
+    "max_num_bonds": 1
   },
   "56": {
     "name": "Ba",
     "color": "00C900",
     "radius": 0.67,
-    "maxBonds": 2
+    "max_num_bonds": 2
   },
   "57": {
     "name": "La",
     "color": "70D4FF",
     "radius": 0.935,
-    "maxBonds": 3
+    "max_num_bonds": 3
   },
   "58": {
     "name": "Ce",
     "color": "FFFFC7",
     "radius": 0.915,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "59": {
     "name": "Pr",
     "color": "D9FFC7",
     "radius": 0.91,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "60": {
     "name": "Nd",
     "color": "C7FFC7",
     "radius": 0.905,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "61": {
     "name": "Pm",
     "color": "A3FFC7",
     "radius": 0.9,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "62": {
     "name": "Sm",
     "color": "8FFFC7",
     "radius": 0.9,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "63": {
     "name": "Eu",
     "color": "61FFC7",
     "radius": 0.995,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "64": {
     "name": "Gd",
     "color": "45FFC7",
     "radius": 0.895,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "65": {
     "name": "Tb",
     "color": "30FFC7",
     "radius": 0.88,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "66": {
     "name": "Dy",
     "color": "1FFFC7",
     "radius": 0.875,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "67": {
     "name": "Ho",
     "color": "00FF9C",
     "radius": 0.87,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "68": {
     "name": "Er",
     "color": "00E675",
     "radius": 0.865,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "69": {
     "name": "Tm",
     "color": "00D452",
     "radius": 0.86,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "70": {
     "name": "Yb",
     "color": "00BF38",
     "radius": 0.97,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "71": {
     "name": "Lu",
     "color": "00AB24",
     "radius": 0.86,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "72": {
     "name": "Hf",
     "color": "4DC2FF",
     "radius": 0.785,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "73": {
     "name": "Ta",
     "color": "4DA6FF",
     "radius": 0.715,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "74": {
     "name": "W",
     "color": "2194D6",
     "radius": 0.685,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "75": {
     "name": "Re",
     "color": "267DAB",
     "radius": 0.675,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "76": {
     "name": "Os",
     "color": "266696",
     "radius": 0.685,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "77": {
     "name": "Ir",
     "color": "175487",
     "radius": 0.66,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "78": {
     "name": "Pt",
     "color": "D0D0E0",
     "radius": 0.75,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "79": {
     "name": "Au",
     "color": "FFD123",
     "radius": 0.75,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "80": {
     "name": "Hg",
     "color": "B8B8D0",
     "radius": 0.85,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "81": {
     "name": "Tl",
     "color": "A6544D",
     "radius": 0.775,
-    "maxBonds": 3
+    "max_num_bonds": 3
   },
   "82": {
     "name": "Pb",
     "color": "575961",
     "radius": 0.77,
-    "maxBonds": 4
+    "max_num_bonds": 4
   },
   "83": {
     "name": "Bi",
     "color": "9E4FB5",
     "radius": 0.77,
-    "maxBonds": 3
+    "max_num_bonds": 3
   },
   "84": {
     "name": "Po",
     "color": "AB5C00",
     "radius": 0.84,
-    "maxBonds": 2
+    "max_num_bonds": 2
   },
   "85": {
     "name": "At",
     "color": "754F45",
     "radius": 1,
-    "maxBonds": 1
+    "max_num_bonds": 1
   },
   "86": {
     "name": "Rn",
     "color": "428296",
     "radius": 1,
-    "maxBonds": 0
+    "max_num_bonds": 0
   },
   "87": {
     "name": "Fr",
     "color": "420066",
     "radius": 1,
-    "maxBonds": 1
+    "max_num_bonds": 1
   },
   "88": {
     "name": "Ra",
     "color": "007D00",
     "radius": 0.95,
-    "maxBonds": 2
+    "max_num_bonds": 2
   },
   "89": {
     "name": "Ac",
     "color": "70ABFA",
     "radius": 0.94,
-    "maxBonds": 3
+    "max_num_bonds": 3
   },
   "90": {
     "name": "Th",
     "color": "00BAFF",
     "radius": 0.895,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "91": {
     "name": "Pa",
     "color": "00A1FF",
     "radius": 0.805,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "92": {
     "name": "U",
     "color": "008FFF",
     "radius": 0.79,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "93": {
     "name": "Np",
     "color": "0080FF",
     "radius": 0.775,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "94": {
     "name": "Pu",
     "color": "006BFF",
     "radius": 1,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "95": {
     "name": "Am",
     "color": "545CF2",
     "radius": 0.755,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "96": {
     "name": "Cm",
     "color": "785CE3",
     "radius": 1,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "97": {
     "name": "Bk",
     "color": "8A4FE3",
     "radius": 1,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "98": {
     "name": "Cf",
     "color": "A136D4",
     "radius": 0.765,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "99": {
     "name": "Es",
     "color": "B31FD4",
     "radius": 0.76,
-    "maxBonds": 6
+    "max_num_bonds": 6
   },
   "100": {
     "name": "Fm",
     "color": "B31FBA",
     "radius": 0.755,
-    "maxBonds": 6
+    "max_num_bonds": 6
   }
 }
