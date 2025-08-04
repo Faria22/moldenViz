@@ -1,5 +1,4 @@
 import logging
-from dataclasses import dataclass
 from enum import Enum
 from typing import cast
 
@@ -8,17 +7,8 @@ import pyvista as pv
 from numpy.typing import NDArray
 from scipy.spatial.distance import pdist, squareform
 
-from ._config_module import Config
+from ._config_module import AtomType, Config
 from .parser import _Atom
-
-
-@dataclass
-class AtomType:
-    name: str
-    color: str
-    radius: float
-    max_num_bonds: int
-
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +139,7 @@ class Molecule:
 
         distances = squareform(pdist(atom_centers))  # Compute pairwise distances
         mask = np.triu(np.ones_like(distances, dtype=bool), k=1)  # Ensure boolean mask
-        indices = np.where((distances < config.molecule.max_bond_lenght) & mask)  # Apply mask
+        indices = np.where((distances < config.molecule.bond.max_length) & mask)  # Apply mask
 
         for atom_a_ind, atom_b_ind in zip(indices[0], indices[1]):
             bond = Bond(self.atoms[atom_a_ind], self.atoms[atom_b_ind])

@@ -102,11 +102,11 @@ class Plotter:
             self.tab.spherical_grid(
                 np.linspace(
                     0,
-                    max(config.grig.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius),
-                    config.grig.spherical.num_r_points,
+                    max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius),
+                    config.grid.spherical.num_r_points,
                 ),
-                np.linspace(0, np.pi, config.grig.spherical.num_theta_points),
-                np.linspace(0, 2 * np.pi, config.grig.spherical.num_phi_points),
+                np.linspace(0, np.pi, config.grid.spherical.num_theta_points),
+                np.linspace(0, 2 * np.pi, config.grid.spherical.num_phi_points),
             )
 
         self.orb_mesh = self._create_mo_mesh()
@@ -397,7 +397,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         if self.plotter.tab._grid_type == GridType.CARTESIAN:  # noqa: SLF001
             self.radius_entry.insert(
                 0,
-                str(max(config.grig.max_radius_multiplier * self.plotter.molecule.max_radius, config.grig.min_radius)),
+                str(max(config.grid.max_radius_multiplier * self.plotter.molecule.max_radius, config.grig.min_radius)),
             )
             self.radius_points_entry.insert(0, str(config.grid.spherical.num_radius_points))
             self.theta_points_entry.insert(0, str(config.grid.spherical.num_theta_points))
@@ -429,7 +429,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
         # Previous grid was sphesical, so use adapted default values
         if self.plotter.tab._grid_type == GridType.SPHERICAL:  # noqa: SLF001
-            r = max(config.grig.max_radius_multiplier * self.plotter.molecule.max_radius, config.grid.min_radius)
+            r = max(config.grid.max_radius_multiplier * self.plotter.molecule.max_radius, config.grid.min_radius)
 
             self.x_min_entry.insert(0, str(-r))
             self.y_min_entry.insert(0, str(-r))
@@ -474,7 +474,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.radius_entry.delete(0, tk.END)
         self.radius_entry.insert(
             0,
-            str(max(config.grig.max_radius_multiplier * self.plotter.molecule.max_radius, config.grid.min_radius)),
+            str(max(config.grid.max_radius_multiplier * self.plotter.molecule.max_radius, config.grid.min_radius)),
         )
 
         self.radius_points_entry.delete(0, tk.END)

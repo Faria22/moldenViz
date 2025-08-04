@@ -1,16 +1,23 @@
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 import toml
 
-from ._plotting_objects import AtomType
-
 default_configs_dir = Path(__file__).parent / 'default_configs'
 
 custom_configs_dir = Path().home() / '.config/moldenViz'
 custom_configs_dir.mkdir(parents=True, exist_ok=True)
+
+
+@dataclass
+class AtomType:
+    name: str
+    color: str
+    radius: float
+    max_num_bonds: int
 
 
 class Config:
@@ -22,7 +29,7 @@ class Config:
 
         atoms_custom_config = custom_config.pop('Atom', {})
 
-        self.config = self.dict_to_namedspace(default_config | custom_config)
+        self.config = self.merge_configs(default_config, custom_config)
 
         self.atom_types = self.load_atom_types(atoms_custom_config)
 
@@ -40,6 +47,30 @@ class Config:
         """
         return SimpleNamespace(**{k: Config.dict_to_namedspace(v) if isinstance(v, dict) else v for k, v in d.items()})
 
+    @staticmethod
+    def merge_configs(default_config: dict, custom_config: dict) -> SimpleNamespace:
+        """Merge multiple configuration dictionaries into a single SimpleNamespace.
+
+        Parameters
+        ----------
+            configs: dict: The dictionary containing configuration items.
+
+        Returns
+        -------
+            SimpleNamespace: A SimpleNamespace object with attributes corresponding to the configuration items.
+        """
+        return Config.dict_to_namedspace(Config.recursive_merge(default_config, custom_config))
+
+    @staticmethod
+    def recursive_merge(default: dict, custom: dict) -> dict:
+        merged = default.copy()
+        for k, v in custom.items():
+            if isinstance(v, dict) and isinstance(default.get(k), dict):
+                merged[k] = Config.recursive_merge(default[k], v)
+            else:
+                merged[k] = v
+        return merged
+
     def __getattr__(self, item: str) -> Any:
         """Get an attribute from the configuration.
 
@@ -50,7 +81,7 @@ class Config:
         if not hasattr(self.config, item):
             raise AttributeError(f"No attribute '{item}' found in the configurations.")
 
-        return self.config.item
+        return getattr(self.config, item)
 
     @staticmethod
     def load_atom_types(atoms_custom_config: dict) -> dict[int, AtomType]:
