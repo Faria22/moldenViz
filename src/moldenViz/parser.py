@@ -203,7 +203,7 @@ class Parser:
         """
         logger.info('Parsing GTO lines...')
 
-        shell_lables = ['s', 'p', 'd', 'f', 'g']
+        shell_labels = ['s', 'p', 'd', 'f', 'g']
 
         lines = iter(self.molden_lines[self.gto_ind + 1 : self.mo_ind])
 
@@ -219,7 +219,7 @@ class Parser:
                     break
 
                 shell_label, num_gtos, _ = line.split()
-                if shell_label not in shell_lables:
+                if shell_label not in shell_labels:
                     raise ValueError(f"Shell label '{shell_label}' is currently not supported.")
 
                 gtos = []
@@ -227,7 +227,7 @@ class Parser:
                     exp, coeff = next(lines).split()
                     gtos.append(_GTO(float(exp), float(coeff)))
 
-                shell = _Shell(shell_lables.index(shell_label), gtos)
+                shell = _Shell(shell_labels.index(shell_label), gtos)
                 shell.normalize()
 
                 atom.shells.append(shell)
