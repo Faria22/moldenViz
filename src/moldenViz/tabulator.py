@@ -114,7 +114,7 @@ class GridType(Enum):
     UNKNOWN = 'unknown'
 
 
-class Tabulator(Parser):
+class Tabulator:
     """Extends Parses, create grids and tabulates Gaussian-type orbitals (GTOs) from Molden files.
 
     Args
@@ -133,15 +133,14 @@ class Tabulator(Parser):
         only_molecule: bool = False,
     ) -> None:
         """Initialize the Tabulator with a Molden file or its content."""
-        super().__init__(source, only_molecule)
+        self._parser = Parser(source, only_molecule)
 
         self.only_molecule = only_molecule
         self._grid_type = GridType.UNKNOWN
 
         self._grid: NDArray[np.floating]
         self.grid_dimensions: tuple[int, int, int]
-        self.gtos_data: NDArray[np.floating]
-        self.mos_data: NDArray[np.floating]
+        self.gtos: NDArray[np.floating]
 
     @property
     def grid(self) -> NDArray[np.floating]:  # noqa: D102
@@ -195,7 +194,7 @@ class Tabulator(Parser):
         self.grid_dimensions = (len(x), len(y), len(z))
 
         if tabulate_gtos:
-            self.gtos_data = self.tabulate_gtos()
+            self.gtos = self.tabulate_gtos()
 
     def spherical_grid(
         self,
@@ -233,7 +232,7 @@ class Tabulator(Parser):
         self.grid_dimensions = (len(r), len(theta), len(phi))
 
         if tabulate_gtos:
-            self.gtos_data = self.tabulate_gtos()
+            self.gtos = self.tabulate_gtos()
 
     def tabulate_gtos(self) -> NDArray[np.floating]:
         """Tabulate Gaussian-type orbitals (GTOs) on the current grid.
@@ -256,9 +255,9 @@ class Tabulator(Parser):
             raise ValueError('Grid is not defined. Please create a grid before tabulating GTOs.')
 
         # Having a predefined array makes it faster to fill the data
-        gto_data = np.empty((self._grid.shape[0], len(self.mos[0].coeffs)))
+        gto_data = np.empty((self._grid.shape[0], len(self._parser.mos[0].coeffs)))
         ind = 0
-        for atom in self.atoms:
+        for atom in self._parser.atoms:
             centered_grid = self._grid - atom.position
             max_l = atom.shells[-1].l
 
@@ -312,7 +311,7 @@ class Tabulator(Parser):
             raise ValueError('GTOs are not tabulated. Please tabulate GTOs before tabulating MOs.')
 
         if mo_inds is None:
-            mo_inds = list(range(len(self.mos)))
+            mo_inds = list(range(len(self._parser.mos)))
 
         if isinstance(mo_inds, range):
             mo_inds = list(mo_inds)
@@ -321,17 +320,17 @@ class Tabulator(Parser):
             raise ValueError('Provided mo_inds is empty. Please provide valid indices.')
 
         if isinstance(mo_inds, int):
-            if mo_inds < 0 or mo_inds >= len(self.mos):
+            if mo_inds < 0 or mo_inds >= len(self._parser.mos):
                 raise ValueError('Provided mo_index is invalid. Please provide valid index.')
-        elif any(mo_ind < 0 or mo_ind >= len(self.mos) for mo_ind in mo_inds):
+        elif any(mo_ind < 0 or mo_ind >= len(self._parser.mos) for mo_ind in mo_inds):
             raise ValueError('Provided mo_inds contains invalid indices. Please provide valid indices.')
 
         if isinstance(mo_inds, int):
-            mo_data = np.sum(self.gtos_data * self.mos[mo_inds].coeffs[None, :], axis=1)
+            mo_data = np.sum(self.gtos * self._parser.mos[mo_inds].coeffs[None, :], axis=1)
         else:
-            mo_coeffs = np.stack([self.mos[i].coeffs for i in mo_inds])
+            mo_coeffs = np.stack([self._parser.mos[i].coeffs for i in mo_inds])
 
-            mo_data = np.sum(self.gtos_data[:, None, :] * mo_coeffs[None, ...], axis=2)
+            mo_data = np.sum(self.gtos[:, None, :] * mo_coeffs[None, ...], axis=2)
             logger.debug('MO data shape: %s', mo_data.shape)
 
         return mo_data
