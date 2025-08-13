@@ -307,7 +307,7 @@ class Tabulator:
         if not hasattr(self, 'grid'):
             raise ValueError('Grid is not defined. Please create a grid before tabulating MOs.')
 
-        if not hasattr(self, 'gtos_data'):
+        if not hasattr(self, 'gtos'):
             raise ValueError('GTOs are not tabulated. Please tabulate GTOs before tabulating MOs.')
 
         if mo_inds is None:
