@@ -96,9 +96,7 @@ def _binomial(r: float, k: int) -> float:
     for i in range(k):
         numerator *= r - i
 
-    denominator = factorial(k)
-
-    return numerator / denominator
+    return numerator / factorial(k)
 
 
 class GridType(Enum):
