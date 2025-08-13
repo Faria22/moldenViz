@@ -2,6 +2,7 @@
 
 import logging
 from enum import Enum
+from functools import lru_cache
 from math import factorial
 from typing import Any, Optional
 
@@ -65,6 +66,12 @@ def _cartesian_to_spherical(
     return r, theta, phi
 
 
+@lru_cache(maxsize=None)
+def _cached_factorial(n: int) -> int:
+    return factorial(n)
+
+
+@lru_cache(maxsize=None)
 def _binomial(r: float, k: int) -> float:
     """
     Calculate the generalized binomial coefficient (r over k).
@@ -96,7 +103,7 @@ def _binomial(r: float, k: int) -> float:
     for i in range(k):
         numerator *= r - i
 
-    return numerator / factorial(k)
+    return numerator / _cached_factorial(k)
 
 
 class GridType(Enum):
@@ -399,11 +406,15 @@ class Tabulator(Parser):
         for l in range(lmax + 1):
             for m in range(l + 1):
                 plms[l, m, :] = (
-                    np.sqrt((2 * l + 1) * factorial(l - m) / factorial(l + m) / 4 / np.pi)
+                    np.sqrt((2 * l + 1) * _cached_factorial(l - m) / _cached_factorial(l + m) / 4 / np.pi)
                     * 2**l
                     * (1 - x**2) ** (m / 2)
                     * sum(
-                        factorial(k) * x ** (k - m) * _binomial(l, k) * _binomial((l + k - 1) / 2, l) / factorial(k - m)
+                        _cached_factorial(k)
+                        * x ** (k - m)
+                        * _binomial(l, k)
+                        * _binomial((l + k - 1) / 2, l)
+                        / _cached_factorial(k - m)
                         for k in range(m, l + 1)
                     )
                 )
