@@ -75,7 +75,7 @@ class Plotter:
         else:
             self.tab = Tabulator(source, only_molecule=only_molecule)
 
-        self.molecule = Molecule(self.tab.atoms)
+        self.molecule = Molecule(self.tab._parser.atoms)  # noqa: SLF001
         self.molecule_opacity = config.molecule.opacity
 
         if not only_molecule:
@@ -207,7 +207,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.settings_button.pack(expand=True, padx=5, pady=10)
 
         self.orb_tv = _OrbitalsTreeview(self)
-        self.orb_tv.populate_tree(self.plotter.tab.mos)
+        self.orb_tv.populate_tree(self.plotter.tab._parser.mos)  # noqa: SLF001
         self.orb_tv.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
     def on_close(self) -> None:
@@ -569,7 +569,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
     def update_button_states(self) -> None:
         """Update the enabled/disabled state of nav buttons."""
         can_go_prev = self.current_orb_ind > 0
-        can_go_next = self.current_orb_ind < len(self.plotter.tab.mos) - 1
+        can_go_next = self.current_orb_ind < len(self.plotter.tab._parser.mos) - 1  # noqa: SLF001
         self.prev_button.config(state=tk.NORMAL if can_go_prev else tk.DISABLED)
         self.next_button.config(state=tk.NORMAL if can_go_next else tk.DISABLED)
 
