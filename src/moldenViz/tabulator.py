@@ -328,7 +328,7 @@ class Tabulator:
         if isinstance(mo_inds, int):
             mo_data = np.sum(self.gtos * self._parser.mos[mo_inds].coeffs[None, :], axis=1)
         else:
-            mo_coeffs = np.stack([self._parser.mos[i].coeffs for i in mo_inds])
+            mo_coeffs = np.stack([self._parser.mos[mo_ind].coeffs for mo_ind in mo_inds])
 
             mo_data = np.sum(self.gtos[:, None, :] * mo_coeffs[None, ...], axis=2)
             logger.debug('MO data shape: %s', mo_data.shape)
