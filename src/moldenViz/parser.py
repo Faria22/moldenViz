@@ -262,10 +262,11 @@ class Parser:
 
         lines = self.molden_lines[self.mo_ind + 1 :]
         total_num_mos = sum('Sym=' in line for line in lines)
+
         lines = iter(lines)
 
         mos = []
-        for _ in range(total_num_mos):
+        for _mo_ind in range(total_num_mos):
             _, sym = next(lines).split()
 
             energy_line = next(lines)
