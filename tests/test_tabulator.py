@@ -1,9 +1,10 @@
 # ruff: noqa
-import numpy as np
-import pytest
 from pathlib import Path
 
-from moldenViz.tabulator import Tabulator, _spherical_to_cartesian, _cartesian_to_spherical, array_like_type
+import numpy as np
+import pytest
+
+from moldenViz.tabulator import Tabulator, _cartesian_to_spherical, _spherical_to_cartesian, array_like_type
 
 MOLDEN_PATH = Path(__file__).with_name('sample_molden.inp')
 

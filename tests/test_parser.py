@@ -1,10 +1,11 @@
 # ruff: noqa
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
 
-from moldenViz.parser import Parser, _GTO, _Shell
+from moldenViz.parser import _GTO, Parser, _Shell
 
 # ----------------------------------------------------------------------
 # utilities
@@ -56,6 +57,12 @@ def test_basis_and_mo_dimensions(parser_obj: Parser) -> None:
 def test_mo_energies_are_sorted(parser_obj: Parser) -> None:
     energies = np.asarray([mo.energy for mo in parser_obj.mos])
     assert np.all(np.diff(energies) >= 0.0)
+
+
+@pytest.mark.parametrize('source', [None, 1, 1.0, {}, set()])
+def test_parser_invalid_input_type(source: Any):
+    with pytest.raises(TypeError):
+        Parser(source)
 
 
 # ----------------------------------------------------------------------
