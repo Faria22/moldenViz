@@ -3,6 +3,7 @@
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -77,13 +78,17 @@ class Parser:
         only_molecule: bool, optional
             Only parse the atoms and skip molecular orbitals.
             Default is `False`.
+
+    Raises
+    ------
+        TypeError: If the source is not a valid molden file path, or molden file lines.
     """
 
     ANGSTROM_TO_BOHR = 1.8897259886
 
     def __init__(
         self,
-        source: str | list[str],
+        source: str | list[str] | Any,
         only_molecule: bool = False,
     ) -> None:
         """Initialize the Parser with either a filename or molden lines."""
@@ -92,6 +97,8 @@ class Parser:
                 self.molden_lines = file.readlines()
         elif isinstance(source, list):
             self.molden_lines = source
+        else:
+            raise TypeError('Source must be a filename (str) or list of lines (list[str]).')
 
         # Remove leading/trailing whitespace and newline characters
         self.molden_lines = [line.strip() for line in self.molden_lines]
@@ -153,7 +160,7 @@ class Parser:
         elif '[Atoms] Angs' in self.molden_lines:
             atom_ind = self.molden_lines.index('[Atoms] Angs')
         else:
-            raise ValueError("No '[Atoms] (AU/Angs)' section found in the molden file.")
+            raise ValueError('No (AU/Angs) in [Atoms] section found in the molden file.')
 
         gto_ind = self.molden_lines.index('[GTO]')
 
