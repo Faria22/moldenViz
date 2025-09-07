@@ -14,6 +14,19 @@ custom_configs_dir.mkdir(parents=True, exist_ok=True)
 
 @dataclass
 class AtomType:
+    """Represents the properties of an atom type for visualization.
+    
+    Parameters
+    ----------
+    name : str
+        The name/symbol of the atom type (e.g., 'C', 'H', 'O').
+    color : str
+        The color to use for visualizing this atom type.
+    radius : float
+        The radius for displaying this atom type.
+    max_num_bonds : int
+        The maximum number of bonds this atom type can form.
+    """
     name: str
     color: str
     radius: float
@@ -39,11 +52,13 @@ class Config:
 
         Parameters
         ----------
-            d: dict: The dictionary to convert.
+        d : dict
+            The dictionary to convert.
 
         Returns
         -------
-            SimpleNamespace: A SimpleNamespace object with attributes corresponding to the dictionary keys.
+        SimpleNamespace
+            A SimpleNamespace object with attributes corresponding to the dictionary keys.
         """
         return SimpleNamespace(**{k: Config.dict_to_namedspace(v) if isinstance(v, dict) else v for k, v in d.items()})
 
@@ -53,16 +68,34 @@ class Config:
 
         Parameters
         ----------
-            configs: dict: The dictionary containing configuration items.
+        default_config : dict
+            The default configuration dictionary.
+        custom_config : dict
+            The custom configuration dictionary to merge with defaults.
 
         Returns
         -------
-            SimpleNamespace: A SimpleNamespace object with attributes corresponding to the configuration items.
+        SimpleNamespace
+            A SimpleNamespace object with attributes corresponding to the merged configuration items.
         """
         return Config.dict_to_namedspace(Config.recursive_merge(default_config, custom_config))
 
     @staticmethod
     def recursive_merge(default: dict, custom: dict) -> dict:
+        """Recursively merge two dictionaries.
+        
+        Parameters
+        ----------
+        default : dict
+            The default dictionary.
+        custom : dict
+            The custom dictionary to merge with default.
+            
+        Returns
+        -------
+        dict
+            The merged dictionary.
+        """
         merged = default.copy()
         for k, v in custom.items():
             if isinstance(v, dict) and isinstance(default.get(k), dict):
@@ -74,9 +107,20 @@ class Config:
     def __getattr__(self, item: str) -> Any:
         """Get an attribute from the configuration.
 
+        Parameters
+        ----------
+        item : str
+            The name of the configuration attribute to retrieve.
+
         Returns
         -------
-            object: The value of the requested configuration item.
+        Any
+            The value of the requested configuration item.
+            
+        Raises
+        ------
+        AttributeError
+            If the requested attribute is not found in the configuration.
         """
         if not hasattr(self.config, item):
             raise AttributeError(f"No attribute '{item}' found in the configurations.")
@@ -92,10 +136,15 @@ class Config:
         Radius come from default molden values
         Max number of bonds is set to author's best guess. Please, if you have better values, let me know!
 
+        Parameters
+        ----------
+        atoms_custom_config : dict
+            Custom configuration for atom types.
+
         Returns
         -------
-            dict[int, AtomType]: A dictionary mapping atomic numbers to AtomType objects.
-
+        dict[int, AtomType]
+            A dictionary mapping atomic numbers to AtomType objects.
         """
         with (default_configs_dir / 'atom_types.json').open('r') as f:
             atom_types = json.load(f)
@@ -127,8 +176,13 @@ class Config:
 
         Returns
         -------
-            dict: The custom configuration dictionary.
-
+        dict
+            The default configuration dictionary.
+            
+        Raises
+        ------
+        FileNotFoundError
+            If the default configuration file is not found.
         """
         default_config_path = default_configs_dir / 'config.toml'
         if not default_config_path.exists():
@@ -143,8 +197,8 @@ class Config:
 
         Returns
         -------
-            dict: The custom configuration dictionary.
-
+        dict
+            The custom configuration dictionary. Empty dict if file doesn't exist.
         """
         custom_config_path = custom_configs_dir / 'config.toml'
         if not custom_config_path.exists():
