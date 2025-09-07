@@ -365,7 +365,7 @@ class Tabulator:
             raise ValueError('Provided mo_inds contains invalid indices. Please provide valid indices.')
 
         if isinstance(mo_inds, int):
-            mo_data = np.sum(self.gtos * self._parser.mos[mo_inds].coeffs[None, :], axis=1)
+            mo_data = np.sum(self.gtos * self._parser.mo_coeffs[mo_inds][None, :], axis=1)
         else:
             # Use direct slicing of mo_coeffs array
             mo_coeffs = self._parser.mo_coeffs[mo_inds]

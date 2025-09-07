@@ -38,14 +38,16 @@ def test_single_mo_coeffs_array():
     assert_true(parser.mo_coeffs.ndim == 2, "mo_coeffs should be 2D")
     assert_true(parser.mo_coeffs.shape[0] == len(parser.mos), "First dim should match MO count")
     
-    # Test MO coefficient access
+    # Test that MOs no longer have individual coeffs
     for i in range(min(5, len(parser.mos))):
         mo = parser.mos[i]
         
-        # Test coefficient access
-        coeffs = mo.coeffs
-        direct_coeffs = parser.mo_coeffs[i]  # Direct index since mo_coeffs is sorted
-        assert_equal(coeffs, direct_coeffs, f"MO {i} coeffs should match direct access")
+        # Test that coeffs field doesn't exist
+        assert_true(not hasattr(mo, 'coeffs'), f"MO {i} should not have coeffs field")
+        
+        # Test that coefficients are accessible via parser.mo_coeffs
+        coeffs = parser.mo_coeffs[i]
+        assert_true(len(coeffs) > 0, f"MO {i} should have coefficients in mo_coeffs array")
 
 def test_sorting_efficiency():
     """Test that sorting is efficient and preserves coefficient access."""
@@ -54,23 +56,31 @@ def test_sorting_efficiency():
     # Get unsorted MOs
     mos_unsorted, mo_coeffs_unsorted = parser.get_mos(sort=False)
     
-    # Store original coefficients by MO object id (unique identifier)
-    original_mapping = {id(mo): mo.coeffs.copy() for mo in mos_unsorted}
+    # Store original coefficients by index
+    original_coeffs = {i: mo_coeffs_unsorted[i].copy() for i in range(len(mos_unsorted))}
+    original_energies = {i: mos_unsorted[i].energy for i in range(len(mos_unsorted))}
     
-    # Sort MOs
-    mos_sorted = parser_module.Parser.sort_mos(mos_unsorted)
+    # Get sorted MOs (default behavior)
+    mos_sorted, mo_coeffs_sorted = parser.get_mos(sort=True)
     
     # Verify sorting worked
     energies = [mo.energy for mo in mos_sorted]
     assert_true(all(energies[i] <= energies[i+1] for i in range(len(energies)-1)), 
                 "Energies should be sorted")
     
-    # Verify coefficient access preserved - each MO should still have its original coefficients
-    for mo in mos_sorted:
-        current_coeffs = mo.coeffs
-        expected_coeffs = original_mapping[id(mo)]
-        assert_equal(current_coeffs, expected_coeffs, 
-                    f"MO coeffs should be preserved after sorting")
+    # Verify coefficient arrays are properly sorted - coefficients should follow MO order
+    for i, mo in enumerate(mos_sorted):
+        # Find the original index of this MO by matching energy and checking coefficients
+        matching_indices = [j for j, energy in original_energies.items() if energy == mo.energy]
+        
+        # Find which one has matching coefficients
+        found_match = False
+        for j in matching_indices:
+            if np.array_equal(mo_coeffs_sorted[i], original_coeffs[j]):
+                found_match = True
+                break
+        
+        assert_true(found_match, f"Could not find matching coefficients for MO {i}")
 
 def test_tabulator_integration():
     """Test that tabulator operations work correctly with the new structure."""
@@ -85,14 +95,14 @@ def test_tabulator_integration():
     
     for pattern in test_patterns:
         if all(0 <= idx < len(parser.mos) for idx in pattern):
-            # Old approach (what tabulator used to do)
-            old_coeffs = np.stack([parser.mos[idx].coeffs for idx in pattern])
-            
-            # New approach (direct slicing since mo_coeffs is now sorted)
+            # New approach (direct slicing since mo_coeffs is now the only source)
             new_coeffs = parser.mo_coeffs[pattern]
             
-            assert_equal(old_coeffs, new_coeffs, 
-                        f"Pattern {pattern} should produce identical results")
+            # Test that we get the expected shape and data
+            assert_true(new_coeffs.shape[0] == len(pattern), 
+                        f"Pattern {pattern} should return correct number of MOs")
+            assert_true(new_coeffs.shape[1] == parser.mo_coeffs.shape[1], 
+                        f"Pattern {pattern} should preserve coefficient dimension")
 
 def test_memory_and_performance():
     """Test memory efficiency and performance improvements."""
@@ -105,29 +115,21 @@ def test_memory_and_performance():
         if size <= len(parser.mos):
             mo_inds = list(range(size))
             
-            # Time old approach
-            start = time.time()
-            for _ in range(50):
-                _ = np.stack([parser.mos[idx].coeffs for idx in mo_inds])
-            old_time = time.time() - start
-            
-            # Time new approach (direct slicing)
+            # Time direct slicing approach (the only way now)
             start = time.time()
             for _ in range(50):
                 _ = parser.mo_coeffs[mo_inds]
-            new_time = time.time() - start
+            direct_time = time.time() - start
             
-            # New should be faster
-            speedup = old_time / new_time if new_time > 0 else float('inf')
-            assert_true(speedup >= 1.0, f"New approach should be faster (got {speedup:.2f}x)")
+            # Verify we get reasonable performance
+            assert_true(direct_time < 1.0, f"Direct slicing should be fast (took {direct_time:.4f}s)")
 
 def test_backward_compatibility():
-    """Test that all existing usage patterns still work."""
+    """Test that the new API works correctly."""
     parser = parser_module.Parser(str(MOLDEN_PATH))
     
-    # Test individual MO access
-    mo = parser.mos[0]
-    coeffs = mo.coeffs
+    # Test that we can access coefficients through mo_coeffs
+    coeffs = parser.mo_coeffs[0]
     
     # Should work like a normal numpy array
     assert_true(len(coeffs) > 0, "Should have non-zero length")
@@ -138,6 +140,10 @@ def test_backward_compatibility():
     # Should support numpy operations
     sum_val = np.sum(coeffs)
     assert_true(isinstance(sum_val, (float, np.floating)), "Should support numpy functions")
+    
+    # Test that MO objects no longer have coeffs
+    mo = parser.mos[0]
+    assert_true(not hasattr(mo, 'coeffs'), "MO should not have coeffs field")
 
 if __name__ == "__main__":
     print("Running comprehensive tests for single mo_coeffs array implementation...")

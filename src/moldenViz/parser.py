@@ -48,15 +48,12 @@ class _MolecularOrbital:
         The spin state of the molecular orbital ('Alpha' or 'Beta').
     occ : int
         The occupation number of the molecular orbital.
-    coeffs : NDArray[np.floating]
-        The coefficients of the molecular orbital in the basis set.
     """
 
     sym: str
     energy: float
     spin: str
     occ: int
-    coeffs: NDArray[np.floating]
 
 
 class _GTO:
@@ -349,7 +346,7 @@ class Parser:
         tuple[list[_MolecularOrbital], NDArray[np.floating]]
             A tuple containing:
             - A list of MolecularOrbital objects containing
-              the symmetry, energy, and coefficients for each MO.
+              the symmetry, energy, spin, and occupation for each MO.
             - A 2D array of shape (num_mos, num_basis_functions) containing
               all molecular orbital coefficients in the same order as the MOs.
         """
@@ -365,6 +362,7 @@ class Parser:
         lines = iter(lines)
 
         mos = []
+        mo_coeffs = np.empty((total_num_mos, num_total_gtos), dtype=float)
         
         for mo_ind in range(total_num_mos):
             _, sym = next(lines).split()
@@ -382,15 +380,14 @@ class Parser:
                 _, coeff = next(lines).split()
                 coeffs.append(coeff)
 
-            # Store coefficients directly in MO
-            mo_coeffs = np.array(coeffs, dtype=float)[order]
+            # Store coefficients in shared array
+            mo_coeffs[mo_ind] = np.array(coeffs, dtype=float)[order]
 
             mo = _MolecularOrbital(
                 sym=sym,
                 energy=energy,
                 spin=spin,
                 occ=occ,
-                coeffs=mo_coeffs,
             )
 
             mos.append(mo)
@@ -398,10 +395,10 @@ class Parser:
         logger.info('Parsed MO coefficients.')
 
         if sort:
-            mos = self.sort_mos(mos)
-
-        # Create mo_coeffs array from sorted MOs
-        mo_coeffs = np.stack([mo.coeffs for mo in mos])
+            # Sort MOs and reorder mo_coeffs to match
+            sorted_indices = sorted(range(len(mos)), key=lambda i: mos[i].energy)
+            mos = [mos[i] for i in sorted_indices]
+            mo_coeffs = mo_coeffs[sorted_indices]
 
         return mos, mo_coeffs
 
