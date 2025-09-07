@@ -60,6 +60,7 @@ from moldenViz.examples import co
 Plotter(co)
 ```
 the list of examples is:
+- co
 - o2
 - co2
 - h2o
