@@ -74,6 +74,13 @@ def _cartesian_to_spherical(
 
 @lru_cache(maxsize=None)
 def _cached_factorial(n: int) -> int:
+    """Compute factorial with caching for non-negative integers.
+
+    Returns
+    -------
+    int
+        The factorial of n.
+    """
     return factorial(n)
 
 
@@ -384,7 +391,19 @@ class Tabulator:
         -------
         NDArray[np.floating]
             Tabulated real spherical harmonics.
+
+        Raises
+        ------
+        ValueError
+            If input arrays are not 1D or of the same size, or if lmax is negative.
         """
+        if theta.ndim != 1 or phi.ndim != 1 or theta.size != phi.size or lmax < 0:
+            raise ValueError('Invalid input: theta and phi must be 1D arrays of the same size.')
+        if theta.size == 0 or phi.size == 0:
+            raise ValueError('Input arrays theta and phi must not be empty.')
+        if lmax < 0:
+            raise ValueError('lmax must be a non-negative integer.')
+
         plms = Tabulator._tabulate_plms(np.cos(theta), lmax)
 
         xlms = np.empty((lmax + 1, 2 * lmax + 1, theta.size), dtype=float)
@@ -420,7 +439,7 @@ class Tabulator:
         NDArray[np.floating]
             Tabulated associated Legendre polynomials.
         """
-        plms = np.zeros((lmax + 1, lmax + 1, x.size), dtype=float)
+        plms = np.empty((lmax + 1, lmax + 1, x.size), dtype=float)
 
         for l in range(lmax + 1):
             for m in range(l + 1):
