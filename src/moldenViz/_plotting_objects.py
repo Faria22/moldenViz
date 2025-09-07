@@ -21,11 +21,21 @@ ATOM_X = AtomType('X', 'black', 1, 0)
 
 
 class Atom:
+    """Represents an atom in 3D space for visualization purposes.
+    
+    Parameters
+    ----------
+    atomic_number : int
+        The atomic number of the element.
+    center : NDArray[np.floating]
+        The 3D coordinates of the atom center.
+    """
     def __init__(
         self,
         atomic_number: int,
         center: NDArray[np.floating],
     ) -> None:
+        """Initialize an Atom with atomic number and position."""
         self.atom_type = ATOM_TYPES.get(atomic_number, ATOM_X)
         if self.atom_type is ATOM_X:
             logger.warning(
@@ -38,7 +48,11 @@ class Atom:
         self.bonds: list[Bond] = []
 
     def remove_extra_bonds(self) -> None:
-        """Remove the longest bonds if there are more bonds than `max_bonds`."""
+        """Remove the longest bonds if there are more bonds than max_bonds.
+        
+        This method sorts bonds by length and removes the longest ones if the number
+        of bonds exceeds the maximum allowed for this atom type.
+        """
         if len(self.bonds) <= self.atom_type.max_num_bonds:
             return
 
@@ -49,11 +63,22 @@ class Atom:
 
 
 class Bond:
+    """Represents a chemical bond between two atoms for visualization.
+    
+    Parameters
+    ----------
+    atom_a : Atom
+        The first atom in the bond.
+    atom_b : Atom
+        The second atom in the bond.
+    """
     class ColorType(Enum):
+        """Enumeration for bond color types."""
         UNIFORM = 'uniform'
         SPLIT = 'split'
 
     def __init__(self, atom_a: Atom, atom_b: Atom) -> None:
+        """Initialize a Bond between two atoms with appropriate geometry and coloring."""
         bond_vec = atom_a.center - atom_b.center
         center = (atom_a.center + atom_b.center) / 2
 
@@ -129,13 +154,28 @@ class Bond:
 
 
 class Molecule:
+    """Represents a complete molecule with atoms and bonds for visualization.
+    
+    Parameters
+    ----------
+    atoms : list[_Atom]
+        List of atom objects from the parser to create the molecule structure.
+    """
     def __init__(self, atoms: list[_Atom]) -> None:
+        """Initialize a Molecule from a list of parsed atoms."""
         # Max radius is used later for plotting
         self.max_radius = 0
 
         self.get_atoms(atoms)
 
     def get_atoms(self, atoms: list[_Atom]) -> None:
+        """Convert parsed atoms to visualization atoms and create bonds.
+        
+        Parameters
+        ----------
+        atoms : list[_Atom]
+            List of parsed atom objects.
+        """
         atomic_numbers = [atom.atomic_number for atom in atoms]
         atom_centers = [atom.position for atom in atoms]
         self.atoms = list(map(Atom, atomic_numbers, atom_centers))
@@ -154,6 +194,20 @@ class Molecule:
             atom.remove_extra_bonds()
 
     def add_meshes(self, plotter: pv.Plotter, opacity: float = config.molecule.opacity) -> list[pv.Actor]:
+        """Add all molecule meshes (atoms and bonds) to the PyVista plotter.
+        
+        Parameters
+        ----------
+        plotter : pv.Plotter
+            The PyVista plotter to add meshes to.
+        opacity : float, optional
+            The opacity level for the molecule meshes. Default from config.
+            
+        Returns
+        -------
+        list[pv.Actor]
+            List of PyVista actors that were added to the plotter.
+        """
         actors = []
         for atom in self.atoms:
             if config.molecule.atom.show:
