@@ -27,29 +27,26 @@ class Plotter:
     This class uses PyVista for 3D rendering and Tkinter for the user interface
     to control plotting parameters and select orbitals.
 
-    Args
-    ----
-        source: str | list[str]
-            The path to the molden file, or the lines from the file.
-
-        only_molecule: bool, optional
-            Only parse the atoms and skip molecular orbitals.
-            Default is `False`.
-
-        tabulator: Tabulator, optional
-            If `None`, `Plotter` creates a `Tabulator` and tabulates the GTOs and MOs with a default grid.
-            A `Tabulator` can be passed as to tabulate the GTOs in a predetermined grid.
-
-            Note: `Tabulator` grid must be spherical or cartesian. Custom grids are not allowed.
-
-        tk_rook: tk.Tk, optional
-            If user is using the plotter inside a tk app, `tk_root` can be passed as to not create a new tk instance.
+    Parameters
+    ----------
+    source : str | list[str]
+        The path to the molden file, or the lines from the file.
+    only_molecule : bool, optional
+        Only parse the atoms and skip molecular orbitals.
+        Default is ``False``.
+    tabulator : Tabulator, optional
+        If ``None``, ``Plotter`` creates a ``Tabulator`` and tabulates the GTOs and MOs with a default grid.
+        A ``Tabulator`` can be passed to tabulate the GTOs in a predetermined grid.
+        
+        Note: ``Tabulator`` grid must be spherical or cartesian. Custom grids are not allowed.
+    tk_root : tk.Tk, optional
+        If user is using the plotter inside a tk app, ``tk_root`` can be passed to not create a new tk instance.
 
     Raises
     ------
-        ValueError:
-            If the provided tabulator is invalid
-            (e.g., missing grid or GTO data when `only_molecule` is `False`, or has an UNKNOWN grid type).
+    ValueError
+        If the provided tabulator is invalid
+        (e.g., missing grid or GTO data when ``only_molecule`` is ``False``, or has an UNKNOWN grid type).
     """
 
     def __init__(

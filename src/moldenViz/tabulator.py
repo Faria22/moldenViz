@@ -23,16 +23,19 @@ def _spherical_to_cartesian(
 ) -> tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]:
     """Convert spherical coordinates to Cartesian coordinates.
 
-    Args
-    ----
-        r (NDArray[np.floating]): Radial distances.
-        theta (NDArray[np.floating]): Polar angles (in radians).
-        phi (NDArray[np.floating]): Azimuthal angles (in radians).
+    Parameters
+    ----------
+    r : NDArray[np.floating]
+        Radial distances.
+    theta : NDArray[np.floating]
+        Polar angles (in radians).
+    phi : NDArray[np.floating]
+        Azimuthal angles (in radians).
 
     Returns
     -------
-        tuple: Arrays of x, y, z Cartesian coordinates.
-
+    tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]
+        Arrays of x, y, z Cartesian coordinates.
     """
     x = r * np.sin(theta) * np.cos(phi)
     y = r * np.sin(theta) * np.sin(phi)
@@ -48,15 +51,20 @@ def _cartesian_to_spherical(
 ) -> tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]:
     """Convert Cartesian coordinates to spherical coordinates.
 
-    Args
-    ----
-        x (NDArray[np.floating]): X coordinates.
-        y (NDArray[np.floating]): Y coordinates.
-        z (NDArray[np.floating]): Z coordinates.
+    Parameters
+    ----------
+    x : NDArray[np.floating]
+        X coordinates.
+    y : NDArray[np.floating]
+        Y coordinates.
+    z : NDArray[np.floating]
+        Z coordinates.
 
     Returns
     -------
-        tuple: Arrays of r (radius), theta (polar angle), phi (azimuthal angle).
+    tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]
+        Arrays of r (radius), theta (polar angle), phi (azimuthal angle).
+    """
 
     """
     r = np.sqrt(x**2 + y**2 + z**2)
@@ -73,23 +81,27 @@ def _cached_factorial(n: int) -> int:
 
 @lru_cache(maxsize=None)
 def _binomial(r: float, k: int) -> float:
-    """
-    Calculate the generalized binomial coefficient (r over k).
+    """Calculate the generalized binomial coefficient (r over k).
 
     This function supports real or complex 'r' and non-negative integer 'k'.
     The formula is: C(r, k) = r * (r-1) * ... * (r-k+1) / k!
 
-    Args:
-        r: A real or complex number.
-        k: A non-negative integer.
+    Parameters
+    ----------
+    r : float
+        A real or complex number.
+    k : int
+        A non-negative integer.
 
     Returns
     -------
+    float
         The value of the generalized binomial coefficient as a float or complex number.
 
     Raises
     ------
-        ValueError: If k is a negative integer.
+    ValueError
+        If k is a negative integer.
     """
     if not isinstance(k, int) or k < 0:
         raise ValueError('k must be a non-negative integer.')
@@ -115,16 +127,15 @@ class GridType(Enum):
 
 
 class Tabulator:
-    """Extends Parses, create grids and tabulates Gaussian-type orbitals (GTOs) from Molden files.
+    """Extends Parser, create grids and tabulates Gaussian-type orbitals (GTOs) from Molden files.
 
-    Args
-    ----
-        source: str | list[str]
-            The path to the molden file, or the lines from the file.
-
-        only_molecule: bool, optional
-            Only parse the atoms and skip molecular orbitals.
-            Default is `False`.
+    Parameters
+    ----------
+    source : str | list[str]
+        The path to the molden file, or the lines from the file.
+    only_molecule : bool, optional
+        Only parse the atoms and skip molecular orbitals.
+        Default is ``False``.
     """
 
     def __init__(
@@ -172,18 +183,17 @@ class Tabulator:
     ) -> None:
         r"""Create cartesian grid from x, y, z arrays and tabulate GTOs.
 
-        Args
-        ----
-            x: NDArray[np.floating]
-                Array of x coordinates.
-            y: NDArray[np.floating]
-                Array of y coordinates.
-            z: NDArray[np.floating]
-                Array of z coordinates.
-            tabulate_gtos: bool, optional
-                Whether to tabulate Gaussian-type orbitals (GTOs) after creating the grid.
-                Defaults to True.
-
+        Parameters
+        ----------
+        x : NDArray[np.floating]
+            Array of x coordinates.
+        y : NDArray[np.floating]
+            Array of y coordinates.
+        z : NDArray[np.floating]
+            Array of z coordinates.
+        tabulate_gtos : bool, optional
+            Whether to tabulate Gaussian-type orbitals (GTOs) after creating the grid.
+            Defaults to True.
         """
         if self.only_molecule:
             raise RuntimeError('Grid creation is not allowed when `only_molecule` is set to `True`.')
@@ -205,17 +215,18 @@ class Tabulator:
     ) -> None:
         r"""Create spherical grid from r, theta, phi arrays and tabulate GTOs.
 
-        Args
-        ----
-            r: NDArray[np.floating]
-                Array of radial coordinates.
-            theta: NDArray[np.floating]
-                Array of polar angles (in radians).
-            phi: NDArray[np.floating]
-                Array of azimuthal angles (in radians).
-            tabulate_gtos: bool, optional
-                Whether to tabulate Gaussian-type orbitals (GTOs) after creating the grid.
-                Defaults to True.
+        Parameters
+        ----------
+        r : NDArray[np.floating]
+            Array of radial coordinates.
+        theta : NDArray[np.floating]
+            Array of polar angles (in radians).
+        phi : NDArray[np.floating]
+            Array of azimuthal angles (in radians).
+        tabulate_gtos : bool, optional
+            Whether to tabulate Gaussian-type orbitals (GTOs) after creating the grid.
+            Defaults to True.
+        """
 
         Note
         ----
@@ -239,13 +250,13 @@ class Tabulator:
 
         Returns
         -------
-            NDArray[np.floating]:
-                Array containing the tabulated GTOs data.
+        NDArray[np.floating]
+            Array containing the tabulated GTOs data.
 
         Raises
         ------
-            ValueError:
-                If the grid is not defined before tabulating GTOs.
+        ValueError
+            If the grid is not defined before tabulating GTOs.
 
         """
         if self.only_molecule:
@@ -281,28 +292,27 @@ class Tabulator:
     def tabulate_mos(self, mo_inds: Optional[int | array_like_type] = None) -> NDArray[np.floating]:
         """Tabulate molecular orbitals (MOs) on the current grid.
 
-        Args
-        ----
-            mo_inds : int, ArrayLike, None
-                Indices of the MOs to tabulate. If None, all MOs are tabulated.
+        Parameters
+        ----------
+        mo_inds : int, array-like, or None, optional
+            Indices of the MOs to tabulate. If None, all MOs are tabulated.
 
         Returns
         -------
-            NDArray[np.floating]:
-                Array containing the tabulated MOs data.
-
-                If an integer is provided, it will tabulate only that MO.
-                If an array-like is provided, it will tabulate the MOs at those indices.
+        NDArray[np.floating]
+            Array containing the tabulated MOs data.
+            
+            If an integer is provided, it will tabulate only that MO.
+            If an array-like is provided, it will tabulate the MOs at those indices.
 
         Raises
         ------
-            ValueError:
-                If the grid is not defined before tabulating MOs.
-            ValueError:
-                If GTOs are not tabulated before tabulating MOs.
-            ValueError:
-                If provided mo_inds invalid.
-
+        ValueError
+            If the grid is not defined before tabulating MOs.
+        ValueError
+            If GTOs are not tabulated before tabulating MOs.
+        ValueError
+            If provided mo_inds are invalid.
         """
         if not hasattr(self, 'grid'):
             raise ValueError('Grid is not defined. Please create a grid before tabulating MOs.')
@@ -348,20 +358,19 @@ class Tabulator:
 
         Note: Above, the Plms are normalized, i.e, \Theta_{lm}(\theta) in eq 1 of the paper.
 
-        Args
-        ----
-            theta: NDArray[np.floating]
-                Array of theta values.
-            phi: NDArray[np.floating]
-                Array of phi values.
-            lmax: int
-                Maximum angular momentum quantum number.
+        Parameters
+        ----------
+        theta : NDArray[np.floating]
+            Array of theta values.
+        phi : NDArray[np.floating]
+            Array of phi values.
+        lmax : int
+            Maximum angular momentum quantum number.
 
         Returns
         -------
-            NDArray[np.floating]:
-                Tabulated real spherical harmonics.
-
+        NDArray[np.floating]
+            Tabulated real spherical harmonics.
         """
         plms = Tabulator._tabulate_plms(np.cos(theta), lmax)
 
@@ -386,19 +395,17 @@ class Tabulator:
         Using closed form outlined here:
         https://en.m.wikipedia.org/wiki/Associated_Legendre_polynomials#Closed_Form
 
-        Args
-        ----
-            x: NDArray[np.floating]
-                Array of x values.
-            lmax: int
-                Maximum angular momentum quantum number.
+        Parameters
+        ----------
+        x : NDArray[np.floating]
+            Array of x values.
+        lmax : int
+            Maximum angular momentum quantum number.
 
         Returns
         -------
-            NDArray[np.floating]:
-                Tabulated associated Legendre polynomials.
-
-
+        NDArray[np.floating]
+            Tabulated associated Legendre polynomials.
         """
         plms = np.zeros((lmax + 1, lmax + 1, x.size), dtype=float)
 

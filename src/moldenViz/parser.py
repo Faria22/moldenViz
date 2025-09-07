@@ -13,6 +13,19 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class _Atom:
+    """Represents an atom with its properties and associated shells.
+    
+    Parameters
+    ----------
+    label : str
+        The atomic label (e.g., 'C', 'O', 'H').
+    atomic_number : int
+        The atomic number of the element.
+    position : NDArray[np.floating]
+        The 3D position coordinates of the atom.
+    shells : list[_Shell]
+        List of electron shells associated with this atom.
+    """
     label: str
     atomic_number: int
     position: NDArray[np.floating]
@@ -21,6 +34,21 @@ class _Atom:
 
 @dataclass
 class _MolecularOrbital:
+    """Represents a molecular orbital with its properties.
+    
+    Parameters
+    ----------
+    sym : str
+        The symmetry label of the molecular orbital.
+    energy : float
+        The energy of the molecular orbital.
+    spin : str
+        The spin state of the molecular orbital ('Alpha' or 'Beta').
+    occ : int
+        The occupation number of the molecular orbital.
+    coeffs : NDArray[np.floating]
+        The coefficients of the molecular orbital in the basis set.
+    """
     sym: str
     energy: float
     spin: str
@@ -29,26 +57,65 @@ class _MolecularOrbital:
 
 
 class _GTO:
+    """Represents a Gaussian-type orbital (GTO) primitive.
+    
+    Parameters
+    ----------
+    exp : float
+        The exponent of the Gaussian function.
+    coeff : float
+        The coefficient of the Gaussian function.
+    """
     def __init__(self, exp: float, coeff: float) -> None:
+        """Initialize a GTO primitive with exponent and coefficient."""
         self.exp = exp
         self.coeff = coeff
 
         self.norm = 0.0
 
     def normalize(self, l: int) -> None:
+        """Normalize the GTO primitive.
+        
+        Parameters
+        ----------
+        l : int
+            The angular momentum quantum number.
+            
+        Notes
+        -----
+        Uses the normalization factor from Jiyun Kuang and C D Lin 1997 
+        J. Phys. B: At. Mol. Opt. Phys. 30 2529, page 2532.
+        """
         # See (Jiyun Kuang and C D Lin 1997 J. Phys. B: At. Mol. Opt. Phys. 30 2529)
         # page 2532 for the normalization factor
         self.norm = np.sqrt(2 * (2 * self.exp) ** (l + 1.5) / gamma(l + 1.5))
 
 
 class _Shell:
+    """Represents an electron shell containing multiple GTO primitives.
+    
+    Parameters
+    ----------
+    l : int
+        The angular momentum quantum number of the shell.
+    gtos : list[_GTO]
+        List of GTO primitives that compose this shell.
+    """
     def __init__(self, l: int, gtos: list[_GTO]) -> None:
+        """Initialize a shell with angular momentum and GTO primitives."""
         self.l = l
         self.gtos = gtos
 
         self.norm = 0.0
 
     def normalize(self) -> None:
+        """Normalize the shell.
+        
+        Notes
+        -----
+        Uses the normalization factor from Jiyun Kuang and C D Lin 1997 
+        J. Phys. B: At. Mol. Opt. Phys. 30 2529, equations 18 and 20.
+        """
         # See (Jiyun Kuang and C D Lin 1997 J. Phys. B: At. Mol. Opt. Phys. 30 2529)
         # equation 18 and 20 for the normalization factor
         for gto in self.gtos:
@@ -69,14 +136,13 @@ class _Shell:
 class Parser:
     """Parser for molden files.
 
-    Args
-    ----
-        source: str | list[str]
-            The path to the molden file, or the lines from the file.
-
-        only_molecule: bool, optional
-            Only parse the atoms and skip molecular orbitals.
-            Default is `False`.
+    Parameters
+    ----------
+    source : str | list[str]
+        The path to the molden file, or the lines from the file.
+    only_molecule : bool, optional
+        Only parse the atoms and skip molecular orbitals.
+        Default is ``False``.
     """
 
     ANGSTROM_TO_BOHR = 1.8897259886
@@ -113,8 +179,9 @@ class Parser:
 
         Raises
         ------
-            ValueError: If the molden lines do not contain the required sections
-                        or if they are in an unsupported format.
+        ValueError
+            If the molden lines do not contain the required sections
+            or if they are in an unsupported format.
 
         """
         logger.info('Checking molden format...')
@@ -140,11 +207,13 @@ class Parser:
 
         Returns
         -------
-            tuple[int, int, int]: Indices of the '[Atoms]', '[GTO]', and '[MO]' lines.
+        tuple[int, int, int]
+            Indices of the '[Atoms]', '[GTO]', and '[MO]' lines.
 
         Raises
         ------
-            ValueError: If the molden lines do not contain the required sections.
+        ValueError
+            If the molden lines do not contain the required sections.
 
         """
         logger.info('Dividing molden lines into sections...')
@@ -167,7 +236,8 @@ class Parser:
 
         Returns
         -------
-            list[Atom]: A list of Atom objects containing the label, atomic number,
+        list[_Atom]
+            A list of Atom objects containing the label, atomic number,
             and position for each atom.
 
         """
@@ -192,12 +262,14 @@ class Parser:
 
         Returns
         -------
-            list[_Shell]: A list of `_Shell` objects containing the atom, angular
+        list[_Shell]
+            A list of `_Shell` objects containing the atom, angular
             momentum quantum number (l), and GTOs for each shell.
 
         Raises
         ------
-            ValueError: If the shell label is not supported or if the GTOs are not
+        ValueError
+            If the shell label is not supported or if the GTOs are not
             formatted correctly in the molden file.
 
         """
@@ -239,20 +311,17 @@ class Parser:
     def get_mos(self, sort: bool = True) -> list[_MolecularOrbital]:
         """Parse the molecular orbitals (MOs) from the molden file.
 
-        Args
-        ----
-            mo_inds: int, ArrayLike]
-                Indices of the MOs to tabulate. If None, all MOs are tabulated.
-            sort: bool
-                If true (default), returns the mos sorted by energy. If false, returns the mos in the order
-                given in the molden file.
-
+        Parameters
+        ----------
+        sort : bool, optional
+            If true (default), returns the MOs sorted by energy. If false, 
+            returns the MOs in the order given in the molden file.
 
         Returns
         -------
-            list[MolecularOrbital]: A list of MolecularOrbital objects containing
+        list[_MolecularOrbital]
+            A list of MolecularOrbital objects containing
             the symmetry, energy, and coefficients for each MO.
-
         """
         logger.info('Parsing MO coefficients...')
 
@@ -309,7 +378,8 @@ class Parser:
 
         Returns
         -------
-            list[int]: The order of the atomic orbitals.
+        list[int]
+            The order of the atomic orbitals.
 
         """
         order = []
@@ -329,16 +399,16 @@ class Parser:
     def sort_mos(mos: list[_MolecularOrbital]) -> list[_MolecularOrbital]:
         """Sort a list of MOs by energy.
 
-        Args
-        ----
-            mos: list[_MolecularOrbital]
-                A list of `_MolecularOrbital` objects to be sorted.
+        Parameters
+        ----------
+        mos : list[_MolecularOrbital]
+            A list of `_MolecularOrbital` objects to be sorted.
 
         Returns
         -------
-            list[_MolecularOrbital]: A new list containing the `_MolecularOrbital` objects sorted
+        list[_MolecularOrbital]
+            A new list containing the `_MolecularOrbital` objects sorted
             by their energy in ascending order.
-
         """
         logger.info('Sorting MOs by energy...')
         mos = sorted(mos, key=lambda mo: mo.energy)
