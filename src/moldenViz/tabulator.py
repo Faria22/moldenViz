@@ -293,7 +293,7 @@ class Tabulator:
             raise RuntimeError('Grid is not defined. Please create a grid before tabulating GTOs.')
 
         # Having a predefined array makes it faster to fill the data
-        gto_data = np.empty((self._grid.shape[0], len(self._parser.mos[0].coeffs)))
+        gto_data = np.empty((self._grid.shape[0], self._parser.mo_coeffs.shape[1]))
         ind = 0
         for atom in self._parser.atoms:
             centered_grid = self._grid - atom.position
@@ -367,7 +367,9 @@ class Tabulator:
         if isinstance(mo_inds, int):
             mo_data = np.sum(self.gtos * self._parser.mos[mo_inds].coeffs[None, :], axis=1)
         else:
-            mo_coeffs = np.stack([self._parser.mos[mo_ind].coeffs for mo_ind in mo_inds])
+            # Use direct slicing instead of stacking individual arrays
+            mo_indices = [self._parser.mos[mo_ind].index for mo_ind in mo_inds]
+            mo_coeffs = self._parser.mo_coeffs[mo_indices]
 
             mo_data = np.sum(self.gtos[:, None, :] * mo_coeffs[None, ...], axis=2)
             logger.debug('MO data shape: %s', mo_data.shape)

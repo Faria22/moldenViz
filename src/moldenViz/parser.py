@@ -48,15 +48,31 @@ class _MolecularOrbital:
         The spin state of the molecular orbital ('Alpha' or 'Beta').
     occ : int
         The occupation number of the molecular orbital.
-    coeffs : NDArray[np.floating]
-        The coefficients of the molecular orbital in the basis set.
+    index : int
+        The index of the row in the parent parser's mo_coeffs array.
+    _mo_coeffs : NDArray[np.floating], optional
+        Reference to the shared coefficient array from the parser.
     """
 
     sym: str
     energy: float
     spin: str
     occ: int
-    coeffs: NDArray[np.floating]
+    index: int
+    _mo_coeffs: NDArray[np.floating] = None
+
+    @property
+    def coeffs(self) -> NDArray[np.floating]:
+        """Get the coefficients of the molecular orbital in the basis set.
+        
+        Returns
+        -------
+        NDArray[np.floating]
+            The coefficients of the molecular orbital.
+        """
+        if self._mo_coeffs is None:
+            raise ValueError("Molecular orbital coefficients array not initialized")
+        return self._mo_coeffs[self.index]
 
 
 class _GTO:
@@ -160,6 +176,9 @@ class Parser:
     mos : list[_MolecularOrbital]
         A list of MolecularOrbital objects containing the symmetry,
         energy, and coefficients for each MO.
+    mo_coeffs : NDArray[np.floating]
+        A 2D array containing all molecular orbital coefficients, where
+        each row represents the coefficients for one molecular orbital.
 
     Raises
     ------
@@ -196,7 +215,7 @@ class Parser:
             return
 
         self.shells = self.get_shells()
-        self.mos = self.get_mos()
+        self.mos, self.mo_coeffs = self.get_mos()
 
     def check_molden_format(self) -> None:
         """Check if the provided molden lines conform to the expected format.
@@ -332,7 +351,7 @@ class Parser:
         logger.info('Parsed %s GTOs.', len(shells))
         return shells
 
-    def get_mos(self, sort: bool = True) -> list[_MolecularOrbital]:
+    def get_mos(self, sort: bool = True) -> tuple[list[_MolecularOrbital], NDArray[np.floating]]:
         """Parse the molecular orbitals (MOs) from the molden file.
 
         Parameters
@@ -343,9 +362,12 @@ class Parser:
 
         Returns
         -------
-        list[_MolecularOrbital]
-            A list of MolecularOrbital objects containing
-            the symmetry, energy, and coefficients for each MO.
+        tuple[list[_MolecularOrbital], NDArray[np.floating]]
+            A tuple containing:
+            - A list of MolecularOrbital objects containing
+              the symmetry, energy, and index for each MO.
+            - A 2D array of shape (num_mos, num_basis_functions) containing
+              all molecular orbital coefficients.
         """
         logger.info('Parsing MO coefficients...')
 
@@ -358,8 +380,11 @@ class Parser:
 
         lines = iter(lines)
 
+        # Create shared coefficient array
+        mo_coeffs = np.empty((total_num_mos, num_total_gtos), dtype=float)
         mos = []
-        for _mo_ind in range(total_num_mos):
+        
+        for mo_ind in range(total_num_mos):
             _, sym = next(lines).split()
 
             energy_line = next(lines)
@@ -375,12 +400,16 @@ class Parser:
                 _, coeff = next(lines).split()
                 coeffs.append(coeff)
 
+            # Store coefficients in shared array
+            mo_coeffs[mo_ind] = np.array(coeffs, dtype=float)[order]
+
             mo = _MolecularOrbital(
                 sym=sym,
                 energy=energy,
                 spin=spin,
                 occ=occ,
-                coeffs=np.array(coeffs, dtype=float)[order],
+                index=mo_ind,
+                _mo_coeffs=mo_coeffs,
             )
 
             mos.append(mo)
@@ -390,7 +419,7 @@ class Parser:
         if sort:
             mos = self.sort_mos(mos)
 
-        return mos
+        return mos, mo_coeffs
 
     def _gto_order(self) -> list[int]:
         """Return the order of the GTOs in the molden file.
@@ -433,7 +462,8 @@ class Parser:
         -------
         list[_MolecularOrbital]
             A new list containing the `_MolecularOrbital` objects sorted
-            by their energy in ascending order.
+            by their energy in ascending order. The original coefficient
+            array indices are preserved - only the order of MO objects changes.
         """
         logger.info('Sorting MOs by energy...')
         mos = sorted(mos, key=lambda mo: mo.energy)
