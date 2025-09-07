@@ -67,7 +67,6 @@ autodoc_mock_imports = [
     'numpy',
     'scipy',
     'matplotlib',
-    'logging'
 ]
 
 # Make autodoc more permissive about import failures
