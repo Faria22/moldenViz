@@ -23,7 +23,7 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
-dependencies = ["numpy", "pyvista", "pyvistaqt", "scipy", "PySide6", "toml"]
+dependencies = ["numpy", "pyvista", "pyvistaqt", "scipy", "PySide6", "toml", "pydantic>=2.0.0"]
 
 [project.urls]
 Documentation = "https://moldenviz.readthedocs.io/en/latest/"
