@@ -38,15 +38,13 @@ def test_single_mo_coeffs_array():
     assert_true(parser.mo_coeffs.ndim == 2, "mo_coeffs should be 2D")
     assert_true(parser.mo_coeffs.shape[0] == len(parser.mos), "First dim should match MO count")
     
-    # Test MO index access
+    # Test MO coefficient access
     for i in range(min(5, len(parser.mos))):
         mo = parser.mos[i]
-        assert_true(hasattr(mo, 'index'), f"MO {i} should have index")
-        assert_true(0 <= mo.index < len(parser.mos), f"MO {i} index should be valid")
         
         # Test coefficient access
         coeffs = mo.coeffs
-        direct_coeffs = parser.mo_coeffs[mo.index]
+        direct_coeffs = parser.mo_coeffs[i]  # Direct index since mo_coeffs is sorted
         assert_equal(coeffs, direct_coeffs, f"MO {i} coeffs should match direct access")
 
 def test_sorting_efficiency():
@@ -54,10 +52,10 @@ def test_sorting_efficiency():
     parser = parser_module.Parser(str(MOLDEN_PATH))
     
     # Get unsorted MOs
-    mos_unsorted, mo_coeffs = parser.get_mos(sort=False)
+    mos_unsorted, mo_coeffs_unsorted = parser.get_mos(sort=False)
     
-    # Store original coefficient mapping
-    original_mapping = {mo.index: mo.coeffs.copy() for mo in mos_unsorted}
+    # Store original coefficients by MO object id (unique identifier)
+    original_mapping = {id(mo): mo.coeffs.copy() for mo in mos_unsorted}
     
     # Sort MOs
     mos_sorted = parser_module.Parser.sort_mos(mos_unsorted)
@@ -67,10 +65,10 @@ def test_sorting_efficiency():
     assert_true(all(energies[i] <= energies[i+1] for i in range(len(energies)-1)), 
                 "Energies should be sorted")
     
-    # Verify coefficient access preserved
+    # Verify coefficient access preserved - each MO should still have its original coefficients
     for mo in mos_sorted:
         current_coeffs = mo.coeffs
-        expected_coeffs = original_mapping[mo.index]
+        expected_coeffs = original_mapping[id(mo)]
         assert_equal(current_coeffs, expected_coeffs, 
                     f"MO coeffs should be preserved after sorting")
 
@@ -90,9 +88,8 @@ def test_tabulator_integration():
             # Old approach (what tabulator used to do)
             old_coeffs = np.stack([parser.mos[idx].coeffs for idx in pattern])
             
-            # New approach (what tabulator does now)
-            indices = [parser.mos[idx].index for idx in pattern]
-            new_coeffs = parser.mo_coeffs[indices]
+            # New approach (direct slicing since mo_coeffs is now sorted)
+            new_coeffs = parser.mo_coeffs[pattern]
             
             assert_equal(old_coeffs, new_coeffs, 
                         f"Pattern {pattern} should produce identical results")
@@ -114,11 +111,10 @@ def test_memory_and_performance():
                 _ = np.stack([parser.mos[idx].coeffs for idx in mo_inds])
             old_time = time.time() - start
             
-            # Time new approach
+            # Time new approach (direct slicing)
             start = time.time()
             for _ in range(50):
-                indices = [parser.mos[idx].index for idx in mo_inds]
-                _ = parser.mo_coeffs[indices]
+                _ = parser.mo_coeffs[mo_inds]
             new_time = time.time() - start
             
             # New should be faster

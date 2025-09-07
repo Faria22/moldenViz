@@ -367,9 +367,8 @@ class Tabulator:
         if isinstance(mo_inds, int):
             mo_data = np.sum(self.gtos * self._parser.mos[mo_inds].coeffs[None, :], axis=1)
         else:
-            # Use direct slicing instead of stacking individual arrays
-            mo_indices = [self._parser.mos[mo_ind].index for mo_ind in mo_inds]
-            mo_coeffs = self._parser.mo_coeffs[mo_indices]
+            # Use direct slicing of mo_coeffs array
+            mo_coeffs = self._parser.mo_coeffs[mo_inds]
 
             mo_data = np.sum(self.gtos[:, None, :] * mo_coeffs[None, ...], axis=2)
             logger.debug('MO data shape: %s', mo_data.shape)

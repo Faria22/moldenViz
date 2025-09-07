@@ -48,31 +48,15 @@ class _MolecularOrbital:
         The spin state of the molecular orbital ('Alpha' or 'Beta').
     occ : int
         The occupation number of the molecular orbital.
-    index : int
-        The index of the row in the parent parser's mo_coeffs array.
-    _mo_coeffs : NDArray[np.floating], optional
-        Reference to the shared coefficient array from the parser.
+    coeffs : NDArray[np.floating]
+        The coefficients of the molecular orbital in the basis set.
     """
 
     sym: str
     energy: float
     spin: str
     occ: int
-    index: int
-    _mo_coeffs: NDArray[np.floating] = None
-
-    @property
-    def coeffs(self) -> NDArray[np.floating]:
-        """Get the coefficients of the molecular orbital in the basis set.
-        
-        Returns
-        -------
-        NDArray[np.floating]
-            The coefficients of the molecular orbital.
-        """
-        if self._mo_coeffs is None:
-            raise ValueError("Molecular orbital coefficients array not initialized")
-        return self._mo_coeffs[self.index]
+    coeffs: NDArray[np.floating]
 
 
 class _GTO:
@@ -365,9 +349,9 @@ class Parser:
         tuple[list[_MolecularOrbital], NDArray[np.floating]]
             A tuple containing:
             - A list of MolecularOrbital objects containing
-              the symmetry, energy, and index for each MO.
+              the symmetry, energy, and coefficients for each MO.
             - A 2D array of shape (num_mos, num_basis_functions) containing
-              all molecular orbital coefficients.
+              all molecular orbital coefficients in the same order as the MOs.
         """
         logger.info('Parsing MO coefficients...')
 
@@ -380,8 +364,6 @@ class Parser:
 
         lines = iter(lines)
 
-        # Create shared coefficient array
-        mo_coeffs = np.empty((total_num_mos, num_total_gtos), dtype=float)
         mos = []
         
         for mo_ind in range(total_num_mos):
@@ -400,16 +382,15 @@ class Parser:
                 _, coeff = next(lines).split()
                 coeffs.append(coeff)
 
-            # Store coefficients in shared array
-            mo_coeffs[mo_ind] = np.array(coeffs, dtype=float)[order]
+            # Store coefficients directly in MO
+            mo_coeffs = np.array(coeffs, dtype=float)[order]
 
             mo = _MolecularOrbital(
                 sym=sym,
                 energy=energy,
                 spin=spin,
                 occ=occ,
-                index=mo_ind,
-                _mo_coeffs=mo_coeffs,
+                coeffs=mo_coeffs,
             )
 
             mos.append(mo)
@@ -418,6 +399,9 @@ class Parser:
 
         if sort:
             mos = self.sort_mos(mos)
+
+        # Create mo_coeffs array from sorted MOs
+        mo_coeffs = np.stack([mo.coeffs for mo in mos])
 
         return mos, mo_coeffs
 
@@ -462,8 +446,7 @@ class Parser:
         -------
         list[_MolecularOrbital]
             A new list containing the `_MolecularOrbital` objects sorted
-            by their energy in ascending order. The original coefficient
-            array indices are preserved - only the order of MO objects changes.
+            by their energy in ascending order.
         """
         logger.info('Sorting MOs by energy...')
         mos = sorted(mos, key=lambda mo: mo.energy)
