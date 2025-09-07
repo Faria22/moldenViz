@@ -96,16 +96,16 @@ tab = Tabulator('molden.inp')
 
 # Using a spherical grid
 tab.spherical_grid(
-    r=np.linspace(0, 5, 20),
-    theta=np.linspace(0, np.pi, 20),
-    phi=np.linspace(0, 2 * np.pi, 40)
+    r = np.linspace(0, 5, 20),
+    theta = np.linspace(0, np.pi, 20),
+    phi = np.linspace(0, 2 * np.pi, 40)
 )
 
 # Or a cartesian grid
 tab.cartesian_grid(
-    x=np.linspace(-2, 2, 20),
-    y=np.linspace(-2, 2, 20),
-    z=np.linspace(-2, 2, 20)
+    x = np.linspace(-2, 2, 20),
+    y = np.linspace(-2, 2, 20),
+    z = np.linspace(-2, 2, 20)
 )
 
 print(tab.grid.shape)
