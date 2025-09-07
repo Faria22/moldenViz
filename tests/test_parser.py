@@ -1,10 +1,12 @@
-# ruff: noqa
+"""Unit tests for the Molden file parser."""
+
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
 
-from moldenViz.parser import Parser, _GTO, _Shell
+from moldenViz.parser import _GTO, Parser, _Shell  # noqa: PLC2701
 
 # ----------------------------------------------------------------------
 # utilities
@@ -14,7 +16,13 @@ MOLDEN_PATH = Path(__file__).with_name('sample_molden.inp')
 
 @pytest.fixture(scope='session')
 def parser_obj() -> Parser:
-    """Parser built once per test session from the reference Molden file."""
+    """
+    Parser built once per test session from the reference Molden file.
+
+    Returns
+    -------
+        Parser object
+    """
     return Parser(str(MOLDEN_PATH))
 
 
@@ -22,46 +30,65 @@ def parser_obj() -> Parser:
 # basic structural sanity
 # ----------------------------------------------------------------------
 def test_section_indices_order(parser_obj: Parser) -> None:
+    """Check if section indices are in the correct order."""
     assert parser_obj.atom_ind < parser_obj.gto_ind < parser_obj.mo_ind
 
 
 def test_gaussian_normalization_positive() -> None:
+    """Check if Gaussian type orbitals and shells are normalized correctly."""
     gto = _GTO(0.8, 0.5)
     gto.normalize(l=2)
     shell = _Shell(2, [gto])
     shell.normalize()
-    assert gto.norm > 0.0 and shell.norm > 0.0
+    assert gto.norm > 0.0
+    assert shell.norm > 0.0
 
 
 def test_atomic_orbital_permutation(parser_obj: Parser) -> None:
-    order = parser_obj._gto_order()
+    """Check if the permutation of atomic orbitals is a valid one."""
+    order = parser_obj._gto_order()  # noqa: SLF001
     assert sorted(order) == list(range(len(order)))
 
 
 def test_atom_labels(parser_obj: Parser) -> None:
+    """Check if atom labels are loaded correctly."""
     labels = [atm.label for atm in parser_obj.atoms]
     assert labels == ['Br', 'C_a', 'C_b', 'C_c', 'C_d', 'H']
 
 
 def test_basis_and_mo_dimensions(parser_obj: Parser) -> None:
-    n_basis = sum(2 * shell.l + 1 for shell in parser_obj.shells)
+    """Check number of MOs and GTOs against known values."""
+    num_mos = 177
+    assert len(parser_obj.mos) == num_mos
 
-    assert len(parser_obj.mos) == 177
-
-    # every MO coefficient vector must have that length
+    num_gtos = sum(2 * shell.l + 1 for shell in parser_obj.shells)
     for mo in parser_obj.mos:
-        assert len(mo.coeffs) == n_basis
+        assert len(mo.coeffs) == num_gtos
 
 
 def test_mo_energies_are_sorted(parser_obj: Parser) -> None:
+    """Molecular orbital energies must be sorted in ascending order."""
     energies = np.asarray([mo.energy for mo in parser_obj.mos])
     assert np.all(np.diff(energies) >= 0.0)
+
+
+@pytest.mark.parametrize('source', [None, 1, 1.0, {}, set()])
+def test_parser_invalid_input_type(source: Any) -> None:
+    """
+    Parser must raise TypeError if input is not str or list of str.
+
+    Raises
+    ------
+        TypeError
+    """
+    with pytest.raises(TypeError):
+        Parser(source)
 
 
 # ----------------------------------------------------------------------
 # reproducibility checks
 # ----------------------------------------------------------------------
-def test_file_vs_lines_consistency(tmp_path) -> None:
+def test_file_vs_lines_consistency(tmp_path: Path) -> None:
     """Parsing via filename or via pre-read lines must give identical results."""
     lines = MOLDEN_PATH.read_text().splitlines(True)
 
