@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from typing import Any, Literal
 
 import toml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 default_configs_dir = Path(__file__).parent / 'default_configs'
 
@@ -36,24 +36,24 @@ class AtomType(BaseModel):
 class SphericalGridConfig(BaseModel):
     """Configuration for spherical grid parameters."""
 
-    num_r_points: int = Field(100, gt=0, description='Number of radial points')
-    num_theta_points: int = Field(60, gt=0, description='Number of theta points')
-    num_phi_points: int = Field(120, gt=0, description='Number of phi points')
+    num_r_points: int = Field(100, gt=0, le=1000, description='Number of radial points (1-1000)')
+    num_theta_points: int = Field(60, gt=0, le=1000, description='Number of theta points (1-1000)')
+    num_phi_points: int = Field(120, gt=0, le=1000, description='Number of phi points (1-1000)')
 
 
 class CartesianGridConfig(BaseModel):
     """Configuration for cartesian grid parameters."""
 
-    num_x_points: int = Field(100, gt=0, description='Number of x points')
-    num_y_points: int = Field(100, gt=0, description='Number of y points')
-    num_z_points: int = Field(100, gt=0, description='Number of z points')
+    num_x_points: int = Field(100, gt=0, le=1000, description='Number of x points (1-1000)')
+    num_y_points: int = Field(100, gt=0, le=1000, description='Number of y points (1-1000)')
+    num_z_points: int = Field(100, gt=0, le=1000, description='Number of z points (1-1000)')
 
 
 class GridConfig(BaseModel):
     """Configuration for grid generation."""
 
-    min_radius: int = Field(5, gt=0, description='Minimum radius')
-    max_radius_multiplier: int = Field(2, gt=0, description='Max radius multiplier')
+    min_radius: int = Field(5, gt=0, le=100, description='Minimum radius (1-100)')
+    max_radius_multiplier: int = Field(2, gt=0, le=10, description='Max radius multiplier (1-10)')
     spherical: SphericalGridConfig = Field(default_factory=SphericalGridConfig)
     cartesian: CartesianGridConfig = Field(default_factory=CartesianGridConfig)
 
@@ -77,8 +77,38 @@ class BondConfig(BaseModel):
     show: bool = Field(True, description='Whether to show bonds')
     max_length: float = Field(4.0, gt=0, description='Maximum bond length')
     color_type: Literal['uniform'] = Field('uniform', description='Bond color type')
-    color: str = Field('grey', description='Bond color')
+    color: str = Field('grey', description='Bond color (hex code or common name)')
     radius: float = Field(0.15, gt=0, description='Bond radius')
+
+    @field_validator('color')
+    @classmethod
+    def validate_color(cls, v: str) -> str:
+        """Validate color is either hex code or common color name.
+        
+        Returns
+        -------
+        str
+            The validated color string.
+        """
+        # Common color names that are likely to be supported
+        common_colors = {
+            'black', 'white', 'red', 'green', 'blue', 'yellow', 'cyan', 'magenta',
+            'grey', 'gray', 'orange', 'purple', 'pink', 'brown', 'lime', 'navy',
+            'maroon', 'olive', 'teal', 'silver', 'gold',
+        }
+
+        # Check if it's a hex color (with or without #)
+        hex_part = v[1:] if v.startswith('#') else v
+        
+        hex_color_length = 6
+        if len(hex_part) == hex_color_length and all(c in '0123456789ABCDEFabcdef' for c in hex_part):
+            return v
+
+        # Check if it's a common color name
+        if v.lower() in common_colors:
+            return v
+
+        raise ValueError(f'Color must be a 6-digit hex code (with or without #) or a common color name. Got: {v}')
 
 
 class MoleculeConfig(BaseModel):
