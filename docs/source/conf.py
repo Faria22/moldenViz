@@ -9,18 +9,22 @@ _copyright = '2025, Felipe Faria'
 author = 'Felipe Faria'
 
 # Import the project version
-sys.path.insert(0, Path('../../src').resolve().name)
+sys.path.insert(0, str(Path('../../src').resolve()))
 try:
-    from moldenViz.__about__ import __version__
-
+    # Try to read version directly from file to avoid importing the full module
+    version_file = Path('../../src/moldenViz/__about__.py').resolve()
+    version_globals = {}
+    exec(version_file.read_text(), version_globals)
+    __version__ = version_globals['__version__']
+    
     release = __version__
     version = '.'.join(release.split('.')[:2])  # e.g., "0.1" from "0.1.4"
-except ImportError:
+except (ImportError, FileNotFoundError, KeyError) as e:
     release = '0.0.0'  # Fallback or error
     version = '0.0'
     logger.warning(
-        'Warning: Could not import __version__ from moldenViz.__about__.\n'
-        "Make sure '../src' is in sys.path and moldenViz/__about__.py exists.",
+        f'Warning: Could not read version from __about__.py: {e}\n'
+        "Using fallback version.",
     )
 
 # -- General configuration ---------------------------------------------------
@@ -52,7 +56,30 @@ html_theme_options = {
 }
 
 autodoc_member_order = 'bysource'
-autosummary_generate = True  # Uncomment if you want to auto-generate stubs
+autosummary_generate = False  # Disable auto-generation to avoid orphaned files
+
+# Mock imports for modules that require GUI or other system dependencies
+autodoc_mock_imports = [
+    'tkinter',
+    'pyvista',
+    'pyvistaqt',
+    'PySide6',
+    'numpy', 
+    'scipy',
+    'matplotlib',
+    'logging'
+]
+
+# Make autodoc more permissive about import failures
+autodoc_default_options = {
+    'members': True,
+    'undoc-members': False,
+    'show-inheritance': True,
+    'ignore-module-all': True,
+}
+
+# Don't be strict about import errors
+autodoc_inherit_docstrings = True
 
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
