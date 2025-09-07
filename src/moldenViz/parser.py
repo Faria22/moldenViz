@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class _Atom:
     """Represents an atom with its properties and associated shells.
-    
+
     Parameters
     ----------
     label : str
@@ -27,6 +27,7 @@ class _Atom:
     shells : list[_Shell]
         List of electron shells associated with this atom.
     """
+
     label: str
     atomic_number: int
     position: NDArray[np.floating]
@@ -36,7 +37,7 @@ class _Atom:
 @dataclass
 class _MolecularOrbital:
     """Represents a molecular orbital with its properties.
-    
+
     Parameters
     ----------
     sym : str
@@ -50,6 +51,7 @@ class _MolecularOrbital:
     coeffs : NDArray[np.floating]
         The coefficients of the molecular orbital in the basis set.
     """
+
     sym: str
     energy: float
     spin: str
@@ -59,7 +61,7 @@ class _MolecularOrbital:
 
 class _GTO:
     """Represents a Gaussian-type orbital (GTO) primitive.
-    
+
     Parameters
     ----------
     exp : float
@@ -67,6 +69,7 @@ class _GTO:
     coeff : float
         The coefficient of the Gaussian function.
     """
+
     def __init__(self, exp: float, coeff: float) -> None:
         """Initialize a GTO primitive with exponent and coefficient."""
         self.exp = exp
@@ -76,15 +79,15 @@ class _GTO:
 
     def normalize(self, l: int) -> None:
         """Normalize the GTO primitive.
-        
+
         Parameters
         ----------
         l : int
             The angular momentum quantum number.
-            
+
         Notes
         -----
-        Uses the normalization factor from Jiyun Kuang and C D Lin 1997 
+        Uses the normalization factor from Jiyun Kuang and C D Lin 1997
         J. Phys. B: At. Mol. Opt. Phys. 30 2529, page 2532.
         """
         # See (Jiyun Kuang and C D Lin 1997 J. Phys. B: At. Mol. Opt. Phys. 30 2529)
@@ -94,7 +97,7 @@ class _GTO:
 
 class _Shell:
     """Represents an electron shell containing multiple GTO primitives.
-    
+
     Parameters
     ----------
     l : int
@@ -102,6 +105,7 @@ class _Shell:
     gtos : list[_GTO]
         List of GTO primitives that compose this shell.
     """
+
     def __init__(self, l: int, gtos: list[_GTO]) -> None:
         """Initialize a shell with angular momentum and GTO primitives."""
         self.l = l
@@ -111,10 +115,10 @@ class _Shell:
 
     def normalize(self) -> None:
         """Normalize the shell.
-        
+
         Notes
         -----
-        Uses the normalization factor from Jiyun Kuang and C D Lin 1997 
+        Uses the normalization factor from Jiyun Kuang and C D Lin 1997
         J. Phys. B: At. Mol. Opt. Phys. 30 2529, equations 18 and 20.
         """
         # See (Jiyun Kuang and C D Lin 1997 J. Phys. B: At. Mol. Opt. Phys. 30 2529)
@@ -144,7 +148,19 @@ class Parser:
     only_molecule : bool, optional
         Only parse the atoms and skip molecular orbitals.
         Default is `False`.
-        
+
+    Attributes
+    ----------
+    atoms : list[_Atom]
+        A list of Atom objects containing the label, atomic number,
+        and position for each atom.
+    shells : list[_Shell]
+        A list of `_Shell` objects containing the atom, angular
+        momentum quantum number (l), and GTOs for each shell.
+    mos : list[_MolecularOrbital]
+        A list of MolecularOrbital objects containing the symmetry,
+        energy, and coefficients for each MO.
+
     Raises
     ------
     TypeError
@@ -172,7 +188,7 @@ class Parser:
 
         self.check_molden_format()
 
-        self.atom_ind, self.gto_ind, self.mo_ind = self.divide_molden_lines()
+        self._atom_ind, self._gto_ind, self._mo_ind = self.divide_molden_lines()
 
         self.atoms = self.get_atoms()
 
@@ -250,10 +266,10 @@ class Parser:
 
         """
         logger.info('Parsing atoms...')
-        angs = 'Angs' in self.molden_lines[self.atom_ind]
+        angs = 'Angs' in self.molden_lines[self._atom_ind]
 
         atoms = []
-        for line in self.molden_lines[self.atom_ind + 1 : self.gto_ind]:
+        for line in self.molden_lines[self._atom_ind + 1 : self._gto_ind]:
             label, _, atomic_number, *coords = line.split()
 
             position = np.array([float(coord) for coord in coords], dtype=float)
@@ -285,7 +301,7 @@ class Parser:
 
         shell_labels = ['s', 'p', 'd', 'f', 'g']
 
-        lines = iter(self.molden_lines[self.gto_ind + 1 : self.mo_ind])
+        lines = iter(self.molden_lines[self._gto_ind + 1 : self._mo_ind])
 
         shells = []
         for atom in self.atoms:
@@ -322,7 +338,7 @@ class Parser:
         Parameters
         ----------
         sort : bool, optional
-            If true (default), returns the MOs sorted by energy. If false, 
+            If true (default), returns the MOs sorted by energy. If false,
             returns the MOs in the order given in the molden file.
 
         Returns
@@ -337,7 +353,7 @@ class Parser:
 
         order = self._gto_order()
 
-        lines = self.molden_lines[self.mo_ind + 1 :]
+        lines = self.molden_lines[self._mo_ind + 1 :]
         total_num_mos = sum('Sym=' in line for line in lines)
 
         lines = iter(lines)

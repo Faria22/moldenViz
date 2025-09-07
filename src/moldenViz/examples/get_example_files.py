@@ -9,12 +9,12 @@ from pathlib import Path
 
 def _read_file(path: Path) -> list[str]:
     """Read a molden file and return its contents as a list of lines.
-    
+
     Parameters
     ----------
     path : Path
         Path to the molden file to read.
-        
+
     Returns
     -------
     list[str]

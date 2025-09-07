@@ -7,8 +7,8 @@ from .plotter import Plotter
 
 
 def main() -> None:
-    """Main entry point for the moldenViz command-line interface.
-    
+    """Entry point for the moldenViz command-line interface.
+
     Parses command line arguments and launches the plotter with the specified
     molden file or example molecule. Supports options to plot only the molecule
     structure without molecular orbitals.

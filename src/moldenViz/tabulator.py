@@ -65,8 +65,6 @@ def _cartesian_to_spherical(
     tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]
         Arrays of r (radius), theta (polar angle), phi (azimuthal angle).
     """
-
-    """
     r = np.sqrt(x**2 + y**2 + z**2)
     theta = np.arccos(z / r)
     phi = np.arctan2(y, x)
@@ -136,6 +134,13 @@ class Tabulator:
     only_molecule : bool, optional
         Only parse the atoms and skip molecular orbitals.
         Default is ``False``.
+
+    Attributes
+    ----------
+    grid : NDArray[np.floating]
+        The grid points where GTOs and MOs are tabulated.
+    gtos : NDArray[np.floating]
+        The tabulated Gaussian-type orbitals (GTOs) on the grid.
     """
 
     def __init__(
@@ -146,16 +151,23 @@ class Tabulator:
         """Initialize the Tabulator with a Molden file or its content."""
         self._parser = Parser(source, only_molecule)
 
-        self.only_molecule = only_molecule
-        self._grid_type = GridType.UNKNOWN
+        self._only_molecule = only_molecule
 
         self._grid: NDArray[np.floating]
-        self.grid_dimensions: tuple[int, int, int]
-        self.gtos: NDArray[np.floating]
+        self._grid_type = GridType.UNKNOWN
+        self._grid_dimensions: tuple[int, int, int]
+
+        self._gtos: NDArray[np.floating]
 
     @property
-    def grid(self) -> NDArray[np.floating]:  # noqa: D102
+    def grid(self) -> NDArray[np.floating]:
+        """Get the grid points where GTOs and MOs are tabulated."""
         return self._grid
+
+    @property
+    def gtos(self) -> NDArray[np.floating]:
+        """Get the tabulated Gaussian-type orbitals (GTOs) on the grid."""
+        return self._gtos
 
     @grid.setter
     def grid(self, new_grid: Any) -> None:
@@ -195,16 +207,16 @@ class Tabulator:
             Whether to tabulate Gaussian-type orbitals (GTOs) after creating the grid.
             Defaults to True.
         """
-        if self.only_molecule:
+        if self._only_molecule:
             raise RuntimeError('Grid creation is not allowed when `only_molecule` is set to `True`.')
 
         xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
         self._grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
         self._grid_type = GridType.CARTESIAN
-        self.grid_dimensions = (len(x), len(y), len(z))
+        self._grid_dimensions = (len(x), len(y), len(z))
 
         if tabulate_gtos:
-            self.gtos = self.tabulate_gtos()
+            self._gtos = self.tabulate_gtos()
 
     def spherical_grid(
         self,
@@ -226,24 +238,23 @@ class Tabulator:
         tabulate_gtos : bool, optional
             Whether to tabulate Gaussian-type orbitals (GTOs) after creating the grid.
             Defaults to True.
-        """
 
         Note
         ----
             Grid points are converted to Cartesian coordinates.
 
         """
-        if self.only_molecule:
+        if self._only_molecule:
             raise RuntimeError('Grid creation is not allowed when `only_molecule` is set to `True`.')
 
         rr, tt, pp = np.meshgrid(r, theta, phi, indexing='ij')
         xx, yy, zz = _spherical_to_cartesian(rr, tt, pp)
         self._grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
         self._grid_type = GridType.SPHERICAL
-        self.grid_dimensions = (len(r), len(theta), len(phi))
+        self._grid_dimensions = (len(r), len(theta), len(phi))
 
         if tabulate_gtos:
-            self.gtos = self.tabulate_gtos()
+            self._gtos = self.tabulate_gtos()
 
     def tabulate_gtos(self) -> NDArray[np.floating]:
         """Tabulate Gaussian-type orbitals (GTOs) on the current grid.
@@ -259,7 +270,7 @@ class Tabulator:
             If the grid is not defined before tabulating GTOs,
             or if the `only_molecule` flag is set to `True`.
         """
-        if self.only_molecule:
+        if self._only_molecule:
             raise RuntimeError('Grid creation is not allowed when `only_molecule` is set to `True`.')
 
         if not hasattr(self, 'grid'):
@@ -287,6 +298,8 @@ class Tabulator:
                 ind += 2 * l + 1
 
         logger.debug('GTO data shape: %s', gto_data.shape)
+
+        self._gtos = gto_data
         return gto_data
 
     def tabulate_mos(self, mo_inds: Optional[int | array_like_type] = None) -> NDArray[np.floating]:
@@ -301,7 +314,7 @@ class Tabulator:
         -------
         NDArray[np.floating]
             Array containing the tabulated MOs data.
-            
+
             If an integer is provided, it will tabulate only that MO.
             If an array-like is provided, it will tabulate the MOs at those indices.
 

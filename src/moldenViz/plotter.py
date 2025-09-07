@@ -33,20 +33,47 @@ class Plotter:
         The path to the molden file, or the lines from the file.
     only_molecule : bool, optional
         Only parse the atoms and skip molecular orbitals.
-        Default is ``False``.
+        Default is `False`.
     tabulator : Tabulator, optional
-        If ``None``, ``Plotter`` creates a ``Tabulator`` and tabulates the GTOs and MOs with a default grid.
-        A ``Tabulator`` can be passed to tabulate the GTOs in a predetermined grid.
-        
-        Note: ``Tabulator`` grid must be spherical or cartesian. Custom grids are not allowed.
+        If `None`, `Plotter` creates a `Tabulator` and tabulates the GTOs and MOs with a default grid.
+        A `Tabulator` can be passed to tabulate the GTOs in a predetermined grid.
+
+        Note: `Tabulator` grid must be spherical or cartesian. Custom grids are not allowed.
     tk_root : tk.Tk, optional
-        If user is using the plotter inside a tk app, ``tk_root`` can be passed to not create a new tk instance.
+        If user is using the plotter inside a tk app, `tk_root` can be passed to not create a new tk instance.
+
+    Attributes
+    ----------
+    on_screen : bool
+        Indicates if the plotter window is currently open.
+    tabulator : Tabulator
+        The Tabulator object used for tabulating GTOs and MOs.
+    molecule : Molecule
+        The Molecule object representing the molecular structure.
+    molecule_opacity : float
+        The opacity of the molecule in the visualization.
+    molecule_actors : list[pv.Actor]
+        List of PyVista actors representing the molecule.
+    tk_root : tk.Tk | None
+        The Tkinter root window.
+    pv_plotter : BackgroundPlotter
+        The PyVista BackgroundPlotter for 3D rendering.
+    molecule_actors : list[pv.Actor]
+        List of PyVista actors representing the molecule.
+    orb_mesh : pv.StructuredGrid
+        The mesh used for visualizing molecular orbitals.
+    orb_actor : pv.Actor | None
+        The PyVista actor for the currently displayed molecular orbital.
+    contour : float
+        The contour level for molecular orbital visualization.
+    opacity : float
+        The opacity of the molecular orbital in the visualization.
 
     Raises
     ------
     ValueError
         If the provided tabulator is invalid
-        (e.g., missing grid or GTO data when ``only_molecule`` is ``False``, or has an UNKNOWN grid type).
+        (e.g., missing grid or GTO data when `only_molecule` is `False`, or has an UNKNOWN grid type).
     """
 
     def __init__(
@@ -68,17 +95,17 @@ class Plotter:
             if tabulator._grid_type == GridType.UNKNOWN:  # noqa: SLF001
                 raise ValueError('The plotter only supports spherical and cartesian grids.')
 
-            self.tab = tabulator
+            self.tabulator = tabulator
         else:
-            self.tab = Tabulator(source, only_molecule=only_molecule)
+            self.tabulator = Tabulator(source, only_molecule=only_molecule)
 
-        self.molecule = Molecule(self.tab._parser.atoms)  # noqa: SLF001
+        self.molecule = Molecule(self.tabulator._parser.atoms)  # noqa: SLF001
         self.molecule_opacity = config.molecule.opacity
 
         if not only_molecule:
             self.tk_root = tk_root
-            self.no_prev_root = self.tk_root is None
-            if self.no_prev_root:
+            self._no_prev_tk_root = self.tk_root is None
+            if self._no_prev_tk_root:
                 self.tk_root = tk.Tk()
                 self.tk_root.withdraw()  # Hides window
 
@@ -96,7 +123,7 @@ class Plotter:
 
         if not tabulator:
             # Default is a spherical grid
-            self.tab.spherical_grid(
+            self.tabulator.spherical_grid(
                 np.linspace(
                     0,
                     max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius),
@@ -134,11 +161,11 @@ class Plotter:
 
         """
         mesh = pv.StructuredGrid()
-        mesh.points = pv.pyvista_ndarray(self.tab.grid)
+        mesh.points = pv.pyvista_ndarray(self.tabulator.grid)
 
         # Pyvista needs the dimensions backwards
         # in other words, (phi, theta, r) or (z, y, x)
-        mesh.dimensions = self.tab.grid_dimensions[::-1]
+        mesh.dimensions = self.tabulator._grid_dimensions[::-1]  # noqa: SLF001
 
         return mesh
 
@@ -166,9 +193,9 @@ class Plotter:
             ValueError: If the grid_type is not SPHERICAL or CARTESIAN.
         """
         if grid_type == GridType.CARTESIAN:
-            self.tab.cartesian_grid(i_points, j_points, k_points)
+            self.tabulator.cartesian_grid(i_points, j_points, k_points)
         elif grid_type == GridType.SPHERICAL:
-            self.tab.spherical_grid(i_points, j_points, k_points)
+            self.tabulator.spherical_grid(i_points, j_points, k_points)
         else:
             raise ValueError('The plotter only supports spherical and cartesian grids.')
 
@@ -204,14 +231,14 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.settings_button.pack(expand=True, padx=5, pady=10)
 
         self.orb_tv = _OrbitalsTreeview(self)
-        self.orb_tv.populate_tree(self.plotter.tab._parser.mos)  # noqa: SLF001
+        self.orb_tv.populate_tree(self.plotter.tabulator._parser.mos)  # noqa: SLF001
         self.orb_tv.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
     def on_close(self) -> None:
         self.plotter.on_screen = False
         self.plotter.pv_plotter.close()
         self.destroy()
-        if self.plotter.tk_root and self.plotter.no_prev_root:
+        if self.plotter.tk_root and self.plotter._no_prev_tk_root:  # noqa: SLF001
             self.plotter.tk_root.destroy()
 
     def protocols(self) -> None:
@@ -265,7 +292,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         ttk.Label(settings_frame, text='MO Grid parameters').grid(row=0, column=1, padx=5, pady=5, columnspan=4)
 
         self.grid_type_radio_var = tk.StringVar()
-        self.grid_type_radio_var.set(self.plotter.tab._grid_type.value)  # noqa: SLF001
+        self.grid_type_radio_var.set(self.plotter.tabulator._grid_type.value)  # noqa: SLF001
 
         ttk.Label(settings_frame, text='Spherical grid:').grid(row=1, column=1, padx=5, pady=5)
         sph_grid_type_button = ttk.Radiobutton(
@@ -391,7 +418,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.phi_points_entry.delete(0, tk.END)
 
         # Previous grid was cartesian, so use default values
-        if self.plotter.tab._grid_type == GridType.CARTESIAN:  # noqa: SLF001
+        if self.plotter.tabulator._grid_type == GridType.CARTESIAN:  # noqa: SLF001
             self.radius_entry.insert(
                 0,
                 str(max(config.grid.max_radius_multiplier * self.plotter.molecule.max_radius, config.grig.min_radius)),
@@ -401,10 +428,10 @@ class _OrbitalSelectionScreen(tk.Toplevel):
             self.phi_points_entry.insert(0, str(config.grid.spherical.num_phi_points))
             return
 
-        num_r, num_theta, num_phi = self.plotter.tab.grid_dimensions
+        num_r, num_theta, num_phi = self.plotter.tabulator._grid_dimensions  # noqa: SLF001
 
         # The last point of the grid for sure has the largest r
-        r, _, _ = _cartesian_to_spherical(*self.plotter.tab.grid[-1, :])  # pyright: ignore[reportArgumentType]
+        r, _, _ = _cartesian_to_spherical(*self.plotter.tabulator.grid[-1, :])  # pyright: ignore[reportArgumentType]
 
         self.radius_entry.insert(0, str(r))
         self.radius_points_entry.insert(0, str(num_r))
@@ -425,7 +452,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.z_num_points_entry.delete(0, tk.END)
 
         # Previous grid was sphesical, so use adapted default values
-        if self.plotter.tab._grid_type == GridType.SPHERICAL:  # noqa: SLF001
+        if self.plotter.tabulator._grid_type == GridType.SPHERICAL:  # noqa: SLF001
             r = max(config.grid.max_radius_multiplier * self.plotter.molecule.max_radius, config.grid.min_radius)
 
             self.x_min_entry.insert(0, str(-r))
@@ -441,9 +468,9 @@ class _OrbitalSelectionScreen(tk.Toplevel):
             self.z_num_points_entry.insert(0, str(config.grid.cartesian.num_z_points))
             return
 
-        x_num, y_num, z_num = self.plotter.tab.grid_dimensions
-        x_min, y_min, z_min = self.plotter.tab.grid[0, :]
-        x_max, y_max, z_max = self.plotter.tab.grid[-1, :]
+        x_num, y_num, z_num = self.plotter.tabulator._grid_dimensions  # noqa: SLF001
+        x_min, y_min, z_min = self.plotter.tabulator.grid[0, :]
+        x_max, y_max, z_max = self.plotter.tabulator.grid[-1, :]
 
         self.x_min_entry.insert(0, str(x_min))
         self.x_max_entry.insert(0, str(x_max))
@@ -511,7 +538,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
             # Update the mesh with new points if needed
             new_grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
-            if not np.array_equal(new_grid, self.plotter.tab.grid):
+            if not np.array_equal(new_grid, self.plotter.tabulator.grid):
                 self.plotter.update_mesh(r, theta, phi, GridType.SPHERICAL)
 
         else:
@@ -539,7 +566,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
             # Update the mesh with new points if needed
             new_grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
-            if not np.array_equal(new_grid, self.plotter.tab.grid):
+            if not np.array_equal(new_grid, self.plotter.tabulator.grid):
                 self.plotter.update_mesh(x, y, z, GridType.CARTESIAN)
 
         self.plotter.contour = float(self.contour_entry.get().strip())
@@ -566,7 +593,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
     def update_button_states(self) -> None:
         """Update the enabled/disabled state of nav buttons."""
         can_go_prev = self.current_orb_ind > 0
-        can_go_next = self.current_orb_ind < len(self.plotter.tab._parser.mos) - 1  # noqa: SLF001
+        can_go_next = self.current_orb_ind < len(self.plotter.tabulator._parser.mos) - 1  # noqa: SLF001
         self.prev_button.config(state=tk.NORMAL if can_go_prev else tk.DISABLED)
         self.next_button.config(state=tk.NORMAL if can_go_next else tk.DISABLED)
 
@@ -575,7 +602,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
             self.plotter.pv_plotter.remove_actor(self.plotter.orb_actor)
 
         if orb_ind != -1:
-            self.plotter.orb_mesh['orbital'] = self.plotter.tab.tabulate_mos(orb_ind)
+            self.plotter.orb_mesh['orbital'] = self.plotter.tabulator.tabulate_mos(orb_ind)
 
             contour_mesh = self.plotter.orb_mesh.contour([-self.plotter.contour, self.plotter.contour])
 

@@ -22,7 +22,7 @@ ATOM_X = AtomType('X', 'black', 1, 0)
 
 class Atom:
     """Represents an atom in 3D space for visualization purposes.
-    
+
     Parameters
     ----------
     atomic_number : int
@@ -30,6 +30,7 @@ class Atom:
     center : NDArray[np.floating]
         The 3D coordinates of the atom center.
     """
+
     def __init__(
         self,
         atomic_number: int,
@@ -49,7 +50,7 @@ class Atom:
 
     def remove_extra_bonds(self) -> None:
         """Remove the longest bonds if there are more bonds than max_bonds.
-        
+
         This method sorts bonds by length and removes the longest ones if the number
         of bonds exceeds the maximum allowed for this atom type.
         """
@@ -64,7 +65,7 @@ class Atom:
 
 class Bond:
     """Represents a chemical bond between two atoms for visualization.
-    
+
     Parameters
     ----------
     atom_a : Atom
@@ -72,8 +73,10 @@ class Bond:
     atom_b : Atom
         The second atom in the bond.
     """
+
     class ColorType(Enum):
         """Enumeration for bond color types."""
+
         UNIFORM = 'uniform'
         SPLIT = 'split'
 
@@ -155,12 +158,13 @@ class Bond:
 
 class Molecule:
     """Represents a complete molecule with atoms and bonds for visualization.
-    
+
     Parameters
     ----------
     atoms : list[_Atom]
         List of atom objects from the parser to create the molecule structure.
     """
+
     def __init__(self, atoms: list[_Atom]) -> None:
         """Initialize a Molecule from a list of parsed atoms."""
         # Max radius is used later for plotting
@@ -170,7 +174,7 @@ class Molecule:
 
     def get_atoms(self, atoms: list[_Atom]) -> None:
         """Convert parsed atoms to visualization atoms and create bonds.
-        
+
         Parameters
         ----------
         atoms : list[_Atom]
@@ -195,14 +199,14 @@ class Molecule:
 
     def add_meshes(self, plotter: pv.Plotter, opacity: float = config.molecule.opacity) -> list[pv.Actor]:
         """Add all molecule meshes (atoms and bonds) to the PyVista plotter.
-        
+
         Parameters
         ----------
         plotter : pv.Plotter
             The PyVista plotter to add meshes to.
         opacity : float, optional
             The opacity level for the molecule meshes. Default from config.
-            
+
         Returns
         -------
         list[pv.Actor]

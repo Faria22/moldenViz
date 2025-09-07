@@ -31,7 +31,7 @@ def parser_obj() -> Parser:
 # ----------------------------------------------------------------------
 def test_section_indices_order(parser_obj: Parser) -> None:
     """Check if section indices are in the correct order."""
-    assert parser_obj.atom_ind < parser_obj.gto_ind < parser_obj.mo_ind
+    assert parser_obj._atom_ind < parser_obj._gto_ind < parser_obj._mo_ind
 
 
 def test_gaussian_normalization_positive() -> None:

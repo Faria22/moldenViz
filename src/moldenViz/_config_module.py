@@ -15,7 +15,7 @@ custom_configs_dir.mkdir(parents=True, exist_ok=True)
 @dataclass
 class AtomType:
     """Represents the properties of an atom type for visualization.
-    
+
     Parameters
     ----------
     name : str
@@ -27,6 +27,7 @@ class AtomType:
     max_num_bonds : int
         The maximum number of bonds this atom type can form.
     """
+
     name: str
     color: str
     radius: float
@@ -83,14 +84,14 @@ class Config:
     @staticmethod
     def recursive_merge(default: dict, custom: dict) -> dict:
         """Recursively merge two dictionaries.
-        
+
         Parameters
         ----------
         default : dict
             The default dictionary.
         custom : dict
             The custom dictionary to merge with default.
-            
+
         Returns
         -------
         dict
@@ -116,7 +117,7 @@ class Config:
         -------
         Any
             The value of the requested configuration item.
-            
+
         Raises
         ------
         AttributeError
@@ -178,7 +179,7 @@ class Config:
         -------
         dict
             The default configuration dictionary.
-            
+
         Raises
         ------
         FileNotFoundError
