@@ -39,7 +39,7 @@ you can instead use examples
 ```console
 moldenViz -e co
 ```
-a full list of examples can be found [bellow](#inside-python).
+a full list of examples can be found [below](#inside-python).
 
 You can also choose to only plot the molecule
 ```console
@@ -97,19 +97,19 @@ tab = Tabulator('molden.inp')
 # Using a spherical grid
 tab.spherical_grid(
     r = np.linspace(0, 5, 20),
-    theta = np.linspace(0, np.pi, 20)
+    theta = np.linspace(0, np.pi, 20),
     phi = np.linspace(0, 2 * np.pi, 40)
 )
 
 # Or a cartesian grid
 tab.cartesian_grid(
-    x = np.linspace(-2, 2, 20)
-    y = np.linspace(-2, 2, 20)
+    x = np.linspace(-2, 2, 20),
+    y = np.linspace(-2, 2, 20),
     z = np.linspace(-2, 2, 20)
 )
 
 print(tab.grid.shape)
-print(tab.gtos_data.shape)
+print(tab.gtos.shape)
 ```
 
 And to tabulate a molecular orbital
