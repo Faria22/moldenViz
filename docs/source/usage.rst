@@ -70,15 +70,15 @@ Available Examples
 
 The following example molecules are available:
 
-- ``co`` - Carbon monoxide
-- ``o2`` - Oxygen molecule  
-- ``co2`` - Carbon dioxide
-- ``h2o`` - Water
-- ``benzene`` - Benzene ring
-- ``prismane`` - Prismane structure
-- ``pyridine`` - Pyridine ring
-- ``furan`` - Furan ring
-- ``acrolein`` - Acrolein molecule
+- ``co``
+- ``o2`` 
+- ``co2``
+- ``h2o``
+- ``benzene``
+- ``prismane``
+- ``pyridine``
+- ``furan``
+- ``acrolein``
 
 Python API
 ----------
