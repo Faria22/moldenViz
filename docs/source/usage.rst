@@ -70,15 +70,15 @@ Available Examples
 
 The following example molecules are available:
 
-- ``co``
-- ``o2`` 
-- ``co2``
-- ``h2o``
-- ``benzene``
-- ``prismane``
-- ``pyridine``
-- ``furan``
-- ``acrolein``
+- `co`
+- `o2` 
+- `co2`
+- `h2o`
+- `benzene`
+- `prismane`
+- `pyridine`
+- `furan`
+- `acrolein`
 
 Python API
 ----------
