@@ -171,11 +171,6 @@ class Tabulator:
         """Get the grid points where GTOs and MOs are tabulated."""
         return self._grid
 
-    @property
-    def gtos(self) -> NDArray[np.floating]:
-        """Get the tabulated Gaussian-type orbitals (GTOs) on the grid."""
-        return self._gtos
-
     @grid.setter
     def grid(self, new_grid: Any) -> None:
         if not isinstance(new_grid, np.ndarray):
@@ -192,6 +187,20 @@ class Tabulator:
 
         self._grid = new_grid
         self._grid_type = GridType.UNKNOWN
+
+    @grid.deleter
+    def grid(self) -> None:
+        del self._grid
+        self._grid_type = GridType.UNKNOWN
+
+    @property
+    def gtos(self) -> NDArray[np.floating]:
+        """Get the tabulated Gaussian-type orbitals (GTOs) on the grid."""
+        return self._gtos
+
+    @gtos.deleter
+    def gtos(self) -> None:
+        del self._gtos
 
     def cartesian_grid(
         self,
