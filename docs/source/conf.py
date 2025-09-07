@@ -1,12 +1,15 @@
-import os
+import logging  # noqa: D100
 import sys
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 project = 'moldenViz'
-copyright = '2025, Felipe Faria'
+_copyright = '2025, Felipe Faria'
 author = 'Felipe Faria'
 
 # Import the project version
-sys.path.insert(0, os.path.abspath('../../src'))
+sys.path.insert(0, Path('../../src').resolve().name)
 try:
     from moldenViz.__about__ import __version__
 
@@ -15,8 +18,10 @@ try:
 except ImportError:
     release = '0.0.0'  # Fallback or error
     version = '0.0'
-    print('Warning: Could not import __version__ from moldenViz.__about__.')
-    print("Make sure '../src' is in sys.path and moldenViz/__about__.py exists.")
+    logger.warning(
+        'Warning: Could not import __version__ from moldenViz.__about__.\n'
+        "Make sure '../src' is in sys.path and moldenViz/__about__.py exists.",
+    )
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -33,6 +38,7 @@ templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 
+napoleon_use_ivar = True
 html_theme = 'pydata_sphinx_theme'
 html_static_path = ['_static']
 html_show_sourcelink = False

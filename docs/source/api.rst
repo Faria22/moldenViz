@@ -27,6 +27,7 @@ Plotter Module
 .. automodule:: moldenViz.plotter
    :members:
    :show-inheritance:
+   :no-index:
 
 Tabulator Module
 ----------------
@@ -34,10 +35,9 @@ Tabulator Module
 .. automodule:: moldenViz.tabulator
    :members:
    :show-inheritance:
+   :no-index:
 
 Examples Module
 ---------------
 
 .. automodule:: moldenViz.examples.get_example_files
-   :members:
-   :show-inheritance:
