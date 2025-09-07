@@ -1,0 +1,44 @@
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  test-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install hatch pytest
+
+      - name: Run tests
+        run: pytest
+
+      - name: Ensure tag is on main
+        run: |
+          if [ "$(git branch --contains $GITHUB_SHA | grep main)" != "  main" ]; then
+            echo "Tag is not on main, skipping publish."
+            exit 1
+          fi
+
+      - name: Build package
+        run: hatch build
+
+      - name: Publish to PyPI
+        if: success()
+        env:
+          HATCH_INDEX_USER: __token__
+          HATCH_INDEX_AUTH: ${{ secrets.PYPI_API_TOKEN }}
+        run: hatch publish
