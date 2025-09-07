@@ -244,15 +244,16 @@ class Tabulator:
 
         Raises
         ------
-            ValueError:
-                If the grid is not defined before tabulating GTOs.
+            RuntimeError:
+                If the grid is not defined before tabulating GTOs,
+                or if the `only_molecule` flag is set to True.
 
         """
         if self.only_molecule:
             raise RuntimeError('Grid creation is not allowed when `only_molecule` is set to `True`.')
 
         if not hasattr(self, 'grid'):
-            raise ValueError('Grid is not defined. Please create a grid before tabulating GTOs.')
+            raise RuntimeError('Grid is not defined. Please create a grid before tabulating GTOs.')
 
         # Having a predefined array makes it faster to fill the data
         gto_data = np.empty((self._grid.shape[0], len(self._parser.mos[0].coeffs)))
@@ -296,19 +297,19 @@ class Tabulator:
 
         Raises
         ------
-            ValueError:
+            RuntimeError:
                 If the grid is not defined before tabulating MOs.
-            ValueError:
+            RuntimeError:
                 If GTOs are not tabulated before tabulating MOs.
             ValueError:
-                If provided mo_inds invalid.
+                If provided mo_inds is invalid.
 
         """
         if not hasattr(self, 'grid'):
-            raise ValueError('Grid is not defined. Please create a grid before tabulating MOs.')
+            raise RuntimeError('Grid is not defined. Please create a grid before tabulating MOs.')
 
         if not hasattr(self, 'gtos'):
-            raise ValueError('GTOs are not tabulated. Please tabulate GTOs before tabulating MOs.')
+            raise RuntimeError('GTOs are not tabulated. Please tabulate GTOs before tabulating MOs.')
 
         if mo_inds is None:
             mo_inds = list(range(len(self._parser.mos)))
