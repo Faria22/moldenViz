@@ -87,7 +87,7 @@ The tabulator module provides functionality to create grids and tabulate molecul
    **Attributes:**
 
    * ``grid`` (numpy.ndarray): The generated grid points.
-   * ``gtos`` (numpy.ndarray): Tabulated Gaussian-type orbital data on the grid.
+   * `gtos` (numpy.ndarray): Tabulated Gaussian-type orbital data on the grid.
 
    **Methods:**
 
@@ -143,15 +143,15 @@ The examples module provides pre-defined molecular structures for testing and de
 
 **Available Examples:**
 
-* ``co`` - Carbon monoxide
-* ``o2`` - Oxygen molecule
-* ``co2`` - Carbon dioxide
-* ``h2o`` - Water molecule
-* ``benzene`` - Benzene ring
-* ``prismane`` - Prismane structure
-* ``pyridine`` - Pyridine ring
-* ``furan`` - Furan ring
-* ``acrolein`` - Acrolein molecule
+* ``co``
+* ``o2``
+* ``co2``
+* ``h2o``
+* ``benzene``
+* ``prismane``
+* ``pyridine``
+* ``furan``
+* ``acrolein``
 
 **Example Usage:**
 
