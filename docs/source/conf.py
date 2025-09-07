@@ -64,7 +64,7 @@ autodoc_mock_imports = [
     'pyvista',
     'pyvistaqt',
     'PySide6',
-    'numpy', 
+    'numpy',
     'scipy',
     'matplotlib',
     'logging'
