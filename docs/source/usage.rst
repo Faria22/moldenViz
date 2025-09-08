@@ -228,6 +228,264 @@ Access detailed molecular structure information:
        for shell in atom.shells:
            print(f"Shell l={shell.l}, GTOs={len(shell.gtos)}")
 
+Configuration
+-------------
+
+moldenViz supports extensive customization through configuration files. The configuration system uses a hierarchical approach where custom settings override defaults.
+
+Configuration Files
+~~~~~~~~~~~~~~~~~~~
+
+**Default Configuration**: Built into the package at ``moldenViz/default_configs/config.toml``
+
+**Custom Configuration**: User-specific settings at ``~/.config/moldenViz/config.toml``
+
+The custom configuration file will be created automatically when you first modify settings, or you can create it manually.
+
+Available Configuration Options
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Bond Settings
+^^^^^^^^^^^^^
+
+Control bond appearance and behavior:
+
+.. code-block:: toml
+
+   [molecule.bond]
+   show = true                    # Show/hide bonds
+   max_length = 4.0              # Maximum bond length to display
+   color_type = 'uniform'        # 'uniform' or 'split' coloring
+   color = 'grey'                # Bond color (hex code or color name)
+   radius = 0.15                 # Bond radius/thickness
+
+**Bond Color Types:**
+
+- ``uniform``: All bonds use the same color
+- ``split``: Bonds are colored based on the atoms they connect
+
+**Example - Change bond color and thickness:**
+
+.. code-block:: toml
+
+   [molecule.bond]
+   color = 'blue'
+   radius = 0.25
+   color_type = 'split'
+
+Grid Settings
+^^^^^^^^^^^^^
+
+Control grid generation for molecular orbital calculations:
+
+.. code-block:: toml
+
+   [grid]
+   min_radius = 5                # Minimum radius for grid generation
+   max_radius_multiplier = 2     # Grid extends to max_radius_multiplier * molecular_size
+
+   [grid.spherical]
+   num_r_points = 100           # Radial grid points
+   num_theta_points = 60        # Theta grid points  
+   num_phi_points = 120         # Phi grid points
+
+   [grid.cartesian]
+   num_x_points = 100           # X-axis grid points
+   num_y_points = 100           # Y-axis grid points
+   num_z_points = 100           # Z-axis grid points
+
+**Example - Increase grid resolution:**
+
+.. code-block:: toml
+
+   [grid]
+   min_radius = 3
+   
+   [grid.cartesian]
+   num_x_points = 150
+   num_y_points = 150
+   num_z_points = 150
+
+Molecular Orbital Settings
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Control MO visualization:
+
+.. code-block:: toml
+
+   [mo]
+   contour = 0.1                # Isosurface contour value
+   opacity = 1.0                # MO opacity (0.0 to 1.0)
+
+Atom Settings
+^^^^^^^^^^^^^
+
+Control atom display:
+
+.. code-block:: toml
+
+   [molecule.atom]
+   show = true                  # Show/hide atoms
+
+   [molecule]
+   opacity = 1.0                # Overall molecule opacity
+
+**Example - Semi-transparent molecule:**
+
+.. code-block:: toml
+
+   [molecule]
+   opacity = 0.7
+
+   [mo]
+   opacity = 0.8
+
+Customizing Atom Types
+~~~~~~~~~~~~~~~~~~~~~~
+
+You can customize the appearance of specific atom types by their atomic number:
+
+.. code-block:: toml
+
+   [Atom.1]        # Hydrogen (atomic number 1)
+   color = "FF0000"           # Red color (hex without #)
+   radius = 0.3
+
+   [Atom.6]        # Carbon (atomic number 6)  
+   color = "00FF00"           # Green color
+   radius = 0.8
+
+   [Atom.8]        # Oxygen (atomic number 8)
+   color = "0000FF"           # Blue color
+   radius = 0.6
+
+**Available atom properties:**
+
+- ``name``: Atom symbol (e.g., 'H', 'C', 'O')
+- ``color``: Hex color code without # (e.g., 'FF0000' for red)
+- ``radius``: Atom display radius (positive float)
+- ``max_num_bonds``: Maximum bonds the atom can form
+
+**Example - Colorful atom scheme:**
+
+.. code-block:: toml
+
+   [Atom.1]    # Hydrogen - bright white
+   color = "FFFFFF"
+   radius = 0.25
+
+   [Atom.6]    # Carbon - dark gray  
+   color = "404040"
+   radius = 0.7
+
+   [Atom.7]    # Nitrogen - blue
+   color = "0080FF"
+   radius = 0.65
+
+   [Atom.8]    # Oxygen - red
+   color = "FF4040"
+   radius = 0.6
+
+Complete Configuration Example
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Here's a complete custom configuration file that demonstrates various customizations:
+
+.. code-block:: toml
+
+   # ~/.config/moldenViz/config.toml
+   
+   # Enable smooth shading
+   smooth_shading = true
+   
+   # Grid settings for higher resolution
+   [grid]
+   min_radius = 3
+   max_radius_multiplier = 2.5
+   
+   [grid.spherical]
+   num_r_points = 120
+   num_theta_points = 80
+   num_phi_points = 160
+   
+   [grid.cartesian]
+   num_x_points = 120
+   num_y_points = 120
+   num_z_points = 120
+   
+   # Molecular orbital settings
+   [mo]
+   contour = 0.05
+   opacity = 0.8
+   
+   # Molecule appearance
+   [molecule]
+   opacity = 0.9
+   
+   [molecule.atom]
+   show = true
+   
+   [molecule.bond]
+   show = true
+   max_length = 3.5
+   color_type = 'split'
+   color = 'darkblue'
+   radius = 0.12
+   
+   # Custom atom colors and sizes
+   [Atom.1]    # Hydrogen
+   color = "FFFFFF"
+   radius = 0.3
+   
+   [Atom.6]    # Carbon
+   color = "303030"
+   radius = 0.75
+   
+   [Atom.7]    # Nitrogen  
+   color = "0060FF"
+   radius = 0.65
+   
+   [Atom.8]    # Oxygen
+   color = "FF3030"
+   radius = 0.6
+
+Using Custom Configurations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Once you create a custom configuration file, moldenViz will automatically load and apply your settings:
+
+.. code-block:: python
+
+   from moldenViz import Plotter
+   from moldenViz.examples import benzene
+   
+   # Uses your custom configuration automatically
+   Plotter(benzene)
+
+You can also check current configuration settings:
+
+.. code-block:: python
+
+   from moldenViz._config_module import Config
+   
+   config = Config()
+   print(f"Bond color type: {config.molecule.bond.color_type}")
+   print(f"Min radius: {config.grid.min_radius}")
+   print(f"Carbon atom color: {config.atom_types[6].color}")
+
+Configuration Validation
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+moldenViz validates all configuration values:
+
+- **Colors**: Must be valid hex codes (6 characters, no #) or matplotlib color names
+- **Radii**: Must be positive numbers
+- **Grid points**: Must be positive integers (1-1000)
+- **Opacity**: Must be between 0.0 and 1.0
+- **Bond color type**: Must be 'uniform' or 'split'
+
+Invalid configurations will raise clear error messages explaining what needs to be fixed.
+
 Error Handling
 --------------
 
@@ -260,3 +518,15 @@ Common issues and solutions:
        tab.cartesian_grid(x, y, z)  # This will fail
    except RuntimeError:
        print("Cannot create grids when only_molecule=True")
+
+**Invalid configuration:**
+
+.. code-block:: python
+
+   # If your ~/.config/moldenViz/config.toml has invalid settings
+   try:
+       from moldenViz import Plotter
+       Plotter('molden.inp')
+   except ValueError as e:
+       print(f"Configuration error: {e}")
+       # Fix the configuration file and try again
