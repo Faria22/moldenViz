@@ -17,7 +17,7 @@ config = Config()
 ATOM_TYPES = config.atom_types
 
 # Default atom type for invalid atomic numbers
-ATOM_X = AtomType('X', 'black', 1, 0)
+ATOM_X = AtomType(name='X', color='000000', radius=1.0, max_num_bonds=0)
 
 
 class Atom:

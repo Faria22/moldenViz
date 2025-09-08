@@ -16,15 +16,14 @@ try:
     version_globals = {}
     exec(version_file.read_text(), version_globals)
     __version__ = version_globals['__version__']
-    
+
     release = __version__
     version = '.'.join(release.split('.')[:2])  # e.g., "0.1" from "0.1.4"
 except (ImportError, FileNotFoundError, KeyError) as e:
     release = '0.0.0'  # Fallback or error
     version = '0.0'
     logger.warning(
-        f'Warning: Could not read version from __about__.py: {e}\n'
-        "Using fallback version.",
+        f'Warning: Could not read version from __about__.py: {e}\nUsing fallback version.',
     )
 
 # -- General configuration ---------------------------------------------------
