@@ -1,6 +1,6 @@
-name: Publish to PyPI
+name: Publish to PyPI and Create Release
 permissions:
-  contents: read
+  contents: write  # Changed from 'read' to 'write' to allow creating releases
 
 on:
   push:
@@ -16,6 +16,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch full history for release notes generation
       
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -25,7 +27,7 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y python3-tk python3-pytest
+        sudo apt-get install -y python3-tk python3-pytest gh
         
     - name: Install build tools
       run: |
@@ -57,6 +59,30 @@ jobs:
     - name: Verify build artifacts
       run: |
         ls -la dist/
+        
+    - name: Create GitHub Release
+      if: success()
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        TAG_VERSION=${GITHUB_REF#refs/tags/}
+        # Extract changelog or create release notes
+        if [ -f CHANGELOG.md ]; then
+          # Try to extract changelog for this version
+          RELEASE_NOTES=$(awk "/^## \[?${TAG_VERSION}\]?/,/^## /" CHANGELOG.md | sed '1d;$d' | head -20)
+        elif [ -f CHANGES.md ]; then
+          RELEASE_NOTES=$(awk "/^## \[?${TAG_VERSION}\]?/,/^## /" CHANGES.md | sed '1d;$d' | head -20)
+        else
+          # Generate release notes from recent commits
+          RELEASE_NOTES="Release ${TAG_VERSION}"$'\n\n'"**What's Changed:**"$'\n'
+          RELEASE_NOTES+=$(git log --oneline --since="2 weeks ago" --pretty=format:"* %s" | head -10)
+        fi
+        
+        # Create the release
+        gh release create "$TAG_VERSION" \
+          --title "$TAG_VERSION" \
+          --notes "$RELEASE_NOTES" \
+          --verify-tag
         
     - name: Publish to PyPI
       if: success()
