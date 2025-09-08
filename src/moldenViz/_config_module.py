@@ -3,6 +3,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Literal
 
+import matplotlib.colors as mcolors
 import toml
 from pydantic import BaseModel, Field, field_validator
 
@@ -76,39 +77,23 @@ class BondConfig(BaseModel):
 
     show: bool = Field(True, description='Whether to show bonds')
     max_length: float = Field(4.0, gt=0, description='Maximum bond length')
-    color_type: Literal['uniform'] = Field('uniform', description='Bond color type')
+    color_type: Literal['uniform', 'split'] = Field('uniform', description='Bond color type')
     color: str = Field('grey', description='Bond color (hex code or common name)')
     radius: float = Field(0.15, gt=0, description='Bond radius')
 
     @field_validator('color')
     @classmethod
     def validate_color(cls, v: str) -> str:
-        """Validate color is either hex code or common color name.
-        
+        """Validate color using matplotlib.colors.is_color_like.
+
         Returns
         -------
         str
             The validated color string.
         """
-        # Common color names that are likely to be supported
-        common_colors = {
-            'black', 'white', 'red', 'green', 'blue', 'yellow', 'cyan', 'magenta',
-            'grey', 'gray', 'orange', 'purple', 'pink', 'brown', 'lime', 'navy',
-            'maroon', 'olive', 'teal', 'silver', 'gold',
-        }
-
-        # Check if it's a hex color (with or without #)
-        hex_part = v[1:] if v.startswith('#') else v
-        
-        hex_color_length = 6
-        if len(hex_part) == hex_color_length and all(c in '0123456789ABCDEFabcdef' for c in hex_part):
+        if mcolors.is_color_like(v):
             return v
-
-        # Check if it's a common color name
-        if v.lower() in common_colors:
-            return v
-
-        raise ValueError(f'Color must be a 6-digit hex code (with or without #) or a common color name. Got: {v}')
+        raise ValueError(f'Color must be a valid matplotlib color. Got: {v}')
 
 
 class MoleculeConfig(BaseModel):
