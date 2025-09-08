@@ -427,7 +427,7 @@ Here's a complete custom configuration file that demonstrates various customizat
    
    # Custom atom colors and sizes
    [Atom.1]    # Hydrogen
-
+   color = “FFFFFF”
    radius = 0.3
    
    [Atom.6]    # Carbon
