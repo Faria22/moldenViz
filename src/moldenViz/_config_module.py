@@ -1,3 +1,4 @@
+# type: ignore[reportArgumentType]
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -37,24 +38,24 @@ class AtomType(BaseModel):
 class SphericalGridConfig(BaseModel):
     """Configuration for spherical grid parameters."""
 
-    num_r_points: int = Field(100, gt=0, le=1000, description='Number of radial points (1-1000)')
-    num_theta_points: int = Field(60, gt=0, le=1000, description='Number of theta points (1-1000)')
-    num_phi_points: int = Field(120, gt=0, le=1000, description='Number of phi points (1-1000)')
+    num_r_points: int = Field(100, gt=0, description='Number of radial points (1-1000)')
+    num_theta_points: int = Field(60, gt=0, description='Number of theta points (1-1000)')
+    num_phi_points: int = Field(120, gt=0, description='Number of phi points (1-1000)')
 
 
 class CartesianGridConfig(BaseModel):
     """Configuration for cartesian grid parameters."""
 
-    num_x_points: int = Field(100, gt=0, le=1000, description='Number of x points (1-1000)')
-    num_y_points: int = Field(100, gt=0, le=1000, description='Number of y points (1-1000)')
-    num_z_points: int = Field(100, gt=0, le=1000, description='Number of z points (1-1000)')
+    num_x_points: int = Field(100, gt=0, description='Number of x points (1-1000)')
+    num_y_points: int = Field(100, gt=0, description='Number of y points (1-1000)')
+    num_z_points: int = Field(100, gt=0, description='Number of z points (1-1000)')
 
 
 class GridConfig(BaseModel):
     """Configuration for grid generation."""
 
-    min_radius: int = Field(5, gt=0, le=100, description='Minimum radius (1-100)')
-    max_radius_multiplier: int = Field(2, gt=0, le=10, description='Max radius multiplier (1-10)')
+    min_radius: int = Field(5, gt=0, description='Minimum radius (1-100)')
+    max_radius_multiplier: int = Field(2, gt=0, description='Max radius multiplier (1-10)')
     spherical: SphericalGridConfig = Field(default_factory=SphericalGridConfig)
     cartesian: CartesianGridConfig = Field(default_factory=CartesianGridConfig)
 
@@ -109,7 +110,7 @@ class MainConfig(BaseModel):
 
     smooth_shading: bool = Field(True, description='Enable smooth shading')
     grid: GridConfig = Field(default_factory=GridConfig)
-    MO: MOConfig = Field(default_factory=MOConfig, alias='MO')
+    mo: MOConfig = Field(default_factory=MOConfig)
     molecule: MoleculeConfig = Field(default_factory=MoleculeConfig)
 
     class ConfigDict:
@@ -135,7 +136,7 @@ class Config:
             raise ValueError(f'Invalid configuration: {e}') from e
 
         # Convert to SimpleNamespace for backward compatibility
-        self.config = self.dict_to_namedspace(self._pydantic_config.dict(by_alias=True))
+        self.config = self.dict_to_namedspace(self._pydantic_config.model_dump(by_alias=True))
 
         self.atom_types = self.load_atom_types(atoms_custom_config)
 
@@ -247,7 +248,7 @@ class Config:
         for k, v in atom_types_data.items():
             try:
                 atom_types[int(k)] = AtomType(**v)
-            except Exception as e:
+            except Exception as e:  # noqa: PERF203
                 raise ValueError(f'Invalid atom type data for atomic number {k}: {e}') from e
 
         for atomic_number_str, atom_properties in atoms_custom_config.items():

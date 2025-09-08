@@ -137,8 +137,8 @@ class Plotter:
         self.orb_actor: pv.Actor | None = None
 
         # Values for MO, not the molecule
-        self.contour = config.MO.contour
-        self.opacity = config.MO.opacity
+        self.contour = config.mo.contour
+        self.opacity = config.mo.opacity
 
         _OrbitalSelectionScreen(self, self.tk_root)
 
@@ -487,9 +487,9 @@ class _OrbitalSelectionScreen(tk.Toplevel):
     def reset_settings(self) -> None:
         """Reset settings to default values."""
         self.contour_entry.delete(0, tk.END)
-        self.contour_entry.insert(0, str(config.MO.contour))
+        self.contour_entry.insert(0, str(config.mo.contour))
 
-        self.opacity_scale.set(config.MO.opacity)
+        self.opacity_scale.set(config.mo.opacity)
 
         self.molecule_opacity_scale.set(config.molecule.opacity)
 
