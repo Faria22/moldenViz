@@ -27,12 +27,12 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y python3-tk python3-pytest gh
+        sudo apt-get install -y python3-tk gh
         
     - name: Install build tools
       run: |
         python -m pip install --upgrade pip
-        python -m pip install hatch
+        python -m pip install hatch pytest
         
     - name: Install package in development mode
       run: |
