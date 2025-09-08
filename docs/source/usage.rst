@@ -265,7 +265,6 @@ Control bond appearance and behavior:
 .. code-block:: toml
 
    [molecule.bond]
-   color = 'blue'
    radius = 0.25
    color_type = 'split'
 
