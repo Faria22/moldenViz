@@ -423,7 +423,6 @@ Here's a complete custom configuration file that demonstrates various customizat
    show = true
    max_length = 3.5
    color_type = 'split'
-   color = 'darkblue'
    radius = 0.12
    
    # Custom atom colors and sizes
