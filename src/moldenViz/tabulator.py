@@ -16,6 +16,10 @@ logger = logging.getLogger(__name__)
 array_like_type = NDArray[np.integer] | list[int] | tuple[int, ...] | range
 
 
+def _grid_creation_with_only_molecule_error() -> RuntimeError:
+    return RuntimeError('Grid creation is not allowed when `only_molecule` is set to `True`.')
+
+
 def _spherical_to_cartesian(
     r: NDArray[np.floating],
     theta: NDArray[np.floating],
@@ -224,7 +228,7 @@ class Tabulator:
             Defaults to True.
         """
         if self._only_molecule:
-            raise RuntimeError('Grid creation is not allowed when `only_molecule` is set to `True`.')
+            raise _grid_creation_with_only_molecule_error()
 
         xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
         self._grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
@@ -261,7 +265,7 @@ class Tabulator:
 
         """
         if self._only_molecule:
-            raise RuntimeError('Grid creation is not allowed when `only_molecule` is set to `True`.')
+            raise _grid_creation_with_only_molecule_error()
 
         rr, tt, pp = np.meshgrid(r, theta, phi, indexing='ij')
         xx, yy, zz = _spherical_to_cartesian(rr, tt, pp)
