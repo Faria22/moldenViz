@@ -231,16 +231,12 @@ Access detailed molecular structure information:
 Configuration
 -------------
 
-moldenViz supports extensive customization through configuration files. The configuration system uses a hierarchical approach where custom settings override defaults.
+moldenViz supports customization through configuration files. The configuration system uses a hierarchical approach where custom settings override defaults.
 
 Configuration Files
 ~~~~~~~~~~~~~~~~~~~
 
-**Default Configuration**: Built into the package at ``moldenViz/default_configs/config.toml``
-
 **Custom Configuration**: User-specific settings at ``~/.config/moldenViz/config.toml``
-
-The custom configuration file will be created automatically when you first modify settings, or you can create it manually.
 
 Available Configuration Options
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -273,7 +269,6 @@ Control bond appearance and behavior:
    radius = 0.25
    color_type = 'split'
 
-Grid Settings
 ^^^^^^^^^^^^^
 
 Control grid generation for molecular orbital calculations:
@@ -348,15 +343,15 @@ You can customize the appearance of specific atom types by their atomic number:
 .. code-block:: toml
 
    [Atom.1]        # Hydrogen (atomic number 1)
-   color = "FF0000"           # Red color (hex without #)
+   color = "FF0000"           # Red (hex without #)
    radius = 0.3
 
    [Atom.6]        # Carbon (atomic number 6)  
-   color = "00FF00"           # Green color
+   color = "00FF00"           # Green
    radius = 0.8
 
    [Atom.8]        # Oxygen (atomic number 8)
-   color = "0000FF"           # Blue color
+   color = "0000FF"           # Blue
    radius = 0.6
 
 **Available atom properties:**
@@ -434,7 +429,7 @@ Here's a complete custom configuration file that demonstrates various customizat
    
    # Custom atom colors and sizes
    [Atom.1]    # Hydrogen
-   color = "FFFFFF"
+
    radius = 0.3
    
    [Atom.6]    # Carbon
@@ -461,30 +456,6 @@ Once you create a custom configuration file, moldenViz will automatically load a
    
    # Uses your custom configuration automatically
    Plotter(benzene)
-
-You can also check current configuration settings:
-
-.. code-block:: python
-
-   from moldenViz._config_module import Config
-   
-   config = Config()
-   print(f"Bond color type: {config.molecule.bond.color_type}")
-   print(f"Min radius: {config.grid.min_radius}")
-   print(f"Carbon atom color: {config.atom_types[6].color}")
-
-Configuration Validation
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-moldenViz validates all configuration values:
-
-- **Colors**: Must be valid hex codes (6 characters, no #) or matplotlib color names
-- **Radii**: Must be positive numbers
-- **Grid points**: Must be positive integers (1-1000)
-- **Opacity**: Must be between 0.0 and 1.0
-- **Bond color type**: Must be 'uniform' or 'split'
-
-Invalid configurations will raise clear error messages explaining what needs to be fixed.
 
 Error Handling
 --------------

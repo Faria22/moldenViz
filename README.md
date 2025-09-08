@@ -134,8 +134,7 @@ mos_data = tab.tabulate_mos()
 moldenViz supports customization through configuration files. You can customize:
 - Bond colors and appearance (uniform vs split coloring)
 - Atom colors and radii for different elements
-- Grid parameters and minimum radius settings
-- Molecular orbital visualization settings
+- Grid parameters
 
 Create a configuration file at `~/.config/moldenViz/config.toml` to customize settings. See the [documentation](https://moldenviz.readthedocs.io/en/latest/) for detailed configuration options and examples.
 
