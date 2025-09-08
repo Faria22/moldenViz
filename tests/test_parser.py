@@ -62,8 +62,8 @@ def test_basis_and_mo_dimensions(parser_obj: Parser) -> None:
     assert len(parser_obj.mos) == num_mos
 
     num_gtos = sum(2 * shell.l + 1 for shell in parser_obj.shells)
-    for mo in parser_obj.mos:
-        assert len(mo.coeffs) == num_gtos
+    # Check that mo_coeffs has the right shape
+    assert parser_obj.mo_coeffs.shape == (num_mos, num_gtos)
 
 
 def test_mo_energies_are_sorted(parser_obj: Parser) -> None:
