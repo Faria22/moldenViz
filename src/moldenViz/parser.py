@@ -363,7 +363,7 @@ class Parser:
 
         mos = []
         mo_coeffs = np.empty((total_num_mos, num_total_gtos), dtype=float)
-        
+
         for mo_ind in range(total_num_mos):
             _, sym = next(lines).split()
 
@@ -429,24 +429,3 @@ class Parser:
             ind += 2 * l + 1
 
         return order
-
-    @staticmethod
-    def sort_mos(mos: list[_MolecularOrbital]) -> list[_MolecularOrbital]:
-        """Sort a list of MOs by energy.
-
-        Parameters
-        ----------
-        mos : list[_MolecularOrbital]
-            A list of `_MolecularOrbital` objects to be sorted.
-
-        Returns
-        -------
-        list[_MolecularOrbital]
-            A new list containing the `_MolecularOrbital` objects sorted
-            by their energy in ascending order.
-        """
-        logger.info('Sorting MOs by energy...')
-        mos = sorted(mos, key=lambda mo: mo.energy)
-        logger.info('MOs sorted by energy.')
-
-        return mos
