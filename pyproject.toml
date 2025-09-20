@@ -69,3 +69,9 @@ tests = ["tests", "*/moldenViz/tests"]
 
 [tool.coverage.report]
 exclude_lines = ["no cov", "if __name__ == .__main__.:", "if TYPE_CHECKING:"]
+
+[dependency-groups]
+dev = [
+    "basedpyright>=1.31.4",
+    "ruff>=0.13.1",
+]
