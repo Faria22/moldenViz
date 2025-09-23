@@ -9,6 +9,10 @@ moldenViz Documentation
    :target: https://pypi.org/project/moldenviz
    :alt: Python Versions
 
+.. raw:: html
+
+   <div style="margin-top: 20px;"></div>
+
 ``moldenViz`` is a Python package for parsing Molden files, tabulating molecular orbitals, and visualizing them through intuitive 3D plots. It provides both a command-line interface and a Python API for working with quantum chemistry calculation results.
 
 Key Features
@@ -41,8 +45,10 @@ Or use the Python API:
 
    from moldenViz import Plotter
    from moldenViz.examples import benzene
-   
+
    Plotter(benzene)
+
+For a guided walk-through, continue with :doc:`Getting Started <getting-started>`.
 
 Contents
 --------
@@ -51,7 +57,11 @@ Contents
    :maxdepth: 2
    :caption: User Guide
 
-   usage
+   getting-started
+   cli-guide
+   python-api
+   configuration
+   troubleshooting
 
 .. toctree::
    :maxdepth: 2
@@ -62,7 +72,7 @@ Contents
 .. toctree::
    :maxdepth: 1
    :caption: Additional Information
-   
+
    GitHub Repository <https://github.com/Faria22/moldenViz>
    PyPI Package <https://pypi.org/project/moldenviz>
 

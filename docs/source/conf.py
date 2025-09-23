@@ -54,6 +54,10 @@ html_theme_options = {
     'navbar_end': ['navbar-icon-links.html', 'search-field.html'],
 }
 
+html_sidebars = {'**': []}
+
+html_css_files = ['custom.css']
+
 autodoc_member_order = 'bysource'
 autosummary_generate = False  # Disable auto-generation to avoid orphaned files
 
