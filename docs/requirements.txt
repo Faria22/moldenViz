@@ -1,0 +1,6 @@
+# Dependencies required to build the documentation on Read the Docs
+numpy>=1.20
+scipy>=1.7
+pydantic>=2.0.0
+toml
+pydata-sphinx-theme>=0.14
