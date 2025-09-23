@@ -344,11 +344,10 @@ class Parser:
         Returns
         -------
         tuple[list[_MolecularOrbital], NDArray[np.floating]]
-            A tuple containing:
-            - A list of MolecularOrbital objects containing
-              the symmetry, energy, spin, and occupation for each MO.
-            - A 2D array of shape (num_mos, num_basis_functions) containing
-              all molecular orbital coefficients in the same order as the MOs.
+            Two-item tuple: the first element contains the parsed molecular
+            orbitals (symmetry, energy, spin, occupation), and the second is a
+            2D NumPy array of orbital coefficients shaped
+            ``(num_mos, num_basis_functions)``.
         """
         logger.info('Parsing MO coefficients...')
 

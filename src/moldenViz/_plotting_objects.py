@@ -1,3 +1,5 @@
+"""Utility objects used by the Plotter to build molecular meshes."""
+
 import logging
 from enum import Enum
 from typing import cast
@@ -36,7 +38,15 @@ class Atom:
         atomic_number: int,
         center: NDArray[np.floating],
     ) -> None:
-        """Initialize an Atom with atomic number and position."""
+        """Initialize an atom for visualization.
+
+        Parameters
+        ----------
+        atomic_number : int
+            Atomic number that determines colour, radius, and bond limits.
+        center : NDArray[np.floating]
+            Cartesian coordinates of the atom centre in Angstroms.
+        """
         self.atom_type = ATOM_TYPES.get(atomic_number, ATOM_X)
         if self.atom_type is ATOM_X:
             logger.warning(
@@ -49,10 +59,12 @@ class Atom:
         self.bonds: list[Bond] = []
 
     def remove_extra_bonds(self) -> None:
-        """Remove the longest bonds if there are more bonds than max_bonds.
+        """Clip bonds so the atom respects its configured maximum.
 
-        This method sorts bonds by length and removes the longest ones if the number
-        of bonds exceeds the maximum allowed for this atom type.
+        Notes
+        -----
+        Bonds remain attached to both atoms, but the meshes are cleared for any
+        discarded bonds so they are not rendered by PyVista.
         """
         if len(self.bonds) <= self.atom_type.max_num_bonds:
             return
@@ -81,7 +93,15 @@ class Bond:
         SPLIT = 'split'
 
     def __init__(self, atom_a: Atom, atom_b: Atom) -> None:
-        """Initialize a Bond between two atoms with appropriate geometry and coloring."""
+        """Initialize a bond between two atoms for visualization.
+
+        Parameters
+        ----------
+        atom_a : Atom
+            First atom participating in the bond.
+        atom_b : Atom
+            Second atom participating in the bond.
+        """
         bond_vec = atom_a.center - atom_b.center
         center = (atom_a.center + atom_b.center) / 2
 
@@ -133,7 +153,7 @@ class Bond:
         self.plotted = False
 
     def trim_ends(self) -> None:
-        """Remove the ends of the bond that are going into the atoms."""
+        """Trim bond geometry so it does not intrude into atom spheres."""
         if self.mesh is None:
             return
 
@@ -157,16 +177,16 @@ class Bond:
 
 
 class Molecule:
-    """Represents a complete molecule with atoms and bonds for visualization.
-
-    Parameters
-    ----------
-    atoms : list[_Atom]
-        List of atom objects from the parser to create the molecule structure.
-    """
+    """Composite object storing rendered atoms and inferred bonds."""
 
     def __init__(self, atoms: list[_Atom]) -> None:
-        """Initialize a Molecule from a list of parsed atoms."""
+        """Initialize a molecule from parsed atom data.
+
+        Parameters
+        ----------
+        atoms : list[_Atom]
+            Parsed atoms emitted by :class:`moldenViz.parser.Parser`.
+        """
         # Max radius is used later for plotting
         self.max_radius = 0
 

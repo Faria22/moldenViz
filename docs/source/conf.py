@@ -9,10 +9,11 @@ _copyright = '2025, Felipe Faria'
 author = 'Felipe Faria'
 
 # Import the project version
-sys.path.insert(0, str(Path('../../src').resolve()))
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / 'src'))
 try:
     # Try to read version directly from file to avoid importing the full module
-    version_file = Path('../../src/moldenViz/__about__.py').resolve()
+    version_file = ROOT / 'src' / 'moldenViz' / '__about__.py'
     version_globals = {}
     exec(version_file.read_text(), version_globals)
     __version__ = version_globals['__version__']
@@ -31,6 +32,7 @@ except (ImportError, FileNotFoundError, KeyError) as e:
 
 extensions = [
     'sphinx.ext.autodoc',  # Core library for html generation from docstrings
+    'sphinx.ext.autodoc.typehints',  # Render annotated types in descriptions
     'sphinx.ext.autosummary',  # Create neat summary tables
     'sphinx.ext.napoleon',  # Support for NumPy and Google style docstrings
     'sphinx.ext.viewcode',  # Add links to highlighted source code
@@ -59,7 +61,9 @@ html_sidebars = {'**': []}
 html_css_files = ['custom.css']
 
 autodoc_member_order = 'bysource'
-autosummary_generate = False  # Disable auto-generation to avoid orphaned files
+autosummary_generate = False
+
+autodoc_typehints = 'description'
 
 # Mock imports for modules that require GUI or other system dependencies
 autodoc_mock_imports = [
@@ -67,9 +71,6 @@ autodoc_mock_imports = [
     'pyvista',
     'pyvistaqt',
     'PySide6',
-    'numpy',
-    'scipy',
-    'matplotlib',
 ]
 
 # Make autodoc more permissive about import failures

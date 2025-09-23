@@ -49,5 +49,4 @@ Tips
 ----
 
 - Combine ``-e`` with ``-m`` to explore only the geometry of an example.
-- Run with ``-v`` to increase logging output when debugging an issue.
-- Use configuration overrides (:doc:`see details <configuration>`) to change colours, bond lengths, or orbital contours before launching the CLI.
+- Use configuration overrides (:doc:`see details <configuration>`) to change colors, bond lengths, or orbital contours before launching the CLI.
