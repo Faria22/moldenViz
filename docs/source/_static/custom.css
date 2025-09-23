@@ -1,0 +1,13 @@
+#pst-primary-sidebar,
+button.primary-toggle {
+    display: none !important;
+}
+
+.bd-container {
+    grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.bd-main {
+    max-width: 100% !important;
+    margin: 0 auto !important;
+}

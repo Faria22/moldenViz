@@ -176,21 +176,24 @@ class Plotter:
         k_points: NDArray[np.floating],
         grid_type: GridType,
     ) -> None:
-        """Update the grid in the Tabulator and recreates the MO mesh.
+        """Update the tabulator grid and rebuild the orbital mesh.
 
-        Args:
-            i_points: NDArray[np.floating]:
-                Points for the first dimension (radius or x).
-            j_points: NDArray[np.floating]:
-                Points for the second dimension (theta or y).
-            k_points: NDArray[np.floating]:
-                Points for the third dimension (phi or z).
-            grid_type: GridType:
-                The type of grid to create (SPHERICAL or CARTESIAN).
+        Parameters
+        ----------
+        i_points : NDArray[np.floating]
+            1D array defining the first dimension (radius or x).
+        j_points : NDArray[np.floating]
+            1D array defining the second dimension (theta or y).
+        k_points : NDArray[np.floating]
+            1D array defining the third dimension (phi or z).
+        grid_type : GridType
+            Target grid type to regenerate (`GridType.SPHERICAL` or
+            `GridType.CARTESIAN`).
 
         Raises
         ------
-            ValueError: If the grid_type is not SPHERICAL or CARTESIAN.
+        ValueError
+            If ``grid_type`` is not supported.
         """
         if grid_type == GridType.CARTESIAN:
             self.tabulator.cartesian_grid(i_points, j_points, k_points)
@@ -203,10 +206,21 @@ class Plotter:
 
 
 class _OrbitalSelectionScreen(tk.Toplevel):
+    """Modal dialog that lets users browse and configure molecular orbitals."""
+
     SPHERICAL_GRID_SETTINGS_WINDOW_SIZE = '600x500'
     CARTESIAN_GRID_SETTINGS_WINDOW_SIZE = '800x500'
 
     def __init__(self, plotter: Plotter, tk_master: tk.Tk) -> None:
+        """Create the orbital selection dialog for a plotter instance.
+
+        Parameters
+        ----------
+        plotter : Plotter
+            Active plotter that supplies molecular orbital data.
+        tk_master : tk.Tk
+            Tk root or parent window that owns this dialog.
+        """
         super().__init__(tk_master)
         self.title('Orbitals')
         self.geometry('350x500')
@@ -235,6 +249,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.orb_tv.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
     def on_close(self) -> None:
+        """Close the selection dialog and release GUI resources."""
         self.plotter.on_screen = False
         self.plotter.pv_plotter.close()
         self.destroy()
@@ -242,6 +257,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
             self.plotter.tk_root.destroy()
 
     def protocols(self) -> None:
+        """Attach standard close shortcuts to the dialog window."""
         self.protocol('WM_DELETE_WINDOW', self.on_close)
         self.bind('<Command-q>', lambda _event: self.on_close())
         self.bind('<Command-w>', lambda _event: self.on_close())
@@ -249,6 +265,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.bind('<Control-w>', lambda _event: self.on_close())
 
     def settings_screen(self) -> None:
+        """Open the settings window for molecule and grid configuration."""
         self.settings_window = tk.Toplevel(self)
         self.settings_window.title('Settings')
 
@@ -327,6 +344,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         save_button.grid(row=9, column=0, padx=5, pady=5, columnspan=5)
 
     def place_grid_params_frame(self) -> None:
+        """Render the parameter frame that matches the selected grid type."""
         if self.grid_type_radio_var.get() == GridType.SPHERICAL.value:
             self.settings_window.geometry(self.SPHERICAL_GRID_SETTINGS_WINDOW_SIZE)
             self.cart_grid_params_frame.grid_forget()
@@ -340,6 +358,18 @@ class _OrbitalSelectionScreen(tk.Toplevel):
             self.cart_grid_params_frame_setup()
 
     def sph_grid_params_frame_widgets(self, master: ttk.Frame) -> ttk.Frame:
+        """Build widgets that capture spherical grid parameters.
+
+        Parameters
+        ----------
+        master : ttk.Frame
+            Parent frame that will host the generated widgets.
+
+        Returns
+        -------
+        ttk.Frame
+            Frame containing the spherical grid controls.
+        """
         grid_params_frame = ttk.Frame(master)
 
         # Radius
@@ -368,6 +398,18 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         return grid_params_frame
 
     def cart_grid_params_frame_widgets(self, master: ttk.Frame) -> ttk.Frame:
+        """Build widgets that capture Cartesian grid parameters.
+
+        Parameters
+        ----------
+        master : ttk.Frame
+            Parent frame that will host the generated widgets.
+
+        Returns
+        -------
+        ttk.Frame
+            Frame containing the Cartesian grid controls.
+        """
         grid_params_frame = ttk.Frame(master)
 
         # X
@@ -412,6 +454,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         return grid_params_frame
 
     def sph_grid_params_frame_setup(self) -> None:
+        """Populate the spherical grid widgets with defaults or existing values."""
         self.radius_entry.delete(0, tk.END)
         self.radius_points_entry.delete(0, tk.END)
         self.theta_points_entry.delete(0, tk.END)
@@ -421,9 +464,9 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         if self.plotter.tabulator._grid_type == GridType.CARTESIAN:  # noqa: SLF001
             self.radius_entry.insert(
                 0,
-                str(max(config.grid.max_radius_multiplier * self.plotter.molecule.max_radius, config.grig.min_radius)),
+                str(max(config.grid.max_radius_multiplier * self.plotter.molecule.max_radius, config.grid.min_radius)),
             )
-            self.radius_points_entry.insert(0, str(config.grid.spherical.num_radius_points))
+            self.radius_points_entry.insert(0, str(config.grid.spherical.num_r_points))
             self.theta_points_entry.insert(0, str(config.grid.spherical.num_theta_points))
             self.phi_points_entry.insert(0, str(config.grid.spherical.num_phi_points))
             return
@@ -439,6 +482,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.phi_points_entry.insert(0, str(num_phi))
 
     def cart_grid_params_frame_setup(self) -> None:
+        """Populate the Cartesian grid widgets with defaults or existing values."""
         self.x_min_entry.delete(0, tk.END)
         self.x_max_entry.delete(0, tk.END)
         self.x_num_points_entry.delete(0, tk.END)
@@ -485,7 +529,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.z_num_points_entry.insert(0, str(z_num))
 
     def reset_settings(self) -> None:
-        """Reset settings to default values."""
+        """Restore all settings widgets back to configuration defaults."""
         self.contour_entry.delete(0, tk.END)
         self.contour_entry.insert(0, str(config.mo.contour))
 
@@ -502,7 +546,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         )
 
         self.radius_points_entry.delete(0, tk.END)
-        self.radius_points_entry.insert(0, str(config.grid.spherical.num_radius_points))
+        self.radius_points_entry.insert(0, str(config.grid.spherical.num_r_points))
 
         self.theta_points_entry.delete(0, tk.END)
         self.theta_points_entry.insert(0, str(config.grid.spherical.num_theta_points))
@@ -511,6 +555,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.phi_points_entry.insert(0, str(config.grid.spherical.num_phi_points))
 
     def apply_settings(self) -> None:
+        """Validate UI inputs and apply the chosen rendering parameters."""
         self.plotter.molecule_opacity = round(self.molecule_opacity_scale.get(), 2)
         for actor in self.plotter.molecule_actors:
             actor.GetProperty().SetOpacity(self.plotter.molecule_opacity)
@@ -577,27 +622,34 @@ class _OrbitalSelectionScreen(tk.Toplevel):
             self.plotter.orb_actor.GetProperty().SetOpacity(self.plotter.opacity)
 
     def next_plot(self) -> None:
-        """Go to the next plot."""
+        """Advance to the next molecular orbital."""
         self.current_orb_ind += 1
         self.update_button_states()
         self.orb_tv.highlight_orbital(self.current_orb_ind)
         self.plot_orbital(self.current_orb_ind)
 
     def prev_plot(self) -> None:
-        """Go to the previous plot."""
+        """Return to the previous molecular orbital."""
         self.current_orb_ind -= 1
         self.orb_tv.highlight_orbital(self.current_orb_ind)
         self.update_button_states()
         self.plot_orbital(self.current_orb_ind)
 
     def update_button_states(self) -> None:
-        """Update the enabled/disabled state of nav buttons."""
+        """Synchronize navigation button state with the current orbital index."""
         can_go_prev = self.current_orb_ind > 0
         can_go_next = self.current_orb_ind < len(self.plotter.tabulator._parser.mos) - 1  # noqa: SLF001
         self.prev_button.config(state=tk.NORMAL if can_go_prev else tk.DISABLED)
         self.next_button.config(state=tk.NORMAL if can_go_next else tk.DISABLED)
 
     def plot_orbital(self, orb_ind: int) -> None:
+        """Render the selected orbital isosurface in the PyVista plotter.
+
+        Parameters
+        ----------
+        orb_ind : int
+            Index of the orbital to display; ``-1`` clears the current mesh.
+        """
         if self.plotter.orb_actor:
             self.plotter.pv_plotter.remove_actor(self.plotter.orb_actor)
 
@@ -618,6 +670,13 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
 class _OrbitalsTreeview(ttk.Treeview):
     def __init__(self, selection_screen: _OrbitalSelectionScreen) -> None:
+        """Initialise the tree view that lists available molecular orbitals.
+
+        Parameters
+        ----------
+        selection_screen : _OrbitalSelectionScreen
+            Parent dialog that handles selection changes.
+        """
         columns = ['Index', 'Symmetry', 'Occupation', 'Energy [au]']
         widths = [20, 50, 50, 120]
 
@@ -637,7 +696,13 @@ class _OrbitalsTreeview(ttk.Treeview):
         self.bind('<<TreeviewSelect>>', self.on_select)
 
     def highlight_orbital(self, orb_ind: int) -> None:
-        """Highlight the selected orbital."""
+        """Highlight the given orbital within the tree view.
+
+        Parameters
+        ----------
+        orb_ind : int
+            Index to highlight.
+        """
         if self.current_orb_ind != -1:
             self.item(self.current_orb_ind, tags=('!hightlight',))
 
@@ -646,10 +711,18 @@ class _OrbitalsTreeview(ttk.Treeview):
         self.see(orb_ind)  # Scroll to the selected item
 
     def erase(self) -> None:
+        """Remove all orbital entries from the tree view."""
         for item in self.get_children():
             self.delete(item)
 
     def populate_tree(self, mos: list[_MolecularOrbital]) -> None:
+        """Populate the tree view with molecular orbital metadata.
+
+        Parameters
+        ----------
+        mos : list[_MolecularOrbital]
+            Orbitals sourced from the parser.
+        """
         self.erase()
 
         # Counts the number of MOs with a given symmetry
@@ -660,7 +733,13 @@ class _OrbitalsTreeview(ttk.Treeview):
             self.insert('', 'end', iid=ind, values=(ind + 1, f'{mo.sym}.{mo_sym_count[mo.sym]}', mo.occ, mo.energy))
 
     def on_select(self, _event: tk.Event) -> None:
-        """Handle selection of an orbital."""
+        """Handle user selection events raised by the tree view.
+
+        Parameters
+        ----------
+        _event : tk.Event
+            Tkinter event object (unused).
+        """
         selected_item = self.selection()
         self.selection_remove(selected_item)
         if selected_item:

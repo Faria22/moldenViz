@@ -17,6 +17,14 @@ array_like_type = NDArray[np.integer] | list[int] | tuple[int, ...] | range
 
 
 def _grid_creation_with_only_molecule_error() -> RuntimeError:
+    """Return a consistent error for grid creation when only the molecule is parsed.
+
+    Returns
+    -------
+    RuntimeError
+        The error indicating that grid creation is not allowed when `only_molecule` is set to `True`.
+
+    """
     return RuntimeError('Grid creation is not allowed when `only_molecule` is set to `True`.')
 
 
@@ -30,16 +38,16 @@ def _spherical_to_cartesian(
     Parameters
     ----------
     r : NDArray[np.floating]
-        Radial distances.
+        1D array of radial coordinates.
     theta : NDArray[np.floating]
-        Polar angles (in radians).
+        1D array of polar angles (radians).
     phi : NDArray[np.floating]
-        Azimuthal angles (in radians).
+        1D array of azimuthal angles (radians).
 
     Returns
     -------
     tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]
-        Arrays of x, y, z Cartesian coordinates.
+        Tuple containing the Cartesian coordinates ``(x, y, z)``.
     """
     x = r * np.sin(theta) * np.cos(phi)
     y = r * np.sin(theta) * np.sin(phi)
@@ -58,16 +66,16 @@ def _cartesian_to_spherical(
     Parameters
     ----------
     x : NDArray[np.floating]
-        X coordinates.
+        1D array of x coordinates.
     y : NDArray[np.floating]
-        Y coordinates.
+        1D array of y coordinates.
     z : NDArray[np.floating]
-        Z coordinates.
+        1D array of z coordinates.
 
     Returns
     -------
     tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]
-        Arrays of r (radius), theta (polar angle), phi (azimuthal angle).
+        Tuple containing spherical coordinates ``(r, theta, phi)``.
     """
     r = np.sqrt(x**2 + y**2 + z**2)
     theta = np.arccos(z / r)
@@ -172,11 +180,25 @@ class Tabulator:
 
     @property
     def grid(self) -> NDArray[np.floating]:
-        """Get the grid points where GTOs and MOs are tabulated."""
+        """Return the 2D array of Cartesian grid points used for tabulation."""
         return self._grid
 
     @grid.setter
     def grid(self, new_grid: Any) -> None:
+        """Set the tabulation grid after validating its structure.
+
+        Parameters
+        ----------
+        new_grid : Any
+            Candidate 2D array whose rows are XYZ coordinates.
+
+        Raises
+        ------
+        TypeError
+            If ``new_grid`` is not a NumPy array.
+        ValueError
+            If the array does not have three columns or contains no rows.
+        """
         if not isinstance(new_grid, np.ndarray):
             raise TypeError(f"Expected a NumPy array for 'grid', but got {type(new_grid).__name__}.")
 
@@ -194,6 +216,7 @@ class Tabulator:
 
     @grid.deleter
     def grid(self) -> None:
+        """Delete the cached grid and mark its type as unknown."""
         del self._grid
         self._grid_type = GridType.UNKNOWN
 
@@ -218,11 +241,11 @@ class Tabulator:
         Parameters
         ----------
         x : NDArray[np.floating]
-            Array of x coordinates.
+            1D array of x coordinates.
         y : NDArray[np.floating]
-            Array of y coordinates.
+            1D array of y coordinates.
         z : NDArray[np.floating]
-            Array of z coordinates.
+            1D array of z coordinates.
         tabulate_gtos : bool, optional
             Whether to tabulate Gaussian-type orbitals (GTOs) after creating the grid.
             Defaults to True.
@@ -250,18 +273,18 @@ class Tabulator:
         Parameters
         ----------
         r : NDArray[np.floating]
-            Array of radial coordinates.
+            1D array of radial coordinates.
         theta : NDArray[np.floating]
-            Array of polar angles (in radians).
+            1D array of polar angles (radians).
         phi : NDArray[np.floating]
-            Array of azimuthal angles (in radians).
+            1D array of azimuthal angles (radians).
         tabulate_gtos : bool, optional
             Whether to tabulate Gaussian-type orbitals (GTOs) after creating the grid.
             Defaults to True.
 
-        Note
-        ----
-            Grid points are converted to Cartesian coordinates.
+        Notes
+        -----
+        Grid points are converted to Cartesian coordinates.
 
         """
         if self._only_molecule:
@@ -433,10 +456,10 @@ class Tabulator:
     def _tabulate_plms(x: NDArray[np.floating], lmax: int) -> NDArray[np.floating]:
         """Tabulate normalized associated Legendre polynomials (without Condon-Shortley phase).
 
-        Returns an array of shape (`lmax+1`, `lmax+1`, `x.size`), where:
-            The first index is 0 <= l <= lmax
-            The second index is 0 <= m <= lmax
-            The third index goes over the x points
+        Returns a 3D array with axes `(l, m, index)` where:
+            The first axis enumerates ``l`` in ``[0, lmax]``.
+            The second axis enumerates ``m`` in ``[0, lmax]``.
+            The third axis spans the samples of ``x``.
 
         Using closed form outlined here:
         https://en.m.wikipedia.org/wiki/Associated_Legendre_polynomials#Closed_Form
