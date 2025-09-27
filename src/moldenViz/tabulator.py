@@ -177,11 +177,10 @@ class Tabulator:
         self._grid: NDArray[np.floating]
         self._grid_type = GridType.UNKNOWN
         self._grid_dimensions: tuple[int, int, int] = (0, 0, 0)
-        self._cartesian_axes: tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]] | None = None
-        self._spherical_axes: tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]] | None = None
-        self._atom_gto_slices: list[slice] = []
-
         self._gtos: NDArray[np.floating]
+
+        # Used for when exporting to cube format
+        self.original_axes: tuple[NDArray[np.floating], ...] | None = None
 
     @property
     def grid(self) -> NDArray[np.floating]:
@@ -204,24 +203,24 @@ class Tabulator:
         ValueError
             If the array does not have three columns or contains no rows.
         """
+        min_num_rows = 1
+        num_cols = 3
+        num_dim = 2
+
         if not isinstance(new_grid, np.ndarray):
             raise TypeError(f"Expected a NumPy array for 'grid', but got {type(new_grid).__name__}.")
 
-        if new_grid.ndim != 2:  # noqa: PLR2004
+        if new_grid.ndim != num_dim:
             raise ValueError(f"'grid' must be a 2D array, but got shape {new_grid.shape}.")
 
-        if new_grid.shape[0] < 1:
+        if new_grid.shape[0] < min_num_rows:
             raise ValueError("'grid' must have at least one row (one point in space).")
 
-        if new_grid.shape[1] != 3:  # noqa: PLR2004
+        if new_grid.shape[1] != num_cols:
             raise ValueError(f"'grid' must have exactly 3 columns, but got {new_grid.shape[1]} columns.")
 
+        del self.grid
         self._grid = new_grid
-        self._grid_type = GridType.UNKNOWN
-        self._grid_dimensions = (0, 0, 0)
-        self._cartesian_axes = None
-        self._spherical_axes = None
-        self._atom_gto_slices = []
 
     @grid.deleter
     def grid(self) -> None:
@@ -229,9 +228,7 @@ class Tabulator:
         del self._grid
         self._grid_type = GridType.UNKNOWN
         self._grid_dimensions = (0, 0, 0)
-        self._cartesian_axes = None
-        self._spherical_axes = None
-        self._atom_gto_slices = []
+        self.original_axes = None
 
     @property
     def gtos(self) -> NDArray[np.floating]:
@@ -241,6 +238,59 @@ class Tabulator:
     @gtos.deleter
     def gtos(self) -> None:
         del self._gtos
+
+    @staticmethod
+    def _axis_spacing(axis: NDArray[np.floating], name: str) -> float:
+        if axis.size <= 1:
+            return 0.0
+
+        diffs = np.diff(axis)
+        if np.any(diffs <= 0):
+            raise ValueError(f'{name}-axis values must be strictly increasing for cube export.')
+        if not np.allclose(diffs, diffs[0]):
+            raise ValueError(f'{name}-axis must be evenly spaced for cube export.')
+        return float(diffs[0])
+
+    def _set_grid(
+        self,
+        x: NDArray[np.floating],
+        y: NDArray[np.floating],
+        z: NDArray[np.floating],
+        grid_type: GridType,
+        tabulate_gtos: bool = True,
+    ) -> None:
+        r"""Create grid from x, y, z (or r, theta, phi) arrays and tabulate GTOs.
+
+        Parameters
+        ----------
+        x : NDArray[np.floating]
+            1D array of x (or r) coordinates.
+        y : NDArray[np.floating]
+            1D array of y (or theta) coordinates.
+        z : NDArray[np.floating]
+            1D array of z (or phi) coordinates.
+        grid_type : GridType
+            What type of grid. Determines if x, y, z are actual
+            x, y, z or r, theta, phi.
+        tabulate_gtos : bool, optional
+            Whether to tabulate Gaussian-type orbitals (GTOs) after creating the grid.
+            Defaults to True.
+        """
+        if self._only_molecule:
+            raise _grid_creation_with_only_molecule_error()
+
+        self.original_axes = (x, y, z)
+
+        xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
+        if grid_type == GridType.SPHERICAL:
+            xx, yy, zz = _spherical_to_cartesian(xx, yy, zz)
+
+        self._grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
+        self._grid_type = grid_type
+        self._grid_dimensions = (len(x), len(y), len(z))
+
+        if tabulate_gtos:
+            self._gtos = self.tabulate_gtos()
 
     def cartesian_grid(
         self,
@@ -263,22 +313,7 @@ class Tabulator:
             Whether to tabulate Gaussian-type orbitals (GTOs) after creating the grid.
             Defaults to True.
         """
-        if self._only_molecule:
-            raise _grid_creation_with_only_molecule_error()
-
-        xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
-        self._grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
-        self._grid_type = GridType.CARTESIAN
-        self._grid_dimensions = (len(x), len(y), len(z))
-        self._cartesian_axes = (
-            np.asarray(x, dtype=float),
-            np.asarray(y, dtype=float),
-            np.asarray(z, dtype=float),
-        )
-        self._spherical_axes = None
-
-        if tabulate_gtos:
-            self._gtos = self.tabulate_gtos()
+        self._set_grid(x, y, z, GridType.CARTESIAN, tabulate_gtos)
 
     def spherical_grid(
         self,
@@ -306,23 +341,7 @@ class Tabulator:
         Grid points are converted to Cartesian coordinates.
 
         """
-        if self._only_molecule:
-            raise _grid_creation_with_only_molecule_error()
-
-        rr, tt, pp = np.meshgrid(r, theta, phi, indexing='ij')
-        xx, yy, zz = _spherical_to_cartesian(rr, tt, pp)
-        self._grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
-        self._grid_type = GridType.SPHERICAL
-        self._grid_dimensions = (len(r), len(theta), len(phi))
-        self._spherical_axes = (
-            np.asarray(r, dtype=float),
-            np.asarray(theta, dtype=float),
-            np.asarray(phi, dtype=float),
-        )
-        self._cartesian_axes = None
-
-        if tabulate_gtos:
-            self._gtos = self.tabulate_gtos()
+        self._set_grid(r, theta, phi, GridType.SPHERICAL, tabulate_gtos)
 
     def tabulate_gtos(self) -> NDArray[np.floating]:
         """Tabulate Gaussian-type orbitals (GTOs) on the current grid.
@@ -401,7 +420,6 @@ class Tabulator:
         """
         if not hasattr(self, 'grid'):
             raise RuntimeError('Grid is not defined. Please create a grid before tabulating MOs.')
-
         if not hasattr(self, 'gtos'):
             raise RuntimeError('GTOs are not tabulated. Please tabulate GTOs before tabulating MOs.')
 
@@ -431,22 +449,20 @@ class Tabulator:
 
         return mo_data
 
-    def export(self, path: str | Path, filetype: str, *, mo_index: Optional[int] = None) -> None:
+    def export(self, path: str | Path, *, mo_index: Optional[int] = None) -> None:
         """Export the current grid data to a VTK-based or cube file.
 
         Parameters
         ----------
         path : str | Path
             Target path for the exported data. The file extension should
-            match the desired exporter (``.vtm`` for VTK multiblock,
+            match the desired exporter (``.vtk`` for VTK,
             ``.cube`` for cube files).
-        filetype : str
-            Target export format. Accepted values are ``'vtk'`` for VTK
-            multiblock output and ``'cube'`` for Gaussian cube files.
         mo_index : int | None, optional
-            Molecular orbital index to export when ``filetype`` is ``'cube'``.
-            The parameter is ignored for VTK exports. Required for cube
-            exports.
+            Molecular orbital index to export.
+            The parameter is optional for VTK exports. If none is given
+            then all the molecular orbitals will be exported.
+            Required for cube exports.
 
         Raises
         ------
@@ -460,136 +476,83 @@ class Tabulator:
         if not hasattr(self, '_grid'):
             raise RuntimeError('Grid is not defined. Please create a grid before exporting.')
 
+        if any(dim <= 0 for dim in self._grid_dimensions):
+            raise RuntimeError('Grid dimensions are not defined. Create a grid before exporting.')
+
+        if mo_index is not None and (mo_index < 0 or mo_index >= len(self._parser.mos)):
+            raise ValueError('Provided molecular orbital index is out of range.')
+
         if self._only_molecule:
             raise RuntimeError('Orbital exports are unavailable when only the molecule was parsed.')
 
         destination = Path(path)
-        normalized_type = filetype.lower()
+        filetype = destination.suffix
 
-        if normalized_type in {'vtk', 'vtm', 'vts', 'vti', 'vtu'}:
-            self._export_vtk(destination)
-        elif normalized_type == 'cube':
+        if filetype == '.vtk':
+            self._export_vtk(destination, mo_index)
+        elif filetype == '.cube':
             if mo_index is None:
                 raise ValueError('Cube exports require a molecular orbital index.')
             self._export_cube(destination, mo_index)
         else:
-            raise ValueError("Unsupported export format. Use 'vtk' or 'cube'.")
+            raise ValueError("Unsupported export format. Use '.vtk' or '.cube'.")
 
-    def _export_vtk(self, destination: Path) -> None:
+    def _export_vtk(self, destination: Path, mo_index: Optional[int] = None) -> None:
         """Write orbital data to a VTK multiblock dataset."""
-        if any(dim <= 0 for dim in self._grid_dimensions):
-            raise RuntimeError('Grid dimensions are not defined. Create a grid before exporting.')
-
         if not hasattr(self, 'gtos'):
             self.tabulate_gtos()
 
-        if not self._atom_gto_slices:
-            self.tabulate_gtos()
-
-        mo_data = self.tabulate_mos()
-
-        points = pv.pyvista_ndarray(self._grid)
+        mo_data = self.tabulate_mos(mo_index)
         dims = self._grid_dimensions[::-1]
 
-        blocks = pv.MultiBlock()
+        struct_grid = pv.StructuredGrid()
 
-        global_grid = pv.StructuredGrid()
-        global_grid.points = points.copy()
-        global_grid.dimensions = dims
+        struct_grid = pv.StructuredGrid()
+        struct_grid.points = self._grid.copy()
+        struct_grid.dimensions = dims
         for mo_ind in range(mo_data.shape[1]):
-            global_grid.point_data[f'mo_{mo_ind}'] = mo_data[:, mo_ind]
-        blocks['molecule'] = global_grid
+            struct_grid.point_data[f'mo_{mo_ind}'] = mo_data[:, mo_ind]
 
-        for atom_index, (atom, gto_slice) in enumerate(zip(self._parser.atoms, self._atom_gto_slices)):
-            atom_gtos = self.gtos[:, gto_slice]
-            atom_coeffs = self._parser.mo_coeffs[:, gto_slice]
-            atom_mos = atom_gtos @ atom_coeffs.T
-
-            atom_grid = pv.StructuredGrid()
-            atom_grid.points = points.copy()
-            atom_grid.dimensions = dims
-
-            for mo_ind in range(atom_mos.shape[1]):
-                atom_grid.point_data[f'mo_{mo_ind}'] = atom_mos[:, mo_ind]
-
-            atom_grid.field_data['atom_index'] = np.array([atom_index], dtype=float)
-            atom_grid.field_data['atomic_number'] = np.array([atom.atomic_number], dtype=float)
-
-            blocks[f'{atom.label}_{atom_index}'] = atom_grid
-
-        vtk_path = destination
-        if vtk_path.suffix.lower() != '.vtm':
-            vtk_path = vtk_path.with_suffix('.vtm')
-
-        blocks.save(vtk_path)
+        struct_grid.save(destination)
 
     def _export_cube(self, destination: Path, mo_index: int) -> None:
         """Write a single molecular orbital to a Gaussian cube file."""
-        if self._grid_type != GridType.CARTESIAN:
+        if self._grid_type != GridType.CARTESIAN or self.original_axes is None:
             raise RuntimeError('Cube exports are only supported for Cartesian grids.')
 
-        if self._cartesian_axes is None:
-            raise RuntimeError('Cartesian grid axes are unavailable; rebuild the grid before exporting.')
-
-        if mo_index < 0 or mo_index >= len(self._parser.mos):
-            raise ValueError('Provided molecular orbital index is out of range.')
-
         mo_values = self.tabulate_mos(mo_index)
-        if mo_values.ndim != 1:
-            raise RuntimeError('Unexpected MO data shape for cube export.')
 
-        x_axis, y_axis, z_axis = self._cartesian_axes
-        nx, ny, nz = self._grid_dimensions
+        x, y, z = self.original_axes
+        dx = self._axis_spacing(x, 'x')
+        dy = self._axis_spacing(y, 'x')
+        dz = self._axis_spacing(z, 'x')
 
-        if x_axis.size != nx or y_axis.size != ny or z_axis.size != nz:
-            raise RuntimeError('Stored cartesian axes do not match current grid dimensions.')
+        nx = len(x)
+        ny = len(y)
+        nz = len(z)
 
-        def _axis_spacing(axis: NDArray[np.floating], name: str) -> float:
-            if axis.size <= 1:
-                return 0.0
-
-            diffs = np.diff(axis)
-            if np.any(diffs <= 0):
-                raise ValueError(f'{name}-axis values must be strictly increasing for cube export.')
-            if not np.allclose(diffs, diffs[0]):
-                raise ValueError(f'{name}-axis must be evenly spaced for cube export.')
-            return float(diffs[0])
-
-        dx = _axis_spacing(x_axis, 'X')
-        dy = _axis_spacing(y_axis, 'Y')
-        dz = _axis_spacing(z_axis, 'Z')
-
-        origin = (float(x_axis[0]), float(y_axis[0]), float(z_axis[0]))
-
-        cube_path = destination
-        if cube_path.suffix.lower() != '.cube':
-            cube_path = cube_path.with_suffix('.cube')
-
-        data_3d = mo_values.reshape(self._grid_dimensions, order='C')
-
-        with cube_path.open('w', encoding='ascii') as cube_file:
+        with destination.open('w', encoding='ascii') as cube_file:
             cube_file.write('Generated by moldenViz Tabulator\n')
             cube_file.write(f'Molecular orbital {mo_index}\n')
-            cube_file.write(f'{len(self._parser.atoms):5d} {origin[0]:13.6f} {origin[1]:13.6f} {origin[2]:13.6f}\n')
+            cube_file.write(f'{len(self._parser.atoms):5d} {0.0:13.6f} {0.0:13.6f} {0.0:13.6f}\n')
             cube_file.write(f'{nx:5d} {dx:13.6f} {0.0:13.6f} {0.0:13.6f}\n')
             cube_file.write(f'{ny:5d} {0.0:13.6f} {dy:13.6f} {0.0:13.6f}\n')
             cube_file.write(f'{nz:5d} {0.0:13.6f} {0.0:13.6f} {dz:13.6f}\n')
 
             for atom in self._parser.atoms:
                 cube_file.write(
-                    f'{atom.atomic_number:5d} {float(atom.atomic_number):13.6f} '
+                    f'{atom.atomic_number:5d} {0.0:13.6f} '
                     f'{atom.position[0]:13.6f} {atom.position[1]:13.6f} {atom.position[2]:13.6f}\n',
                 )
 
+            data_3d = mo_values.reshape(self._grid_dimensions, order='C')
             for ix in range(nx):
                 for iy in range(ny):
-                    values = data_3d[ix, iy, :]
-                    line = ''
-                    for iz, val in enumerate(values, start=1):
-                        line += f'{float(val):13.5e}'
-                        if iz % 6 == 0 or iz == values.size:
-                            cube_file.write(f'{line}\n')
-                            line = ''
+                    for iz in range(nz):
+                        cube_file.write(f'{data_3d[ix, iy, iz]:13.5e} ')
+                        if iz % 6 == 5:  # noqa: PLR2004
+                            cube_file.write('\n')
+                    cube_file.write('\n')
 
     @staticmethod
     def _tabulate_xlms(theta: NDArray[np.floating], phi: NDArray[np.floating], lmax: int) -> NDArray[np.floating]:
