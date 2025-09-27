@@ -528,8 +528,8 @@ class Tabulator:
 
         x, y, z = self.original_axes
         dx = self._axis_spacing(x, 'x')
-        dy = self._axis_spacing(y, 'x')
-        dz = self._axis_spacing(z, 'x')
+        dy = self._axis_spacing(y, 'y')
+        dz = self._axis_spacing(z, 'z')
 
         nx = len(x)
         ny = len(y)
