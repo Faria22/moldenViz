@@ -99,10 +99,10 @@ def test_export_cube_creates_file(tmp_path: Path) -> None:
     axis = np.linspace(-1.0, 1.0, 2)
     tab.cartesian_grid(axis, axis, axis)
 
-    cube_stub = tmp_path / 'orbital'
-    tab.export(cube_stub, 'cube', mo_index=0)
+    cube_file_path = tmp_path / 'orbital.cube'
+    tab.export(cube_file_path, mo_index=0)
 
-    cube_path = cube_stub.with_suffix('.cube')
+    cube_path = cube_file_path
     assert cube_path.exists()
 
     contents = cube_path.read_text(encoding='ascii').splitlines()
@@ -118,7 +118,7 @@ def test_export_cube_requires_cartesian_grid(tmp_path: Path) -> None:
     tab.spherical_grid(r, theta, phi)
 
     with pytest.raises(RuntimeError, match='Cube exports are only supported'):
-        tab.export(tmp_path / 'orbital', 'cube', mo_index=0)
+        tab.export(tmp_path / 'orbital.cube', mo_index=0)
 
 
 def test_export_cube_requires_mo_index(tmp_path: Path) -> None:
@@ -128,7 +128,7 @@ def test_export_cube_requires_mo_index(tmp_path: Path) -> None:
     tab.cartesian_grid(axis, axis, axis)
 
     with pytest.raises(ValueError, match='Cube exports require'):
-        tab.export(tmp_path / 'orbital', 'cube')
+        tab.export(tmp_path / 'orbital.cube')
 
 
 def test_export_vtk_writes_multiblock(tmp_path: Path) -> None:
@@ -139,19 +139,12 @@ def test_export_vtk_writes_multiblock(tmp_path: Path) -> None:
     axis = np.linspace(-0.5, 0.5, 2)
     tab.cartesian_grid(axis, axis, axis)
 
-    vtk_stub = tmp_path / 'dataset'
-    tab.export(vtk_stub, 'vtk')
+    vtk_path = tmp_path / 'dataset.vtk'
+    tab.export(vtk_path)
 
-    vtk_path = vtk_stub.with_suffix('.vtm')
     assert vtk_path.exists()
 
-    dataset = pv.read(vtk_path)
-    assert isinstance(dataset, pv.MultiBlock)
-    assert len(dataset) == len(tab._parser.atoms) + 1  # noqa: SLF001
+    mos_data = pv.read(vtk_path)
+    assert isinstance(mos_data, pv.StructuredGrid)
 
-    molecule_block = dataset[0]
-    assert f'mo_0' in molecule_block.point_data
-
-    first_atom_block = dataset[1]
-    assert f'mo_0' in first_atom_block.point_data
-    assert np.isclose(first_atom_block.field_data['atom_index'][0], 0.0)
+    assert 'mo_0' in mos_data.point_data
