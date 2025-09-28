@@ -506,8 +506,6 @@ class Tabulator:
         dims = self._grid_dimensions[::-1]
 
         struct_grid = pv.StructuredGrid()
-
-        struct_grid = pv.StructuredGrid()
         struct_grid.points = self._grid.copy()
         struct_grid.dimensions = dims
 
