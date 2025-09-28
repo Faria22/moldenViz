@@ -246,9 +246,9 @@ class Tabulator:
 
         diffs = np.diff(axis)
         if np.any(diffs <= 0):
-            raise ValueError(f'{name}-axis values must be strictly increasing for cube export.')
+            raise ValueError(f'{name}-axis values must be strictly increasing.')
         if not np.allclose(diffs, diffs[0]):
-            raise ValueError(f'{name}-axis must be evenly spaced for cube export.')
+            raise ValueError(f'{name}-axis must be evenly spaced.')
         return float(diffs[0])
 
     def _set_grid(
