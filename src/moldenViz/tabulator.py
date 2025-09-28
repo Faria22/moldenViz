@@ -4,7 +4,8 @@ import logging
 from enum import Enum
 from functools import lru_cache
 from math import factorial
-from typing import Any, Optional
+from pathlib import Path
+from typing import Any, Optional, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
@@ -401,6 +402,180 @@ class Tabulator:
             logger.debug('MO data shape: %s', mo_data.shape)
 
         return mo_data
+
+    def _normalize_mo_indices(self, mo_inds: Optional[Sequence[int]]) -> list[int]:
+        """Validate and normalise molecular orbital indices."""
+        if self._only_molecule:
+            raise RuntimeError('Orbital data is unavailable when `only_molecule` is set to `True`.')
+
+        total_mos = len(self._parser.mos)
+        if total_mos == 0:
+            raise RuntimeError('No molecular orbitals are available for export.')
+
+        if mo_inds is None:
+            return list(range(total_mos))
+
+        indices = []
+        for idx in mo_inds:
+            candidate = int(idx)
+            if candidate < 0 or candidate >= total_mos:
+                raise ValueError(f'Invalid orbital index: {candidate}. Valid range is 0-{total_mos - 1}.')
+            indices.append(candidate)
+        return indices
+
+    def _resolve_export_path(self, template: str, orbital_index: int, suffix: str, multi: bool) -> Path:
+        """Resolve an export path using a template and orbital index."""
+
+        has_placeholder = '{' in template and '}' in template
+        format_kwargs = {
+            'index': orbital_index,
+            'number': orbital_index,
+            'mo': f'{orbital_index:03d}',
+        }
+
+        formatted = template
+        if has_placeholder:
+            try:
+                formatted = template.format(**format_kwargs)
+            except (KeyError, ValueError):
+                formatted = template
+
+        if formatted.endswith('/') or formatted.endswith('\\'):
+            base_dir = Path(formatted.rstrip('/\\'))
+            base_dir.mkdir(parents=True, exist_ok=True)
+            return (base_dir / f'mo_{orbital_index:03d}{suffix}').resolve()
+
+        path = Path(formatted if has_placeholder else template)
+
+        if path.exists() and path.is_dir():
+            path = path / f'mo_{orbital_index:03d}{suffix}'
+        elif not has_placeholder and not path.suffix:
+            if multi:
+                path = path.with_name(f'{path.name}_mo{orbital_index:03d}{suffix}')
+            else:
+                path = path.with_suffix(suffix)
+        elif not has_placeholder and path.suffix and multi:
+            path = path.with_name(f'{path.stem}_mo{orbital_index:03d}{path.suffix}')
+        elif not path.suffix:
+            path = path.with_suffix(suffix)
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path.resolve()
+
+    def export_vtk(
+        self,
+        path_template: str,
+        mo_inds: Optional[Sequence[int]] = None,
+    ) -> list[Path]:
+        """Export selected molecular orbitals to VTK structured grid files."""
+
+        if self._grid_type == GridType.UNKNOWN:
+            raise RuntimeError('Tabulator grid is undefined. Create a grid before exporting to VTK.')
+
+        indices = self._normalize_mo_indices(mo_inds)
+        if not indices:
+            return []
+
+        export_paths: list[Path] = []
+
+        try:
+            import pyvista as pv
+        except ImportError as exc:  # pragma: no cover - runtime safeguard
+            raise ImportError('PyVista is required to export VTK files.') from exc
+
+        for idx in indices:
+            data = self.tabulate_mos(idx)
+            mesh = pv.StructuredGrid()
+            mesh.points = pv.pyvista_ndarray(self.grid)
+            mesh.dimensions = self._grid_dimensions[::-1]
+            mesh.point_data[f'mo_{idx:03d}'] = data
+
+            target = self._resolve_export_path(path_template, idx, '.vtk', multi=len(indices) > 1)
+            mesh.save(str(target))
+            export_paths.append(target)
+
+        return export_paths
+
+    def _cartesian_axes(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Return axis vectors for the current cartesian grid."""
+        if self._grid_type != GridType.CARTESIAN:
+            raise RuntimeError('Cartesian axes requested for a non-cartesian grid.')
+
+        nx, ny, nz = self._grid_dimensions
+        grid = self._grid.reshape(nx, ny, nz, 3)
+        x_axis = grid[:, 0, 0, 0]
+        y_axis = grid[0, :, 0, 1]
+        z_axis = grid[0, 0, :, 2]
+
+        return x_axis, y_axis, z_axis
+
+    def _write_cube(
+        self,
+        path: Path,
+        orbital_index: int,
+        values: NDArray[np.floating],
+    ) -> None:
+        """Write a Gaussian cube file to ``path`` with the provided data."""
+
+        bohr = Parser.ANGSTROM_TO_BOHR
+        nx, ny, nz = self._grid_dimensions
+        x_axis, y_axis, z_axis = self._cartesian_axes()
+
+        origin = np.array((x_axis[0], y_axis[0], z_axis[0]))
+        dx = 0.0 if nx == 1 else (x_axis[1] - x_axis[0])
+        dy = 0.0 if ny == 1 else (y_axis[1] - y_axis[0])
+        dz = 0.0 if nz == 1 else (z_axis[1] - z_axis[0])
+
+        reshaped = values.reshape(self._grid_dimensions)
+
+        with path.open('w', encoding='utf-8') as handle:
+            handle.write('moldenViz cube export\n')
+            handle.write(f'Orbital {orbital_index}\n')
+            handle.write(
+                f'{len(self._parser.atoms):5d}'
+                f'{origin[0] * bohr:12.6f}{origin[1] * bohr:12.6f}{origin[2] * bohr:12.6f}\n',
+            )
+            handle.write(f'{nx:5d}{dx * bohr:12.6f}{0.0:12.6f}{0.0:12.6f}\n')
+            handle.write(f'{ny:5d}{0.0:12.6f}{dy * bohr:12.6f}{0.0:12.6f}\n')
+            handle.write(f'{nz:5d}{0.0:12.6f}{0.0:12.6f}{dz * bohr:12.6f}\n')
+
+            for atom in self._parser.atoms:
+                coords = atom.position * bohr
+                handle.write(
+                    f'{atom.atomic_number:5d}{float(atom.atomic_number):12.6f}'
+                    f'{coords[0]:12.6f}{coords[1]:12.6f}{coords[2]:12.6f}\n',
+                )
+
+            for ix in range(nx):
+                for iy in range(ny):
+                    row = reshaped[ix, iy, :]
+                    for start in range(0, nz, 6):
+                        chunk = row[start : start + 6]
+                        handle.write(' '.join(f'{value:13.5e}' for value in chunk) + '\n')
+
+    def export_cube(
+        self,
+        path_template: str,
+        mo_inds: Optional[Sequence[int]] = None,
+    ) -> list[Path]:
+        """Export selected molecular orbitals to Gaussian cube files."""
+
+        if self._grid_type != GridType.CARTESIAN:
+            raise RuntimeError('Cube export requires a cartesian grid.')
+
+        indices = self._normalize_mo_indices(mo_inds)
+        if not indices:
+            return []
+
+        export_paths: list[Path] = []
+
+        for idx in indices:
+            data = self.tabulate_mos(idx)
+            target = self._resolve_export_path(path_template, idx, '.cube', multi=len(indices) > 1)
+            self._write_cube(target, idx, data)
+            export_paths.append(target)
+
+        return export_paths
 
     @staticmethod
     def _tabulate_xlms(theta: NDArray[np.floating], phi: NDArray[np.floating], lmax: int) -> NDArray[np.floating]:

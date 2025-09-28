@@ -3,6 +3,13 @@ Troubleshooting
 
 Use this page to diagnose common issues when running ``moldenViz``.
 
+Parser Exceptions
+-----------------
+
+- ``ValueError: Unsupported basis functions`` – the parser only accepts spherical Gaussian functions. Re-export your Molden file with spherical GTOs enabled.
+- ``ValueError: Invalid shell label`` – occurs when the ``[GTO]`` section contains unexpected angular momentum labels. Confirm the file adheres to the `Molden format specification <https://www.theochem.ru.nl/molden/molden_format.html>`_.
+- ``RuntimeError: Grid creation is not allowed when `only_molecule` is set to `True`.`` – raised if you request grids or exports while skipping orbitals. Re-run without ``--only-molecule``.
+
 File Not Found
 --------------
 
@@ -57,3 +64,13 @@ Invalid entries in ``~/.config/moldenViz/config.toml`` raise ``ValueError`` the 
    except ValueError as exc:
        print(f'Configuration error: {exc}')
        print('Review your TOML configuration and try again')
+
+Export Errors
+-------------
+
+- ``ValueError: Orbital selection out of bounds`` – ensure the indices passed to ``--orbitals`` or ``Tabulator.export_*`` fall within the available range reported by ``Parser.mos``.
+- ``RuntimeError: Tabulator grid is undefined`` – create a grid (cartesian or spherical) before calling an export method.
+- ``RuntimeError: Cube export requires a cartesian grid`` – Gaussian cube files expect a rectilinear grid; re-run the export with ``--grid cartesian`` or ``--export-cube`` only.
+- ``ImportError: PyVista is required to export VTK files`` – install the optional ``pyvista`` dependency or re-install with ``pip install moldenViz[dev]``.
+
+If a problem persists, run ``moldenViz -h`` to confirm the CLI supports the options you are using and check the :doc:`Configuration Reference <configuration>` for grid defaults.
