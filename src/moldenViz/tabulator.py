@@ -418,7 +418,7 @@ class Tabulator:
         ValueError
             If provided mo_inds is invalid.
         """
-        if not hasattr(self, 'grid'):
+        if not hasattr(self, '_grid'):
             raise RuntimeError('Grid is not defined. Please create a grid before tabulating MOs.')
         if not hasattr(self, 'gtos'):
             raise RuntimeError('GTOs are not tabulated. Please tabulate GTOs before tabulating MOs.')
