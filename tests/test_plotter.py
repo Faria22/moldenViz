@@ -25,7 +25,8 @@ class MockTabulator(Tabulator):
         grid_type: GridType = GridType.SPHERICAL,
     ) -> None:
         # Always create attributes, then optionally remove them
-        self.grid = np.array([[0, 0, 0], [1, 1, 1]])
+        self._grid = np.array([[0, 0, 0], [1, 1, 1]])
+        self.grid = self._grid
         self.gto_data = np.array([[1, 2, 3], [4, 5, 6]])
         self._grid_type = grid_type
         self._grid_dimensions = (2, 2, 2)

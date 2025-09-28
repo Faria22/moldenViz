@@ -91,3 +91,60 @@ def test_invalid_mo_inds(mo_inds: int | array_like_type | None) -> None:
 
     with pytest.raises(ValueError, match=r'Provided mo_ind.* Please provide valid .*'):
         tab.tabulate_mos(mo_inds)
+
+
+def test_export_cube_creates_file(tmp_path: Path) -> None:
+    """Ensure exporting a cube file writes the expected artifact."""
+    tab = Tabulator(str(MOLDEN_PATH))
+    axis = np.linspace(-1.0, 1.0, 2)
+    tab.cartesian_grid(axis, axis, axis)
+
+    cube_file_path = tmp_path / 'orbital.cube'
+    tab.export(cube_file_path, mo_index=0)
+
+    cube_path = cube_file_path
+    assert cube_path.exists()
+
+    contents = cube_path.read_text(encoding='ascii').splitlines()
+    assert 'Molecular orbital 0' in contents[1]
+    header_tokens = contents[2].split()
+    assert int(header_tokens[0]) == len(tab._parser.atoms)  # noqa: SLF001
+
+
+def test_export_cube_requires_cartesian_grid(tmp_path: Path) -> None:
+    """Cube export should fail when the grid is spherical."""
+    tab = Tabulator(str(MOLDEN_PATH))
+    r, theta, phi = np.r_[1.0, 2.0], np.r_[0.0, np.pi / 2], np.r_[-np.pi, 0.0]
+    tab.spherical_grid(r, theta, phi)
+
+    with pytest.raises(RuntimeError, match='Cube exports are only supported'):
+        tab.export(tmp_path / 'orbital.cube', mo_index=0)
+
+
+def test_export_cube_requires_mo_index(tmp_path: Path) -> None:
+    """Cube export must receive an orbital index."""
+    tab = Tabulator(str(MOLDEN_PATH))
+    axis = np.linspace(-0.5, 0.5, 2)
+    tab.cartesian_grid(axis, axis, axis)
+
+    with pytest.raises(ValueError, match='Cube exports require'):
+        tab.export(tmp_path / 'orbital.cube')
+
+
+def test_export_vtk_writes_multiblock(tmp_path: Path) -> None:
+    """VTK export should emit a multiblock file with molecule and atom data."""
+    pv = pytest.importorskip('pyvista')
+
+    tab = Tabulator(str(MOLDEN_PATH))
+    axis = np.linspace(-0.5, 0.5, 2)
+    tab.cartesian_grid(axis, axis, axis)
+
+    vtk_path = tmp_path / 'dataset.vtk'
+    tab.export(vtk_path)
+
+    assert vtk_path.exists()
+
+    mos_data = pv.read(vtk_path)
+    assert isinstance(mos_data, pv.StructuredGrid)
+
+    assert 'mo_0' in mos_data.point_data
