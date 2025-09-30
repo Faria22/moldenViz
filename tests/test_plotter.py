@@ -8,8 +8,7 @@ from unittest.mock import Mock, patch
 
 import numpy as np
 
-from moldenViz.plotter import Plotter
-from moldenViz.tabulator import GridType, Tabulator
+from tests._src_imports import GridType, Plotter, Tabulator, plotter_module, tabulator_module
 
 # Use the same sample molden file as other tests
 MOLDEN_PATH = Path(__file__).with_name('sample_molden.inp')
@@ -48,10 +47,10 @@ class TestPlotterTabulatorValidation(unittest.TestCase):
     def setUp(self) -> None:
         """Set up mocks to avoid GUI components during testing."""
         # Mock all GUI-related components
-        self.patcher_tk = patch('moldenViz.plotter.tk')
-        self.patcher_pv = patch('moldenViz.plotter.pv')
-        self.patcher_background_plotter = patch('moldenViz.plotter.BackgroundPlotter')
-        self.patcher_molecule = patch('moldenViz.plotter.Molecule')
+        self.patcher_tk = patch.object(plotter_module, 'tk')
+        self.patcher_pv = patch.object(plotter_module, 'pv')
+        self.patcher_background_plotter = patch.object(plotter_module, 'BackgroundPlotter')
+        self.patcher_molecule = patch.object(plotter_module, 'Molecule')
 
         self.mock_tk = self.patcher_tk.start()
         self.mock_pv = self.patcher_pv.start()
@@ -151,7 +150,7 @@ class TestPlotterTabulatorValidation(unittest.TestCase):
         except ValueError:
             self.fail('Plotter raised ValueError with fully valid tabulator')
 
-    @patch('moldenViz.plotter.Tabulator')
+    @patch.object(plotter_module, 'Tabulator')
     def test_none_tabulator_creates_default_tabulator(self, mock_tabulator_class: MockTabulator) -> None:
         """Test that passing None for tabulator creates a default Tabulator."""
         # Create a mock instance for the default tabulator
@@ -172,7 +171,7 @@ class TestPlotterTabulatorValidation(unittest.TestCase):
         """Test validation with a real Tabulator instance that has no grid set."""
         # This test uses a real Tabulator instance to verify the validation works
         # with actual objects, not just mocks
-        with patch('moldenViz.tabulator.Parser') as mock_parser_class:
+        with patch.object(tabulator_module, 'Parser') as mock_parser_class:
             # Mock the parser to avoid needing a real molden file
             mock_parser = Mock()
             mock_parser.atoms = []
@@ -198,10 +197,10 @@ class TestPlotterUpdateMesh(unittest.TestCase):
     def setUp(self) -> None:
         """Set up mocks and a plotter instance."""
         # Mock all GUI-related components
-        self.patcher_tk = patch('moldenViz.plotter.tk')
-        self.patcher_pv = patch('moldenViz.plotter.pv')
-        self.patcher_background_plotter = patch('moldenViz.plotter.BackgroundPlotter')
-        self.patcher_molecule = patch('moldenViz.plotter.Molecule')
+        self.patcher_tk = patch.object(plotter_module, 'tk')
+        self.patcher_pv = patch.object(plotter_module, 'pv')
+        self.patcher_background_plotter = patch.object(plotter_module, 'BackgroundPlotter')
+        self.patcher_molecule = patch.object(plotter_module, 'Molecule')
 
         self.mock_tk = self.patcher_tk.start()
         self.mock_pv = self.patcher_pv.start()

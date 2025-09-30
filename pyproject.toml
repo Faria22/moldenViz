@@ -51,6 +51,21 @@ extra-dependencies = ["mypy>=1.0.0"]
 [tool.hatch.envs.types.scripts]
 check = "mypy --install-types --non-interactive {args:src/moldenViz tests}"
 
+[tool.hatch.envs.default]
+dependencies = [
+    "pytest>=8.3.5",
+    "ruff>=0.13.1",
+    "basedpyright>=1.31.4",
+]
+
+[tool.hatch.envs.default.scripts]
+lint = "ruff check {args:src tests}"
+typecheck = "basedpyright {args:src tests}"
+test = "pytest {args:tests}"
+
+[tool.basedpyright]
+typeCheckingMode = "basic"
+
 [tool.hatch.build.targets.sdist]
 exclude = ["/docs"]
 

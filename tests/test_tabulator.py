@@ -5,10 +5,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from moldenViz.tabulator import (
+from tests._src_imports import (
     Tabulator,
-    _cartesian_to_spherical,  # noqa: PLC2701
-    _spherical_to_cartesian,  # noqa: PLC2701
+    _cartesian_to_spherical,
+    _spherical_to_cartesian,
     array_like_type,
 )
 
