@@ -6,7 +6,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from tests._src_imports import Parser, _GTO, _Shell
+from tests._src_imports import _GTO, Parser, _Shell
 
 # ----------------------------------------------------------------------
 # utilities
