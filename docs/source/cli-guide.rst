@@ -62,7 +62,7 @@ Use the following patterns as building blocks:
 
 .. code-block:: bash
 
-   # Export only the structure (no orbitals) while keeping the GUI open
+   # Only plot the molecule inside my.molden
    moldenViz my.molden -m
 
 .. code-block:: bash
