@@ -365,10 +365,8 @@ class Tabulator:
 
         # Having a predefined array makes it faster to fill the data
         gto_data = np.empty((self._grid.shape[0], self._parser.mo_coeffs.shape[1]))
-        self._atom_gto_slices = []
         ind = 0
         for atom in self._parser.atoms:
-            atom_start = ind
             centered_grid = self._grid - atom.position
             max_l = atom.shells[-1].l
 
@@ -385,8 +383,6 @@ class Tabulator:
                 gto_data[:, gto_inds] = radial[:, None] * xlms[l, m_inds, ...].T
 
                 ind += 2 * l + 1
-
-            self._atom_gto_slices.append(slice(atom_start, ind))
 
         logger.debug('GTO data shape: %s', gto_data.shape)
 
