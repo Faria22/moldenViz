@@ -225,7 +225,8 @@ class Tabulator:
     @grid.deleter
     def grid(self) -> None:
         """Delete the cached grid and mark its type as unknown."""
-        del self._grid
+        if hasattr(self, '_grid'):
+            del self._grid
         self._grid_type = GridType.UNKNOWN
         self._grid_dimensions = (0, 0, 0)
         self.original_axes = None
