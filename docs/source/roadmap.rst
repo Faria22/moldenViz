@@ -16,8 +16,6 @@ Planned
 -------
 
 - **Support for cartesian basis functions** – expand the parser and tabulator to accept cartesian (5D/9G) shells.
-- **Expanded quantities** – tabulation and plotting for densities and electrostatic potentials alongside orbitals.
-- **Gallery and example notebooks** – collect user-submitted renders, plus ready-to-run Jupyter examples.
 
 How to Influence the Roadmap
 ----------------------------
