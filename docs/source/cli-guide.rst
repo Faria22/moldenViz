@@ -1,7 +1,7 @@
 Command Line
 ============
 
-The ``moldenViz`` CLI offers a fast way to inspect Molden files, export volumetric data, and explore bundled examples. Run ``moldenViz -h`` for a full option list; the tables and recipes below summarise each capability.
+The ``moldenViz`` CLI offers a fast way to inspect Molden files and explore bundled examples. Run ``moldenViz -h`` for a full option list; the tables and recipes below summarise each capability.
 
 Primary Options
 ----------------
