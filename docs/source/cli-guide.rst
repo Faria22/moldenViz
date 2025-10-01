@@ -22,21 +22,6 @@ Primary Options
    * - ``-m``, ``--only-molecule``
      - Skip orbital surfaces and render only the nuclear framework.
      - ``False``
-   * - ``--export-vtk PATH``
-     - Export selected orbitals as VTK structured grids alongside launching the viewer (v1.1+).
-     - Disabled
-   * - ``--export-cube PATH``
-     - Write selected orbitals to Gaussian cube files (v1.1+).
-     - Disabled
-   * - ``--orbitals INDICES``
-     - Comma-separated list or range expression for orbitals to export (defaults to HOMO/LUMO pair when omitted).
-     - Auto-selected
-   * - ``--grid cartesian|spherical``
-     - Choose the export grid type. The CLI defaults to spherical (cartesian when ``--export-cube`` is used).
-     - ``spherical``
-   * - ``--resolution Nx,Ny,Nz``
-     - Override the grid resolution used for export (interpreted as ``r,theta,phi`` counts for spherical grids).
-     - Configuration defaults
    * - ``-h``, ``--help``
      - Display inline help and exit.
      - ---
