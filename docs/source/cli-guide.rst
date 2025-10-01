@@ -67,12 +67,7 @@ Use the following patterns as building blocks:
 
 .. code-block:: bash
 
-   # Use a spherical grid with 120 radial points and auto-selected orbitals
-   moldenViz my.molden --export-cube exports/my_{index}.cube --resolution 120,64,128
-
-.. code-block:: bash
-
-   # Use your ~/.config/moldenViz/config.toml overrides and export to VTK
-   moldenViz my.molden --export-vtk exports/my_{index}.vtk
+   # Plot only the molecule of one of the examples
+   moldenViz -e co -m
 
 For additional Python-based export options, see :ref:`exporting-from-python` in the :doc:`Python API guide <python-api>`.
