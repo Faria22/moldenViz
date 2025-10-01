@@ -22,13 +22,6 @@ pip install moldenViz
   moldenViz -e benzene
   ```
 
-- Export orbitals to both VTK and Gaussian cube files (v1.1+):
-
-  ```console
-  moldenViz my.molden --export-vtk exports/orbital_{index}.vtk \
-      --export-cube exports/orbital_{index}.cube --orbitals 15-16
-  ```
-
 - Use the Python API for scripted workflows:
 
   ```python
