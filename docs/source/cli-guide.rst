@@ -55,28 +55,6 @@ Tips
 
 - Combine ``-e`` with ``-m`` to explore only the geometry of an example.
 - Use configuration overrides (:doc:`see details <configuration>`) to change colors, bond lengths, or orbital contours before launching the CLI.
-- Pass ``--resolution`` to down-sample large grids before exporting to keep file sizes manageable.
-
-Volumetric Export (v1.1+)
--------------------------
-
-Exporting new volumetric data does not block the interactive window; exports run first, then the GUI opens.
-
-.. code-block:: bash
-
-   # Export orbitals 15, 16, and 17 to both VTK and cube files
-   moldenViz molecule.molden --orbitals 15,16,17 \
-       --export-vtk exports/molecule_{index}.vtk \
-       --export-cube exports/molecule_{index}.cube
-
-VTK exports require PyVista (installed with the default extras). Cube files mandate a cartesian grid; the CLI switches automatically when ``--export-cube`` is present. Use braces like ``{index}`` or ``{mo}`` in file names to generate one file per orbital.
-
-You can mix example molecules with export flags as well:
-
-.. code-block:: bash
-
-   moldenViz -e benzene --export-vtk exports/benzene_{index}.vtk --grid cartesian --resolution 80,80,80
-
 Common recipes
 --------------
 
