@@ -515,6 +515,8 @@ class Tabulator:
 
     def _export_cube(self, destination: Path, mo_index: int) -> None:
         """Write a single molecular orbital to a Gaussian cube file."""
+        cube_values_per_line = 6
+        
         if self._grid_type != GridType.CARTESIAN or self.original_axes is None:
             raise RuntimeError('Cube exports are only supported for Cartesian grids.')
 
@@ -548,7 +550,7 @@ class Tabulator:
                 for iy in range(ny):
                     for iz in range(nz):
                         cube_file.write(f'{data_3d[ix, iy, iz]:13.5e} ')
-                        if iz % 6 == 5:  # noqa: PLR2004
+                        if iz % cube_values_per_line == (cube_values_per_line - 1):
                             cube_file.write('\n')
                     cube_file.write('\n')
 
