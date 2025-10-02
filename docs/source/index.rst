@@ -62,6 +62,7 @@ Contents
    python-api
    configuration
    troubleshooting
+   contributing
 
 .. toctree::
    :maxdepth: 2
@@ -73,6 +74,7 @@ Contents
    :maxdepth: 1
    :caption: Additional Information
 
+   roadmap
    GitHub Repository <https://github.com/Faria22/moldenViz>
    PyPI Package <https://pypi.org/project/moldenviz>
 

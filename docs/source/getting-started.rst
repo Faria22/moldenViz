@@ -3,6 +3,11 @@ Getting Started
 
 ``moldenViz`` lets you inspect Molden outputs either from the command line or directly in Python. This page covers the essentials so you can install the package and render your first molecule quickly.
 
+What is a Molden file?
+----------------------
+
+A Molden file stores the atomic structure and molecular orbital information produced by many quantum-chemistry codes (GAUSSIAN, ORCA, Molpro, and others). Each file contains ``[Atoms]`` coordinates, contracted Gaussian shells in ``[GTO]``, and orbital coefficients under ``[MO]``. ``moldenViz`` currently reads Molden files that use **spherical Gaussian functions**; Cartesian variants (sometimes labelled 5D/9G) raise an error during parsing. For the full format specification, refer to the `official Molden format description <https://www.theochem.ru.nl/molden/molden_format.html>`_.
+
 Installation
 ------------
 
@@ -44,6 +49,11 @@ Render a provided example molecule directly from the command line:
 
    moldenViz -e benzene
 
+.. image:: _static/placeholder-cli.png
+   :alt: Screenshot of the moldenViz CLI window showing benzene with orbital controls
+   :align: center
+   :class: screenshot-placeholder
+
 Use your own Molden file instead:
 
 .. code-block:: bash
@@ -59,8 +69,13 @@ Create plots programmatically by importing the high-level API:
 
    from moldenViz import Plotter
    from moldenViz.examples import benzene
-   
+
    Plotter(benzene)
+
+.. image:: _static/placeholder-python.png
+   :alt: Screenshot of the moldenViz Python plotter rendering an isosurface next to molecule controls
+   :align: center
+   :class: screenshot-placeholder
 
 Next Steps
 ----------

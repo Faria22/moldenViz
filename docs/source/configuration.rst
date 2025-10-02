@@ -122,6 +122,61 @@ Control the maximum bonding for a specific element (for example, iron):
    [Atom.26]
    max_num_bonds = 6
 
+Worked Examples
+---------------
+
+The snippets below combine the most common overrides so you can copy them into ``~/.config/moldenViz/config.toml`` and adjust as needed.
+
+Reduce bond clutter on dense organic rings while highlighting a metal centre:
+
+.. code-block:: toml
+
+   [molecule]
+   opacity = 0.85
+
+   [molecule.bond]
+   max_length = 2.0
+   radius = 0.08
+   color_type = 'split'
+
+   [Atom.6]  # Carbon
+   color = "2A2A2A"
+   radius = 0.7
+
+   [Atom.8]  # Oxygen
+   color = "FF4040"
+   radius = 0.6
+
+   [Atom.26]  # Iron centre
+   color = "FFB347"
+   radius = 1.1
+   max_num_bonds = 4
+
+Tighten radius settings for a very large biomolecule to keep rendering performant:
+
+.. code-block:: toml
+
+   [grid.cartesian]
+   num_x_points = 80
+   num_y_points = 80
+   num_z_points = 80
+
+   [mo]
+   contour = 0.07
+   opacity = 0.6
+
+   [Atom.1]
+   radius = 0.25
+
+   [Atom.6]
+   radius = 0.65
+   max_num_bonds = 3
+
+   [molecule.bond]
+   radius = 0.05
+
+For troubleshooting tips tied to these overrides, see :doc:`Troubleshooting <troubleshooting>`, especially the sections on configuration validation and export errors.
+
 Complete Example
 ----------------
 

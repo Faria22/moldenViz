@@ -109,6 +109,48 @@ Supply a pre-configured ``Tabulator`` to ``Plotter`` for re-use or fine-grained 
 
    Plotter('molden.inp', tabulator=tab)
 
+The cartesian grid keeps spacing uniform—ideal for Gaussian cube exports—while the spherical grid matches the viewer defaults and keeps memory usage low for visual inspection. Pick the smallest grid that contains your molecule; doubling every axis multiplies memory use by eight.
+
+.. _exporting-from-python:
+
+Exporting Volumetric Data (v1.1+)
+---------------------------------
+
+You can export orbitals without opening the GUI. Create a grid, tabulate orbitals, and call the new export helpers:
+
+.. code-block:: python
+
+   from moldenViz import Tabulator
+   import numpy as np
+
+   tab = Tabulator('molecule.molden')
+   tab.cartesian_grid(
+       x=np.linspace(-8, 8, 120),
+       y=np.linspace(-8, 8, 120),
+       z=np.linspace(-8, 8, 120),
+   )
+
+   # Export orbitals 15 and 16 to VTK and cube files
+   tab.export('exports/orbital_{mo}.vtk', mo_index=15)
+   tab.export('exports/orbital_{mo}.cube', mo_index=15)
+
+To reuse tabulation results in a notebook without re-computation:
+
+.. code-block:: python
+
+   tab = Tabulator('molecule.molden')
+   tab.spherical_grid(
+       r=np.linspace(0, 10, 90),
+       theta=np.linspace(0, np.pi, 60),
+       phi=np.linspace(0, 2 * np.pi, 120),
+   )
+
+   # Keep tabulator to reuse precomputed GTOs
+   Plotter('molecule.molden', tabulator=tab)
+
+   # Later, export the same grid to VTK
+   tab.export('exports/spherical_0.vtk', mo_index=0)
+
 Inspecting Parsed Data
 ----------------------
 
