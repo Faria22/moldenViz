@@ -49,8 +49,9 @@ jobs:
     - name: Verify package version matches tag
       run: |
         TAG_VERSION=${GITHUB_REF#refs/tags/}
+        TAG_VERSION_STRIPPED=${TAG_VERSION#v}
         PACKAGE_VERSION=$(hatch run python -c "from moldenViz.__about__ import __version__; print(__version__)")
-        if [ "$TAG_VERSION" != "$PACKAGE_VERSION" ]; then
+        if [ "$TAG_VERSION_STRIPPED" != "$PACKAGE_VERSION" ]; then
           echo "Tag version ($TAG_VERSION) does not match package version ($PACKAGE_VERSION)"
           exit 1
         fi
