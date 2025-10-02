@@ -107,6 +107,7 @@ class Bond:
 
         length = cast(float, np.linalg.norm(bond_vec))
         self.length = length
+        self.mesh: pv.PolyData | list[pv.PolyData] | None
 
         if config.molecule.bond.color_type.lower() == self.ColorType.UNIFORM.value:
             self.mesh = pv.Cylinder(
@@ -152,6 +153,25 @@ class Bond:
 
         self.plotted = False
 
+    @staticmethod
+    def _trim_atom_from_bond(bond_mesh: pv.PolyData, atom_mesh: pv.PolyData) -> pv.PolyData:
+        """Trim the bond mesh to remove parts that intrude into the atom mesh.
+
+        Parameters
+        ----------
+        bond_mesh : pv.PolyData
+            The mesh representing the bond.
+        atom_mesh : pv.PolyData
+            The mesh representing the atom.
+
+        Returns
+        -------
+        pv.PolyData
+            The trimmed bond mesh.
+        """
+        mesh = cast(pv.PolyData, bond_mesh.triangulate()) - atom_mesh
+        return cast(pv.PolyData, mesh)
+
     def trim_ends(self) -> None:
         """Trim bond geometry so it does not intrude into atom spheres."""
         if self.mesh is None:
@@ -159,11 +179,14 @@ class Bond:
 
         warning = False
         if isinstance(self.mesh, list):
-            self.mesh = [mesh.triangulate() - atom.mesh for mesh, atom in zip(self.mesh, (self.atom_a, self.atom_b))]
+            self.mesh = [
+                self._trim_atom_from_bond(mesh, atom.mesh) for mesh, atom in zip(self.mesh, (self.atom_a, self.atom_b))
+            ]
             if any(mesh.n_points == 0 for mesh in self.mesh):
                 warning = True
         else:
-            self.mesh = self.mesh.triangulate() - self.atom_a.mesh - self.atom_b.mesh
+            self.mesh = self._trim_atom_from_bond(self.mesh, self.atom_a.mesh)
+            self.mesh = self._trim_atom_from_bond(self.mesh, self.atom_b.mesh)
             if self.mesh.n_points == 0:
                 warning = True
 
@@ -248,10 +271,15 @@ class Molecule:
                     continue
 
                 bond.trim_ends()
+                if bond.mesh is None:
+                    continue
+
                 if isinstance(bond.mesh, list):
                     for mesh, color in zip(bond.mesh, bond.color):
                         actors.append(plotter.add_mesh(mesh, color=color, opacity=opacity))
                 else:
+                    if not isinstance(bond.color, str):
+                        raise TypeError('Bond color should be a string for uniform color type.')
                     actors.append(plotter.add_mesh(bond.mesh, color=bond.color, opacity=opacity))
                 bond.plotted = True
 

@@ -32,20 +32,24 @@ jobs:
     - name: Install build tools
       run: |
         python -m pip install --upgrade pip
-        python -m pip install hatch pytest
-        
-    - name: Install package in development mode
+        python -m pip install hatch
+
+    - name: Run Ruff
       run: |
-        python -m pip install -e .
-        
-    - name: Run tests
+        hatch run lint
+
+    - name: Run Basedpyright
       run: |
-        python -m pytest tests/ -v
+        hatch run typecheck
+
+    - name: Run Pytest
+      run: |
+        hatch run test
         
     - name: Verify package version matches tag
       run: |
         TAG_VERSION=${GITHUB_REF#refs/tags/}
-        PACKAGE_VERSION=$(python -c "from moldenViz.__about__ import __version__; print(__version__)")
+        PACKAGE_VERSION=$(hatch run python -c "from moldenViz.__about__ import __version__; print(__version__)")
         if [ "$TAG_VERSION" != "$PACKAGE_VERSION" ]; then
           echo "Tag version ($TAG_VERSION) does not match package version ($PACKAGE_VERSION)"
           exit 1

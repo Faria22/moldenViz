@@ -6,7 +6,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from moldenViz.parser import _GTO, Parser, _Shell  # noqa: PLC2701
+from tests._src_imports import _GTO, Parser, _Shell
 
 # ----------------------------------------------------------------------
 # utilities
