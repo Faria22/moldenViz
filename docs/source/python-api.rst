@@ -131,8 +131,8 @@ You can export orbitals without opening the GUI. Create a grid, tabulate orbital
    )
 
    # Export orbitals 15 and 16 to VTK and cube files
-   tab.export_vtk('exports/orbital_{mo}.vtk', mo_inds=15)
-   tab.export_cube('exports/orbital_{mo}.cube', mo_inds=15)
+   tab.export('exports/orbital_{mo}.vtk', mo_index=15)
+   tab.export('exports/orbital_{mo}.cube', mo_index=15)
 
 To reuse tabulation results in a notebook without re-computation:
 
