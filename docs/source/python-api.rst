@@ -131,10 +131,8 @@ You can export orbitals without opening the GUI. Create a grid, tabulate orbital
    )
 
    # Export orbitals 15 and 16 to VTK and cube files
-   tab.export_vtk('exports/orbital_{mo}.vtk', mo_inds=[15, 16])
-   tab.export_cube('exports/orbital_{mo}.cube', mo_inds=[15, 16])
-
-``export_vtk`` accepts templated paths—``{mo}`` expands to a zero-padded orbital index—and stores each orbital in a separate structured grid. ``export_cube`` requires a cartesian grid and writes Gaussian cube files in Bohr units.
+   tab.export_vtk('exports/orbital_{mo}.vtk', mo_inds=15)
+   tab.export_cube('exports/orbital_{mo}.cube', mo_inds=15)
 
 To reuse tabulation results in a notebook without re-computation:
 
@@ -151,13 +149,7 @@ To reuse tabulation results in a notebook without re-computation:
    Plotter('molecule.molden', tabulator=tab)
 
    # Later, export the same grid to VTK
-   tab.export_vtk('exports/spherical_{mo}.vtk', mo_inds=[0])
-
-Performance tips:
-
-- Cartesians grids grow quickly; start with ``80, 80, 80`` before moving higher.
-- ``Tabulator.export_vtk`` writes one file per orbital so you can select only the indices you need.
-- Combine with ``Tabulator.tabulate_mos`` if you need NumPy arrays instead of files.
+   tab.export_vtk('exports/spherical_{mo}.vtk', mo_inds=0)
 
 Inspecting Parsed Data
 ----------------------
