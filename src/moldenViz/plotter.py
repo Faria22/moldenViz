@@ -2,7 +2,7 @@
 
 import logging
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 from typing import Optional
 
 import numpy as np
@@ -254,6 +254,11 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         settings_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label='Settings', menu=settings_menu)
         settings_menu.add_command(label='Open Settings', command=self.settings_screen)
+
+        # Add Export menu
+        export_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label='Export', menu=export_menu)
+        export_menu.add_command(label='Export Orbital(s)...', command=self.export_orbitals_dialog)
 
         nav_frame = ttk.Frame(self)
         nav_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -656,6 +661,109 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.orb_tv.highlight_orbital(self.current_orb_ind)
         self.update_button_states()
         self.plot_orbital(self.current_orb_ind)
+
+    def _do_export(self, export_window: tk.Toplevel, format_var: tk.StringVar, scope_var: tk.StringVar) -> None:
+        """Execute the export operation.
+
+        Parameters
+        ----------
+        export_window : tk.Toplevel
+            The export dialog window to close on success.
+        format_var : tk.StringVar
+            Variable holding the selected export format ('vtk' or 'cube').
+        scope_var : tk.StringVar
+            Variable holding the selected scope ('current' or 'all').
+        """
+        file_format = format_var.get()
+        scope = scope_var.get()
+
+        # Validate selection
+        if scope == 'current' and self.current_orb_ind < 0:
+            messagebox.showerror('Export Error', 'No orbital is currently selected.')
+            return
+
+        if file_format == 'cube' and scope == 'all':
+            messagebox.showerror(
+                'Export Error',
+                'Cube format only supports exporting a single orbital.\n\n'
+                'Please select "Current orbital" or choose VTK format.',
+            )
+            return
+
+        # Determine file extension and default name
+        ext = '.vtk' if file_format == 'vtk' else '.cube'
+        default_name = f'orbitals_all{ext}' if scope == 'all' else f'orbital_{self.current_orb_ind}{ext}'
+
+        # Show file save dialog
+        file_path = filedialog.asksaveasfilename(
+            parent=export_window,
+            title='Save Orbital Export',
+            defaultextension=ext,
+            initialfile=default_name,
+            filetypes=[('VTK Files', '*.vtk'), ('Gaussian Cube Files', '*.cube'), ('All Files', '*.*')],
+        )
+
+        if not file_path:
+            return  # User cancelled
+
+        # Perform the export
+        try:
+            mo_index = self.current_orb_ind if scope == 'current' else None
+            self.plotter.tabulator.export(file_path, mo_index=mo_index)
+            messagebox.showinfo('Export Successful', f'Orbital(s) exported successfully to:\n{file_path}')
+            export_window.destroy()
+        except (RuntimeError, ValueError) as e:
+            messagebox.showerror('Export Failed', f'Failed to export orbital(s):\n\n{e!s}')
+
+    def export_orbitals_dialog(self) -> None:
+        """Open a dialog to configure and export molecular orbitals."""
+        export_window = tk.Toplevel(self)
+        export_window.title('Export Orbitals')
+        export_window.geometry('400x300')
+
+        main_frame = ttk.Frame(export_window, padding=20)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        # File format selection
+        ttk.Label(main_frame, text='Export Format:', font=('TkDefaultFont', 10, 'bold')).grid(
+            row=0, column=0, columnspan=2, sticky=tk.W, pady=(0, 10),
+        )
+
+        format_var = tk.StringVar(value='vtk')
+        ttk.Radiobutton(main_frame, text='VTK (.vtk) - All orbitals or single', variable=format_var, value='vtk').grid(
+            row=1, column=0, columnspan=2, sticky=tk.W, padx=20,
+        )
+        ttk.Radiobutton(
+            main_frame, text='Gaussian Cube (.cube) - Single orbital only', variable=format_var, value='cube',
+        ).grid(row=2, column=0, columnspan=2, sticky=tk.W, padx=20, pady=(5, 15))
+
+        # Orbital selection
+        ttk.Label(main_frame, text='Orbital Selection:', font=('TkDefaultFont', 10, 'bold')).grid(
+            row=3, column=0, columnspan=2, sticky=tk.W, pady=(0, 10),
+        )
+
+        scope_var = tk.StringVar(value='current')
+        current_orb_radio = ttk.Radiobutton(
+            main_frame,
+            text=f'Current orbital (#{self.current_orb_ind if self.current_orb_ind >= 0 else "None"})',
+            variable=scope_var,
+            value='current',
+        )
+        current_orb_radio.grid(row=4, column=0, columnspan=2, sticky=tk.W, padx=20)
+        if self.current_orb_ind < 0:
+            current_orb_radio.config(state=tk.DISABLED)
+
+        all_orb_radio = ttk.Radiobutton(main_frame, text='All orbitals', variable=scope_var, value='all')
+        all_orb_radio.grid(row=5, column=0, columnspan=2, sticky=tk.W, padx=20, pady=(5, 0))
+
+        # Buttons
+        button_frame = ttk.Frame(main_frame)
+        button_frame.grid(row=6, column=0, columnspan=2, pady=(20, 0))
+
+        ttk.Button(
+            button_frame, text='Export', command=lambda: self._do_export(export_window, format_var, scope_var),
+        ).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text='Cancel', command=export_window.destroy).pack(side=tk.LEFT, padx=5)
 
     def update_button_states(self) -> None:
         """Synchronize navigation button state with the current orbital index."""

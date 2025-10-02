@@ -50,6 +50,28 @@ The ``Plotter`` class renders atoms, bonds, and (optionally) orbital isosurfaces
    # Plot only the molecular structure
    Plotter('molden.inp', only_molecule=True)
 
+Exporting from the GUI
+~~~~~~~~~~~~~~~~~~~~~~
+
+When using the ``Plotter`` GUI, you can export molecular orbitals directly from the Orbitals window:
+
+1. Open the Orbitals window (appears automatically when plotting with orbitals enabled)
+2. Click the **Export** menu in the menubar
+3. Select **Export Orbital(s)...** to open the export dialog
+4. Choose your export format:
+
+   - **VTK (.vtk)**: Exports single orbital or all orbitals in a multi-block VTK file
+   - **Gaussian Cube (.cube)**: Exports a single orbital (cube format does not support multiple orbitals)
+
+5. Select orbital scope:
+
+   - **Current orbital**: Exports the currently displayed orbital
+   - **All orbitals**: Exports all molecular orbitals (VTK format only)
+
+6. Click **Export** and choose the save location
+
+The export uses the current grid configuration from the plotter, so adjust grid settings before exporting if needed.
+
 Tabulating Orbitals
 -------------------
 
