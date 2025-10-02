@@ -93,7 +93,6 @@ The ``color_scheme`` option accepts any valid matplotlib colormap name. Divergin
 - ``RdBu`` (red-blue)
 - ``seismic``
 - ``coolwarm``
-- ``RdYlBu``
 
 You can also define custom two-color gradients:
 
