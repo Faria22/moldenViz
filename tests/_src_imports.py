@@ -13,6 +13,7 @@ if str(SRC_ROOT) not in sys.path:
 parser_module = import_module('moldenViz.parser')
 plotter_module = import_module('moldenViz.plotter')
 tabulator_module = import_module('moldenViz.tabulator')
+config_module = import_module('moldenViz._config_module')
 
 # parser exports
 Parser = parser_module.Parser
@@ -39,6 +40,7 @@ __all__ = [
     '_cartesian_to_spherical',
     '_spherical_to_cartesian',
     'array_like_type',
+    'config_module',
     'parser_module',
     'plotter_module',
     'tabulator_module',

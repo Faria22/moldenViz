@@ -85,6 +85,40 @@ Adjust the appearance of orbital isosurfaces:
    [mo]
    contour = 0.1
    opacity = 1.0
+   color_scheme = 'bwr'  # Any matplotlib colormap
+
+The ``color_scheme`` option accepts any valid matplotlib colormap name. Diverging colormaps work best for molecular orbitals since they show positive and negative phases. Popular choices include:
+
+- ``bwr`` (blue-white-red, default)
+- ``RdBu`` (red-blue)
+- ``seismic``
+- ``coolwarm``
+- ``RdYlBu``
+
+You can also define custom two-color gradients:
+
+.. code-block:: toml
+
+   [mo]
+   custom_colors = ['blue', 'red']  # [negative phase color, positive phase color]
+
+Custom colors accept any matplotlib color format (names, hex codes, RGB tuples as strings). When ``custom_colors`` is specified, it takes precedence over ``color_scheme``.
+
+Examples with different colormaps:
+
+.. code-block:: toml
+
+   # Use a red-blue diverging colormap
+   [mo]
+   color_scheme = 'RdBu'
+
+   # Or define custom colors with hex codes
+   [mo]
+   custom_colors = ['#0000FF', '#FF0000']
+
+   # Or use named colors
+   [mo]
+   custom_colors = ['cyan', 'magenta']
 
 Atom Settings
 -------------

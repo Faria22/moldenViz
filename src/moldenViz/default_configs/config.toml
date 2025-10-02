@@ -17,6 +17,8 @@ num_z_points = 100
 [MO]
 contour = 0.1
 opacity = 1
+color_scheme = 'bwr'
+# custom_colors = ['blue', 'red']  # Uncomment to use custom colors instead of color_scheme
 
 [molecule]
 opacity = 1

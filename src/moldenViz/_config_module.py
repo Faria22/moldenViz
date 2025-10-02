@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from typing import Any, Literal
 
 import matplotlib.colors as mcolors
+import matplotlib.pyplot as plt
 import toml
 from pydantic import BaseModel, Field, field_validator
 
@@ -65,6 +66,71 @@ class MOConfig(BaseModel):
 
     contour: float = Field(0.1, gt=0, description='Contour value')
     opacity: float = Field(1.0, ge=0, le=1, description='Opacity (0-1)')
+    color_scheme: str = Field(
+        'bwr',
+        description='Colormap for MO visualization (diverging colormaps recommended)',
+    )
+    custom_colors: list[str] | None = Field(
+        None,
+        min_length=2,
+        max_length=2,
+        description='Custom two colors for MO visualization [negative, positive]',
+    )
+
+    @field_validator('color_scheme')
+    @classmethod
+    def validate_color_scheme(cls, v: str) -> str:
+        """Validate color scheme is a valid matplotlib colormap.
+
+        Parameters
+        ----------
+        v : str
+            The color scheme name to validate.
+
+        Returns
+        -------
+        str
+            The validated color scheme string.
+
+        Raises
+        ------
+        ValueError
+            If the color scheme is not a valid matplotlib colormap.
+        """
+        try:
+            plt.get_cmap(v)
+        except ValueError as e:
+            raise ValueError(f'Color scheme must be a valid matplotlib colormap. Got: {v}') from e
+        else:
+            return v
+
+    @field_validator('custom_colors')
+    @classmethod
+    def validate_custom_colors(cls, v: list[str] | None) -> list[str] | None:
+        """Validate custom colors using matplotlib.colors.is_color_like.
+
+        Parameters
+        ----------
+        v : list[str] | None
+            The list of colors to validate.
+
+        Returns
+        -------
+        list[str] | None
+            The validated list of colors or None.
+
+        Raises
+        ------
+        ValueError
+            If any color in the list is not a valid matplotlib color.
+        """
+        if v is None:
+            return v
+
+        for color in v:
+            if not mcolors.is_color_like(color):
+                raise ValueError(f'Custom color must be a valid matplotlib color. Got: {color}')
+        return v
 
 
 class AtomDisplayConfig(BaseModel):
