@@ -809,7 +809,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
     def _update_export_dialog_label(self) -> None:
         """Update the export dialog label to reflect the current orbital index."""
-        if hasattr(self, '_export_current_orb_radio') and self._export_current_orb_radio is not None:
+        if self._export_current_orb_radio is not None:
             # Use 1-based indexing for display (add 1 to current_orb_ind)
             orbital_display = self.current_orb_ind + 1 if self.current_orb_ind >= 0 else 'None'
             self._export_current_orb_radio.config(text=f'Current orbital (#{orbital_display})')
