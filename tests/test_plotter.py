@@ -1,12 +1,12 @@
-# ruff: noqa: PT027, PT009, SLF001
-# type: ignore[reportAttributeAccessIssue]
 """Unit tests for the Plotter class."""
 
-import unittest
+import re
+from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import Mock, patch
 
 import numpy as np
+import pytest
 
 from tests._src_imports import GridType, Plotter, Tabulator, plotter_module, tabulator_module
 
@@ -30,6 +30,7 @@ class MockTabulator(Tabulator):
         self.gto_data = np.array([[1, 2, 3], [4, 5, 6]])
         self._grid_type = grid_type
         self._grid_dimensions = (2, 2, 2)
+        self.original_axes: tuple[np.ndarray, np.ndarray, np.ndarray] | None
 
         # Set original_axes if provided, otherwise use a uniform default
         if original_axes is not None:
@@ -53,330 +54,282 @@ class MockTabulator(Tabulator):
         self._parser.atoms = []
 
 
-class TestPlotterTabulatorValidation(unittest.TestCase):
-    """Test validation of tabulator parameter in Plotter.__init__."""
+@pytest.fixture(autouse=True)
+def patch_plotter_dependencies() -> Iterator[None]:
+    """Patch GUI-heavy dependencies used by Plotter.
 
-    def setUp(self) -> None:
-        """Set up mocks to avoid GUI components during testing."""
-        # Mock all GUI-related components
-        self.patcher_tk = patch.object(plotter_module, 'tk')
-        self.patcher_pv = patch.object(plotter_module, 'pv')
-        self.patcher_background_plotter = patch.object(plotter_module, 'BackgroundPlotter')
-        self.patcher_molecule = patch.object(plotter_module, 'Molecule')
+    Yields
+    ------
+    None
+        Allows tests to run with patched GUI components.
+    """
+    patcher_tk = patch.object(plotter_module, 'tk')
+    patcher_pv = patch.object(plotter_module, 'pv')
+    patcher_background_plotter = patch.object(plotter_module, 'BackgroundPlotter')
+    patcher_molecule = patch.object(plotter_module, 'Molecule')
 
-        self.mock_tk = self.patcher_tk.start()
-        self.mock_pv = self.patcher_pv.start()
-        self.mock_background_plotter = self.patcher_background_plotter.start()
-        self.mock_molecule = self.patcher_molecule.start()
+    mock_tk = patcher_tk.start()
+    mock_pv = patcher_pv.start()
+    mock_background_plotter = patcher_background_plotter.start()
+    mock_molecule = patcher_molecule.start()
 
-        # Configure mocks
-        mock_plotter_instance = Mock()
-        mock_plotter_instance.show_axes.return_value = None
-        self.mock_background_plotter.return_value = mock_plotter_instance
+    mock_tk.return_value = Mock()
+    mock_pv.return_value = Mock()
 
-        mock_molecule_instance = Mock()
-        mock_molecule_instance.add_meshes.return_value = []
-        mock_molecule_instance.max_radius = 5.0
-        self.mock_molecule.return_value = mock_molecule_instance
+    mock_plotter_instance = Mock()
+    mock_plotter_instance.show_axes.return_value = None
+    mock_background_plotter.return_value = mock_plotter_instance
 
-    def tearDown(self) -> None:
-        """Clean up patches."""
-        self.patcher_tk.stop()
-        self.patcher_pv.stop()
-        self.patcher_background_plotter.stop()
-        self.patcher_molecule.stop()
+    mock_molecule_instance = Mock()
+    mock_molecule_instance.add_meshes.return_value = []
+    mock_molecule_instance.max_radius = 5.0
+    mock_molecule.return_value = mock_molecule_instance
 
-    def test_tabulator_missing_grid_attribute_raises_error(self) -> None:
-        """Test that ValueError is raised when tabulator lacks grid attribute."""
-        mock_tabulator = MockTabulator(has_grid=False, has_gto_data=True)
+    try:
+        yield
+    finally:
+        patcher_tk.stop()
+        patcher_pv.stop()
+        patcher_background_plotter.stop()
+        patcher_molecule.stop()
 
-        with self.assertRaises(ValueError) as context:
-            Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=mock_tabulator)
 
-        self.assertEqual(str(context.exception), 'Tabulator does not have grid attribute.')
+def test_tabulator_missing_grid_attribute_raises_error() -> None:
+    """Test that Plotter requires tabulators with a grid attribute."""
+    mock_tabulator = MockTabulator(has_grid=False, has_gto_data=True)
 
-    def test_tabulator_missing_gto_data_with_only_molecule_false_raises_error(self) -> None:
-        """Test that ValueError is raised when tabulator lacks gto_data and only_molecule=False."""
-        mock_tabulator = MockTabulator(has_grid=True, has_gto_data=False)
+    with pytest.raises(ValueError, match=re.escape('Tabulator does not have grid attribute.')):
+        Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=mock_tabulator)
 
-        with self.assertRaises(ValueError) as context:
-            Plotter(str(MOLDEN_PATH), only_molecule=False, tabulator=mock_tabulator)
 
-        self.assertEqual(str(context.exception), 'Tabulator does not have tabulated GTOs.')
+def test_tabulator_missing_gto_data_with_only_molecule_false_raises_error() -> None:
+    """Test that Plotter enforces presence of GTO data when needed."""
+    mock_tabulator = MockTabulator(has_grid=True, has_gto_data=False)
 
-    def test_tabulator_missing_gto_data_with_only_molecule_true_succeeds(self) -> None:
-        """Test that missing gto_data is allowed when only_molecule=True."""
-        mock_tabulator = MockTabulator(has_grid=True, has_gto_data=False)
+    with pytest.raises(ValueError, match=re.escape('Tabulator does not have tabulated GTOs.')):
+        Plotter(str(MOLDEN_PATH), only_molecule=False, tabulator=mock_tabulator)
 
-        # This should not raise an exception
-        try:
-            plotter = Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=mock_tabulator)
-            # If we get here, the test passed
-            self.assertIsNotNone(plotter)
-        except ValueError:
-            self.fail('Plotter raised ValueError when only_molecule=True and gto_data is missing')
 
-    def test_tabulator_unknown_grid_type_raises_error(self) -> None:
-        """Test that ValueError is raised when tabulator has UNKNOWN grid type."""
-        mock_tabulator = MockTabulator(has_grid=True, has_gto_data=True, grid_type=GridType.UNKNOWN)
+def test_tabulator_missing_gto_data_with_only_molecule_true_succeeds() -> None:
+    """Test that Plotter allows missing GTO data when only molecules are rendered."""
+    mock_tabulator = MockTabulator(has_grid=True, has_gto_data=False)
 
-        with self.assertRaises(ValueError) as context:
-            Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=mock_tabulator)
+    plotter = Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=mock_tabulator)
 
-        self.assertEqual(str(context.exception), 'The plotter only supports spherical and cartesian grids.')
+    assert plotter is not None
 
-    def test_tabulator_spherical_grid_type_succeeds(self) -> None:
-        """Test that spherical grid type is accepted."""
-        mock_tabulator = MockTabulator(has_grid=True, has_gto_data=True, grid_type=GridType.SPHERICAL)
 
-        # This should not raise an exception
-        try:
-            plotter = Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=mock_tabulator)
-            self.assertIsNotNone(plotter)
-            self.assertEqual(plotter.tabulator, mock_tabulator)
-        except ValueError:
-            self.fail('Plotter raised ValueError with valid spherical grid type')
+def test_tabulator_unknown_grid_type_raises_error() -> None:
+    """Test that unsupported grid types raise a ValueError."""
+    mock_tabulator = MockTabulator(has_grid=True, has_gto_data=True, grid_type=GridType.UNKNOWN)
 
-    def test_tabulator_cartesian_grid_type_succeeds(self) -> None:
-        """Test that cartesian grid type is accepted."""
-        mock_tabulator = MockTabulator(has_grid=True, has_gto_data=True, grid_type=GridType.CARTESIAN)
+    with pytest.raises(
+        ValueError,
+        match=re.escape('The plotter only supports spherical and cartesian grids.'),
+    ):
+        Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=mock_tabulator)
 
-        # This should not raise an exception
-        try:
-            plotter = Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=mock_tabulator)
-            self.assertIsNotNone(plotter)
-            self.assertEqual(plotter.tabulator, mock_tabulator)
-        except ValueError:
-            self.fail('Plotter raised ValueError with valid cartesian grid type')
 
-    def test_valid_tabulator_with_all_attributes_succeeds(self) -> None:
-        """Test that a fully valid tabulator is accepted."""
-        mock_tabulator = MockTabulator(has_grid=True, has_gto_data=True, grid_type=GridType.SPHERICAL)
+def test_tabulator_spherical_grid_type_succeeds() -> None:
+    """Test that spherical tabulator grids are accepted."""
+    mock_tabulator = MockTabulator(has_grid=True, has_gto_data=True, grid_type=GridType.SPHERICAL)
 
-        try:
-            plotter = Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=mock_tabulator)
-            self.assertIsNotNone(plotter)
-            self.assertEqual(plotter.tabulator, mock_tabulator)
-            # Verify that the provided tabulator is used, not a new one created
-            self.assertIs(plotter.tabulator, mock_tabulator)
-        except ValueError:
-            self.fail('Plotter raised ValueError with fully valid tabulator')
+    plotter = Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=mock_tabulator)
 
-    @patch.object(plotter_module, 'Tabulator')
-    def test_none_tabulator_creates_default_tabulator(self, mock_tabulator_class: MockTabulator) -> None:
-        """Test that passing None for tabulator creates a default Tabulator."""
-        # Create a mock instance for the default tabulator
+    assert plotter.tabulator == mock_tabulator
+
+
+def test_tabulator_cartesian_grid_type_succeeds() -> None:
+    """Test that cartesian tabulator grids are accepted."""
+    mock_tabulator = MockTabulator(has_grid=True, has_gto_data=True, grid_type=GridType.CARTESIAN)
+
+    plotter = Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=mock_tabulator)
+
+    assert plotter.tabulator == mock_tabulator
+
+
+def test_valid_tabulator_with_all_attributes_succeeds() -> None:
+    """Test that a fully populated tabulator can be used directly."""
+    mock_tabulator = MockTabulator(has_grid=True, has_gto_data=True, grid_type=GridType.SPHERICAL)
+
+    plotter = Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=mock_tabulator)
+
+    assert plotter.tabulator == mock_tabulator
+    assert plotter.tabulator is mock_tabulator
+
+
+def test_none_tabulator_creates_default_tabulator() -> None:
+    """Test that Plotter instantiates a Tabulator when none is provided."""
+    with patch.object(plotter_module, 'Tabulator') as mock_tabulator_class:
         mock_tabulator_instance = Mock()
-        mock_tabulator_instance._parser.atoms = []
-        mock_tabulator_instance._grid_type = GridType.SPHERICAL
+        mock_tabulator_instance._parser.atoms = []  # noqa: SLF001
+        mock_tabulator_instance._grid_type = GridType.SPHERICAL  # noqa: SLF001
         mock_tabulator_instance.grid = np.array([[0, 0, 0]])
         mock_tabulator_instance.grid_dimensions = (1, 1, 1)
         mock_tabulator_class.return_value = mock_tabulator_instance
 
         plotter = Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=None)
 
-        # Verify that a new Tabulator was created
-        mock_tabulator_class.assert_called_once_with(str(MOLDEN_PATH), only_molecule=True)
-        self.assertEqual(plotter.tabulator, mock_tabulator_instance)
-
-    def test_real_tabulator_instance_validation(self) -> None:
-        """Test validation with a real Tabulator instance that has no grid set."""
-        # This test uses a real Tabulator instance to verify the validation works
-        # with actual objects, not just mocks
-        with patch.object(tabulator_module, 'Parser') as mock_parser_class:
-            # Mock the parser to avoid needing a real molden file
-            mock_parser = Mock()
-            mock_parser.atoms = []
-            mock_parser_class.return_value = mock_parser
-
-            # Create a real Tabulator instance but don't set up a grid
-            real_tabulator = Tabulator(str(MOLDEN_PATH), only_molecule=True)
-
-            # This tabulator should have _grid_type as UNKNOWN and no grid attribute
-            self.assertEqual(real_tabulator._grid_type, GridType.UNKNOWN)
-            self.assertFalse(hasattr(real_tabulator, 'grid'))
-
-            # Test that it raises the appropriate error
-            with self.assertRaises(ValueError) as context:
-                Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=real_tabulator)
-
-            self.assertEqual(str(context.exception), 'Tabulator does not have grid attribute.')
-
-    def test_non_uniform_grid_x_axis_raises_error(self) -> None:
-        """Test that a non-uniform x-axis raises a ValueError."""
-        # Create axes where x is not evenly spaced
-        non_uniform_x = np.array([0.0, 1.0, 2.5])  # Not uniform spacing
-        uniform_y = np.array([0.0, 1.0, 2.0])
-        uniform_z = np.array([0.0, 1.0, 2.0])
-
-        mock_tabulator = MockTabulator(
-            has_grid=True,
-            has_gto_data=True,
-            grid_type=GridType.CARTESIAN,
-            original_axes=(non_uniform_x, uniform_y, uniform_z),
-        )
-
-        with self.assertRaises(ValueError) as context:
-            Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=mock_tabulator)
-
-        self.assertIn('Grid must be uniform for plotting', str(context.exception))
-        self.assertIn('x-axis must be evenly spaced', str(context.exception))
-
-    def test_non_uniform_grid_y_axis_raises_error(self) -> None:
-        """Test that a non-uniform y-axis raises a ValueError."""
-        # Create axes where y is not evenly spaced
-        uniform_x = np.array([0.0, 1.0, 2.0])
-        non_uniform_y = np.array([0.0, 1.0, 3.0])  # Not uniform spacing
-        uniform_z = np.array([0.0, 1.0, 2.0])
-
-        mock_tabulator = MockTabulator(
-            has_grid=True,
-            has_gto_data=True,
-            grid_type=GridType.CARTESIAN,
-            original_axes=(uniform_x, non_uniform_y, uniform_z),
-        )
-
-        with self.assertRaises(ValueError) as context:
-            Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=mock_tabulator)
-
-        self.assertIn('Grid must be uniform for plotting', str(context.exception))
-        self.assertIn('y-axis must be evenly spaced', str(context.exception))
-
-    def test_non_uniform_grid_z_axis_raises_error(self) -> None:
-        """Test that a non-uniform z-axis raises a ValueError."""
-        # Create axes where z is not evenly spaced
-        uniform_x = np.array([0.0, 1.0, 2.0])
-        uniform_y = np.array([0.0, 1.0, 2.0])
-        non_uniform_z = np.array([0.0, 0.5, 2.0])  # Not uniform spacing
-
-        mock_tabulator = MockTabulator(
-            has_grid=True,
-            has_gto_data=True,
-            grid_type=GridType.CARTESIAN,
-            original_axes=(uniform_x, uniform_y, non_uniform_z),
-        )
-
-        with self.assertRaises(ValueError) as context:
-            Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=mock_tabulator)
-
-        self.assertIn('Grid must be uniform for plotting', str(context.exception))
-        self.assertIn('z-axis must be evenly spaced', str(context.exception))
-
-    def test_uniform_grid_succeeds(self) -> None:
-        """Test that a uniform grid passes validation."""
-        # Create uniform axes
-        uniform_x = np.array([0.0, 1.0, 2.0, 3.0])
-        uniform_y = np.array([0.0, 0.5, 1.0, 1.5])
-        uniform_z = np.array([-1.0, 0.0, 1.0])
-
-        mock_tabulator = MockTabulator(
-            has_grid=True,
-            has_gto_data=True,
-            grid_type=GridType.CARTESIAN,
-            original_axes=(uniform_x, uniform_y, uniform_z),
-        )
-
-        try:
-            plotter = Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=mock_tabulator)
-            self.assertIsNotNone(plotter)
-            self.assertEqual(plotter.tabulator, mock_tabulator)
-        except ValueError:
-            self.fail('Plotter raised ValueError with uniform grid')
-
-    def test_no_original_axes_succeeds(self) -> None:
-        """Test that a tabulator with no original_axes (None) does not raise error."""
-        mock_tabulator = MockTabulator(
-            has_grid=True,
-            has_gto_data=True,
-            grid_type=GridType.CARTESIAN,
-            original_axes=None,
-        )
-        mock_tabulator.original_axes = None
-
-        try:
-            plotter = Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=mock_tabulator)
-            self.assertIsNotNone(plotter)
-        except ValueError:
-            self.fail('Plotter raised ValueError when original_axes is None')
+    mock_tabulator_class.assert_called_once_with(str(MOLDEN_PATH), only_molecule=True)
+    assert plotter.tabulator == mock_tabulator_instance
 
 
-class TestPlotterUpdateMesh(unittest.TestCase):
-    """Test the update_mesh method of Plotter."""
+def test_real_tabulator_instance_validation() -> None:
+    """Test validation when using a real Tabulator lacking a grid."""
+    with patch.object(tabulator_module, 'Parser') as mock_parser_class:
+        mock_parser = Mock()
+        mock_parser.atoms = []
+        mock_parser_class.return_value = mock_parser
 
-    def setUp(self) -> None:
-        """Set up mocks and a plotter instance."""
-        # Mock all GUI-related components
-        self.patcher_tk = patch.object(plotter_module, 'tk')
-        self.patcher_pv = patch.object(plotter_module, 'pv')
-        self.patcher_background_plotter = patch.object(plotter_module, 'BackgroundPlotter')
-        self.patcher_molecule = patch.object(plotter_module, 'Molecule')
+        real_tabulator = Tabulator(str(MOLDEN_PATH), only_molecule=True)
 
-        self.mock_tk = self.patcher_tk.start()
-        self.mock_pv = self.patcher_pv.start()
-        self.mock_background_plotter = self.patcher_background_plotter.start()
-        self.mock_molecule = self.patcher_molecule.start()
+    assert real_tabulator._grid_type == GridType.UNKNOWN  # noqa: SLF001
+    assert not hasattr(real_tabulator, 'grid')
 
-        # Configure mocks
-        mock_plotter_instance = Mock()
-        mock_plotter_instance.show_axes.return_value = None
-        self.mock_background_plotter.return_value = mock_plotter_instance
-
-        mock_molecule_instance = Mock()
-        mock_molecule_instance.add_meshes.return_value = []
-        mock_molecule_instance.max_radius = 5.0
-        self.mock_molecule.return_value = mock_molecule_instance
-
-        # Create a plotter with a mock tabulator
-        self.mock_tabulator = MockTabulator(has_grid=True, has_gto_data=True, grid_type=GridType.SPHERICAL)
-        self.mock_tabulator.cartesian_grid = Mock()
-        self.mock_tabulator.spherical_grid = Mock()
-
-        self.plotter = Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=self.mock_tabulator)
-
-    def tearDown(self) -> None:
-        """Clean up patches."""
-        self.patcher_tk.stop()
-        self.patcher_pv.stop()
-        self.patcher_background_plotter.stop()
-        self.patcher_molecule.stop()
-
-    def test_update_mesh_cartesian_grid(self) -> None:
-        """Test update_mesh with cartesian grid type."""
-        x_points = np.array([0, 1, 2])
-        y_points = np.array([0, 1])
-        z_points = np.array([0, 1, 2, 3])
-
-        self.plotter.update_mesh(x_points, y_points, z_points, GridType.CARTESIAN)
-
-        # Verify that cartesian_grid was called with correct parameters
-        self.mock_tabulator.cartesian_grid.assert_called_once_with(x_points, y_points, z_points)
-        self.mock_tabulator.spherical_grid.assert_not_called()
-
-    def test_update_mesh_spherical_grid(self) -> None:
-        """Test update_mesh with spherical grid type."""
-        r_points = np.array([0, 1, 2])
-        theta_points = np.array([0, np.pi / 2, np.pi])
-        phi_points = np.array([0, np.pi, 2 * np.pi])
-
-        self.plotter.update_mesh(r_points, theta_points, phi_points, GridType.SPHERICAL)
-
-        # Verify that spherical_grid was called with correct parameters
-        self.mock_tabulator.spherical_grid.assert_called_once_with(r_points, theta_points, phi_points)
-        self.mock_tabulator.cartesian_grid.assert_not_called()
-
-    def test_update_mesh_unknown_grid_type_raises_error(self) -> None:
-        """Test that update_mesh raises ValueError for UNKNOWN grid type."""
-        points = np.array([0, 1, 2])
-
-        with self.assertRaises(ValueError) as context:
-            self.plotter.update_mesh(points, points, points, GridType.UNKNOWN)
-
-        self.assertEqual(str(context.exception), 'The plotter only supports spherical and cartesian grids.')
-
-        # Verify that neither grid method was called
-        self.mock_tabulator.cartesian_grid.assert_not_called()
-        self.mock_tabulator.spherical_grid.assert_not_called()
+    with pytest.raises(ValueError, match=re.escape('Tabulator does not have grid attribute.')):
+        Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=real_tabulator)
 
 
-if __name__ == '__main__':
-    unittest.main()
+def test_non_uniform_grid_x_axis_raises_error() -> None:
+    """Test that non-uniform x-axis spacing is rejected."""
+    non_uniform_x = np.array([0.0, 1.0, 2.5])
+    uniform_y = np.array([0.0, 1.0, 2.0])
+    uniform_z = np.array([0.0, 1.0, 2.0])
+
+    mock_tabulator = MockTabulator(
+        has_grid=True,
+        has_gto_data=True,
+        grid_type=GridType.CARTESIAN,
+        original_axes=(non_uniform_x, uniform_y, uniform_z),
+    )
+
+    with pytest.raises(ValueError, match=re.escape('x-axis must be evenly spaced.')):
+        Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=mock_tabulator)
+
+
+def test_non_uniform_grid_y_axis_raises_error() -> None:
+    """Test that non-uniform y-axis spacing is rejected."""
+    uniform_x = np.array([0.0, 1.0, 2.0])
+    non_uniform_y = np.array([0.0, 1.0, 3.0])
+    uniform_z = np.array([0.0, 1.0, 2.0])
+
+    mock_tabulator = MockTabulator(
+        has_grid=True,
+        has_gto_data=True,
+        grid_type=GridType.CARTESIAN,
+        original_axes=(uniform_x, non_uniform_y, uniform_z),
+    )
+
+    with pytest.raises(ValueError, match=re.escape('y-axis must be evenly spaced.')):
+        Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=mock_tabulator)
+
+
+def test_non_uniform_grid_z_axis_raises_error() -> None:
+    """Test that non-uniform z-axis spacing is rejected."""
+    uniform_x = np.array([0.0, 1.0, 2.0])
+    uniform_y = np.array([0.0, 1.0, 2.0])
+    non_uniform_z = np.array([0.0, 0.5, 2.0])
+
+    mock_tabulator = MockTabulator(
+        has_grid=True,
+        has_gto_data=True,
+        grid_type=GridType.CARTESIAN,
+        original_axes=(uniform_x, uniform_y, non_uniform_z),
+    )
+
+    with pytest.raises(ValueError, match=re.escape('z-axis must be evenly spaced.')):
+        Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=mock_tabulator)
+
+
+def test_uniform_grid_succeeds() -> None:
+    """Test that uniform axes pass Plotter validation."""
+    uniform_x = np.array([0.0, 1.0, 2.0, 3.0])
+    uniform_y = np.array([0.0, 0.5, 1.0, 1.5])
+    uniform_z = np.array([-1.0, 0.0, 1.0])
+
+    mock_tabulator = MockTabulator(
+        has_grid=True,
+        has_gto_data=True,
+        grid_type=GridType.CARTESIAN,
+        original_axes=(uniform_x, uniform_y, uniform_z),
+    )
+
+    plotter = Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=mock_tabulator)
+
+    assert plotter.tabulator == mock_tabulator
+
+
+def test_no_original_axes_succeeds() -> None:
+    """Test that missing original axes does not raise an error."""
+    mock_tabulator = MockTabulator(
+        has_grid=True,
+        has_gto_data=True,
+        grid_type=GridType.CARTESIAN,
+        original_axes=None,
+    )
+    mock_tabulator.original_axes = None
+
+    plotter = Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=mock_tabulator)
+
+    assert plotter is not None
+
+
+@pytest.fixture
+def plotter_with_mock_tabulator() -> tuple[Plotter, MockTabulator]:
+    """Return a plotter paired with a mock tabulator.
+
+    Returns
+    -------
+    tuple[Plotter, MockTabulator]
+        The plotter under test and its backing tabulator mock.
+    """
+    mock_tabulator = MockTabulator(has_grid=True, has_gto_data=True, grid_type=GridType.SPHERICAL)
+    mock_tabulator.cartesian_grid = Mock()
+    mock_tabulator.spherical_grid = Mock()
+
+    plotter = Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=mock_tabulator)
+
+    return plotter, mock_tabulator
+
+
+def test_update_mesh_cartesian_grid(plotter_with_mock_tabulator: tuple[Plotter, MockTabulator]) -> None:
+    """Test that cartesian grids trigger the cartesian update hook."""
+    plotter, mock_tabulator = plotter_with_mock_tabulator
+    x_points = np.array([0, 1, 2])
+    y_points = np.array([0, 1])
+    z_points = np.array([0, 1, 2, 3])
+
+    plotter.update_mesh(x_points, y_points, z_points, GridType.CARTESIAN)
+
+    mock_tabulator.cartesian_grid.assert_called_once_with(x_points, y_points, z_points)
+    mock_tabulator.spherical_grid.assert_not_called()
+
+
+def test_update_mesh_spherical_grid(plotter_with_mock_tabulator: tuple[Plotter, MockTabulator]) -> None:
+    """Test that spherical grids trigger the spherical update hook."""
+    plotter, mock_tabulator = plotter_with_mock_tabulator
+    r_points = np.array([0, 1, 2])
+    theta_points = np.array([0, np.pi / 2, np.pi])
+    phi_points = np.array([0, np.pi, 2 * np.pi])
+
+    plotter.update_mesh(r_points, theta_points, phi_points, GridType.SPHERICAL)
+
+    mock_tabulator.spherical_grid.assert_called_once_with(r_points, theta_points, phi_points)
+    mock_tabulator.cartesian_grid.assert_not_called()
+
+
+def test_update_mesh_unknown_grid_type_raises_error(
+    plotter_with_mock_tabulator: tuple[Plotter, MockTabulator],
+) -> None:
+    """Test that update_mesh rejects unsupported grid types."""
+    plotter, mock_tabulator = plotter_with_mock_tabulator
+    points = np.array([0, 1, 2])
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape('The plotter only supports spherical and cartesian grids.'),
+    ):
+        plotter.update_mesh(points, points, points, GridType.UNKNOWN)
+
+    mock_tabulator.cartesian_grid.assert_not_called()
+    mock_tabulator.spherical_grid.assert_not_called()
