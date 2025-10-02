@@ -97,12 +97,9 @@ class Plotter:
 
             # Check if grid is uniform (PyVista requires uniform grids)
             if tabulator.original_axes is not None:
-                try:
-                    Tabulator._axis_spacing(tabulator.original_axes[0], 'x')  # noqa: SLF001
-                    Tabulator._axis_spacing(tabulator.original_axes[1], 'y')  # noqa: SLF001
-                    Tabulator._axis_spacing(tabulator.original_axes[2], 'z')  # noqa: SLF001
-                except ValueError as e:
-                    raise ValueError(f'Grid must be uniform for plotting: {e}') from e
+                Tabulator._axis_spacing(tabulator.original_axes[0], 'x')  # noqa: SLF001
+                Tabulator._axis_spacing(tabulator.original_axes[1], 'y')  # noqa: SLF001
+                Tabulator._axis_spacing(tabulator.original_axes[2], 'z')  # noqa: SLF001
 
             self.tabulator = tabulator
         else:
