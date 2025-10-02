@@ -22,6 +22,7 @@ class MockTabulator(Tabulator):
         has_grid: bool = True,
         has_gto_data: bool = True,
         grid_type: GridType = GridType.SPHERICAL,
+        original_axes: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None,
     ) -> None:
         # Always create attributes, then optionally remove them
         self._grid = np.array([[0, 0, 0], [1, 1, 1]])
@@ -29,6 +30,17 @@ class MockTabulator(Tabulator):
         self.gto_data = np.array([[1, 2, 3], [4, 5, 6]])
         self._grid_type = grid_type
         self._grid_dimensions = (2, 2, 2)
+
+        # Set original_axes if provided, otherwise use a uniform default
+        if original_axes is not None:
+            self.original_axes = original_axes
+        else:
+            # Default uniform axes
+            self.original_axes = (
+                np.array([0.0, 1.0, 2.0]),
+                np.array([0.0, 1.0, 2.0]),
+                np.array([0.0, 1.0, 2.0]),
+            )
 
         # Remove attributes if requested
         if not has_grid:
@@ -189,6 +201,103 @@ class TestPlotterTabulatorValidation(unittest.TestCase):
                 Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=real_tabulator)
 
             self.assertEqual(str(context.exception), 'Tabulator does not have grid attribute.')
+
+    def test_non_uniform_grid_x_axis_raises_error(self) -> None:
+        """Test that a non-uniform x-axis raises a ValueError."""
+        # Create axes where x is not evenly spaced
+        non_uniform_x = np.array([0.0, 1.0, 2.5])  # Not uniform spacing
+        uniform_y = np.array([0.0, 1.0, 2.0])
+        uniform_z = np.array([0.0, 1.0, 2.0])
+
+        mock_tabulator = MockTabulator(
+            has_grid=True,
+            has_gto_data=True,
+            grid_type=GridType.CARTESIAN,
+            original_axes=(non_uniform_x, uniform_y, uniform_z),
+        )
+
+        with self.assertRaises(ValueError) as context:
+            Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=mock_tabulator)
+
+        self.assertIn('Grid must be uniform for plotting', str(context.exception))
+        self.assertIn('x-axis must be evenly spaced', str(context.exception))
+
+    def test_non_uniform_grid_y_axis_raises_error(self) -> None:
+        """Test that a non-uniform y-axis raises a ValueError."""
+        # Create axes where y is not evenly spaced
+        uniform_x = np.array([0.0, 1.0, 2.0])
+        non_uniform_y = np.array([0.0, 1.0, 3.0])  # Not uniform spacing
+        uniform_z = np.array([0.0, 1.0, 2.0])
+
+        mock_tabulator = MockTabulator(
+            has_grid=True,
+            has_gto_data=True,
+            grid_type=GridType.CARTESIAN,
+            original_axes=(uniform_x, non_uniform_y, uniform_z),
+        )
+
+        with self.assertRaises(ValueError) as context:
+            Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=mock_tabulator)
+
+        self.assertIn('Grid must be uniform for plotting', str(context.exception))
+        self.assertIn('y-axis must be evenly spaced', str(context.exception))
+
+    def test_non_uniform_grid_z_axis_raises_error(self) -> None:
+        """Test that a non-uniform z-axis raises a ValueError."""
+        # Create axes where z is not evenly spaced
+        uniform_x = np.array([0.0, 1.0, 2.0])
+        uniform_y = np.array([0.0, 1.0, 2.0])
+        non_uniform_z = np.array([0.0, 0.5, 2.0])  # Not uniform spacing
+
+        mock_tabulator = MockTabulator(
+            has_grid=True,
+            has_gto_data=True,
+            grid_type=GridType.CARTESIAN,
+            original_axes=(uniform_x, uniform_y, non_uniform_z),
+        )
+
+        with self.assertRaises(ValueError) as context:
+            Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=mock_tabulator)
+
+        self.assertIn('Grid must be uniform for plotting', str(context.exception))
+        self.assertIn('z-axis must be evenly spaced', str(context.exception))
+
+    def test_uniform_grid_succeeds(self) -> None:
+        """Test that a uniform grid passes validation."""
+        # Create uniform axes
+        uniform_x = np.array([0.0, 1.0, 2.0, 3.0])
+        uniform_y = np.array([0.0, 0.5, 1.0, 1.5])
+        uniform_z = np.array([-1.0, 0.0, 1.0])
+
+        mock_tabulator = MockTabulator(
+            has_grid=True,
+            has_gto_data=True,
+            grid_type=GridType.CARTESIAN,
+            original_axes=(uniform_x, uniform_y, uniform_z),
+        )
+
+        try:
+            plotter = Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=mock_tabulator)
+            self.assertIsNotNone(plotter)
+            self.assertEqual(plotter.tabulator, mock_tabulator)
+        except ValueError:
+            self.fail('Plotter raised ValueError with uniform grid')
+
+    def test_no_original_axes_succeeds(self) -> None:
+        """Test that a tabulator with no original_axes (None) does not raise error."""
+        mock_tabulator = MockTabulator(
+            has_grid=True,
+            has_gto_data=True,
+            grid_type=GridType.CARTESIAN,
+            original_axes=None,
+        )
+        mock_tabulator.original_axes = None
+
+        try:
+            plotter = Plotter(str(MOLDEN_PATH), only_molecule=True, tabulator=mock_tabulator)
+            self.assertIsNotNone(plotter)
+        except ValueError:
+            self.fail('Plotter raised ValueError when original_axes is None')
 
 
 class TestPlotterUpdateMesh(unittest.TestCase):
