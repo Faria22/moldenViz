@@ -236,6 +236,15 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.plotter = plotter
         self.current_orb_ind = -1  # Start with no orbital shown
 
+        # Create menubar
+        menubar = tk.Menu(self)
+        self.config(menu=menubar)
+
+        # Add Settings menu
+        settings_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label='Settings', menu=settings_menu)
+        settings_menu.add_command(label='Open Settings', command=self.settings_screen)
+
         nav_frame = ttk.Frame(self)
         nav_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
@@ -246,9 +255,6 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.next_button.pack(side=tk.RIGHT, padx=5, pady=10)
 
         self.update_button_states()  # Update buttons for initial state
-
-        self.settings_button = ttk.Button(self, text='Settings', command=self.settings_screen)
-        self.settings_button.pack(expand=True, padx=5, pady=10)
 
         self.orb_tv = _OrbitalsTreeview(self)
         self.orb_tv.populate_tree(self.plotter.tabulator._parser.mos)  # noqa: SLF001
