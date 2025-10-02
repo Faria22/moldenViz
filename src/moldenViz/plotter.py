@@ -95,6 +95,15 @@ class Plotter:
             if tabulator._grid_type == GridType.UNKNOWN:  # noqa: SLF001
                 raise ValueError('The plotter only supports spherical and cartesian grids.')
 
+            # Check if grid is uniform (PyVista requires uniform grids)
+            if tabulator.original_axes is not None:
+                try:
+                    Tabulator._axis_spacing(tabulator.original_axes[0], 'x')  # noqa: SLF001
+                    Tabulator._axis_spacing(tabulator.original_axes[1], 'y')  # noqa: SLF001
+                    Tabulator._axis_spacing(tabulator.original_axes[2], 'z')  # noqa: SLF001
+                except ValueError as e:
+                    raise ValueError(f'Grid must be uniform for plotting: {e}') from e
+
             self.tabulator = tabulator
         else:
             self.tabulator = Tabulator(source, only_molecule=only_molecule)
