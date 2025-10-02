@@ -149,7 +149,7 @@ To reuse tabulation results in a notebook without re-computation:
    Plotter('molecule.molden', tabulator=tab)
 
    # Later, export the same grid to VTK
-   tab.export_vtk('exports/spherical_{mo}.vtk', mo_inds=0)
+   tab.export('exports/spherical_0.vtk', mo_index=0)
 
 Inspecting Parsed Data
 ----------------------
