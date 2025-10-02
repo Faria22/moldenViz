@@ -249,6 +249,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         # Initialize export window attributes
         self._export_window = None
         self._export_current_orb_radio = None
+        self._export_all_orb_radio = None
 
         # Create menubar
         menubar = tk.Menu(self)
@@ -780,11 +781,28 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         # Store references for updating the label dynamically
         self._export_window = export_window
         self._export_current_orb_radio = current_orb_radio
+        self._export_all_orb_radio = all_orb_radio
+
+        def update_scope_options(*_args: object) -> None:
+            """Adjust which export scopes are available based on the format."""
+            if self._export_all_orb_radio is None:
+                return
+
+            if format_var.get() == 'cube':
+                self._export_all_orb_radio.config(state=tk.DISABLED)
+                if scope_var.get() == 'all':
+                    scope_var.set('current')
+            else:
+                self._export_all_orb_radio.config(state=tk.NORMAL)
+
+        format_var.trace_add('write', update_scope_options)
+        update_scope_options()
 
         # Clean up references when window is closed
         def on_close() -> None:
             self._export_window = None
             self._export_current_orb_radio = None
+            self._export_all_orb_radio = None
             export_window.destroy()
 
         # Buttons
