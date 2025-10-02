@@ -25,6 +25,12 @@ Always run the test suite and static checks before pushing:
 
 .. code-block:: bash
 
+   hatch run all
+
+The combined ``all`` script runs tests, lint, and type checks in sequence. To invoke an individual stage, use:
+
+.. code-block:: bash
+
    hatch run test
    hatch run lint
    hatch run typecheck
