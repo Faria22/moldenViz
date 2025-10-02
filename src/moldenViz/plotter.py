@@ -7,6 +7,7 @@ from typing import Optional
 
 import numpy as np
 import pyvista as pv
+from matplotlib.colors import LinearSegmentedColormap
 from numpy.typing import NDArray
 from pyvistaqt import BackgroundPlotter
 
@@ -68,6 +69,8 @@ class Plotter:
         The contour level for molecular orbital visualization.
     opacity : float
         The opacity of the molecular orbital in the visualization.
+    cmap : str | LinearSegmentedColormap
+        The colormap used for molecular orbital visualization.
 
     Raises
     ------
@@ -145,6 +148,13 @@ class Plotter:
         # Values for MO, not the molecule
         self.contour = config.mo.contour
         self.opacity = config.mo.opacity
+
+        # Set colormap based on configuration
+        if config.mo.custom_colors is not None:
+            # Create custom colormap from two colors
+            self.cmap = LinearSegmentedColormap.from_list('custom_mo', config.mo.custom_colors)
+        else:
+            self.cmap = config.mo.color_scheme
 
         _OrbitalSelectionScreen(self, self.tk_root)
 
@@ -675,7 +685,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
                 clim=[-self.plotter.contour, self.plotter.contour],
                 opacity=self.plotter.opacity,
                 show_scalar_bar=False,
-                cmap='bwr',
+                cmap=self.plotter.cmap,
                 smooth_shading=True,
             )
 
