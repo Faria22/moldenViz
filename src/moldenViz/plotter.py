@@ -246,6 +246,10 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.plotter = plotter
         self.current_orb_ind = -1  # Start with no orbital shown
 
+        # Initialize export window attributes
+        self._export_window = None
+        self._export_current_orb_radio = None
+
         # Create menubar
         menubar = tk.Menu(self)
         self.config(menu=menubar)
@@ -726,26 +730,43 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
         # File format selection
         ttk.Label(main_frame, text='Export Format:', font=('TkDefaultFont', 10, 'bold')).grid(
-            row=0, column=0, columnspan=2, sticky=tk.W, pady=(0, 10),
+            row=0,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            pady=(0, 10),
         )
 
         format_var = tk.StringVar(value='vtk')
         ttk.Radiobutton(main_frame, text='VTK (.vtk) - All orbitals or single', variable=format_var, value='vtk').grid(
-            row=1, column=0, columnspan=2, sticky=tk.W, padx=20,
+            row=1,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            padx=20,
         )
         ttk.Radiobutton(
-            main_frame, text='Gaussian Cube (.cube) - Single orbital only', variable=format_var, value='cube',
+            main_frame,
+            text='Gaussian Cube (.cube) - Single orbital only',
+            variable=format_var,
+            value='cube',
         ).grid(row=2, column=0, columnspan=2, sticky=tk.W, padx=20, pady=(5, 15))
 
         # Orbital selection
         ttk.Label(main_frame, text='Orbital Selection:', font=('TkDefaultFont', 10, 'bold')).grid(
-            row=3, column=0, columnspan=2, sticky=tk.W, pady=(0, 10),
+            row=3,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            pady=(0, 10),
         )
 
         scope_var = tk.StringVar(value='current')
+        # Use 1-based indexing for display (add 1 to current_orb_ind)
+        orbital_display = self.current_orb_ind + 1 if self.current_orb_ind >= 0 else 'None'
         current_orb_radio = ttk.Radiobutton(
             main_frame,
-            text=f'Current orbital (#{self.current_orb_ind if self.current_orb_ind >= 0 else "None"})',
+            text=f'Current orbital (#{orbital_display})',
             variable=scope_var,
             value='current',
         )
@@ -756,14 +777,27 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         all_orb_radio = ttk.Radiobutton(main_frame, text='All orbitals', variable=scope_var, value='all')
         all_orb_radio.grid(row=5, column=0, columnspan=2, sticky=tk.W, padx=20, pady=(5, 0))
 
+        # Store references for updating the label dynamically
+        self._export_window = export_window
+        self._export_current_orb_radio = current_orb_radio
+
+        # Clean up references when window is closed
+        def on_close() -> None:
+            self._export_window = None
+            self._export_current_orb_radio = None
+            export_window.destroy()
+
         # Buttons
         button_frame = ttk.Frame(main_frame)
         button_frame.grid(row=6, column=0, columnspan=2, pady=(20, 0))
 
         ttk.Button(
-            button_frame, text='Export', command=lambda: self._do_export(export_window, format_var, scope_var),
+            button_frame,
+            text='Export',
+            command=lambda: self._do_export(export_window, format_var, scope_var),
         ).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text='Cancel', command=export_window.destroy).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text='Cancel', command=on_close).pack(side=tk.LEFT, padx=5)
+        export_window.protocol('WM_DELETE_WINDOW', on_close)
 
     def update_button_states(self) -> None:
         """Synchronize navigation button state with the current orbital index."""
@@ -771,6 +805,19 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         can_go_next = self.current_orb_ind < len(self.plotter.tabulator._parser.mos) - 1  # noqa: SLF001
         self.prev_button.config(state=tk.NORMAL if can_go_prev else tk.DISABLED)
         self.next_button.config(state=tk.NORMAL if can_go_next else tk.DISABLED)
+        self._update_export_dialog_label()
+
+    def _update_export_dialog_label(self) -> None:
+        """Update the export dialog label to reflect the current orbital index."""
+        if hasattr(self, '_export_current_orb_radio') and self._export_current_orb_radio is not None:
+            # Use 1-based indexing for display (add 1 to current_orb_ind)
+            orbital_display = self.current_orb_ind + 1 if self.current_orb_ind >= 0 else 'None'
+            self._export_current_orb_radio.config(text=f'Current orbital (#{orbital_display})')
+            # Update the state based on whether an orbital is selected
+            if self.current_orb_ind < 0:
+                self._export_current_orb_radio.config(state=tk.DISABLED)
+            else:
+                self._export_current_orb_radio.config(state=tk.NORMAL)
 
     def plot_orbital(self, orb_ind: int) -> None:
         """Render the selected orbital isosurface in the PyVista plotter.
