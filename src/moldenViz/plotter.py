@@ -662,6 +662,59 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.update_button_states()
         self.plot_orbital(self.current_orb_ind)
 
+    def _do_export(self, export_window: tk.Toplevel, format_var: tk.StringVar, scope_var: tk.StringVar) -> None:
+        """Execute the export operation.
+
+        Parameters
+        ----------
+        export_window : tk.Toplevel
+            The export dialog window to close on success.
+        format_var : tk.StringVar
+            Variable holding the selected export format ('vtk' or 'cube').
+        scope_var : tk.StringVar
+            Variable holding the selected scope ('current' or 'all').
+        """
+        file_format = format_var.get()
+        scope = scope_var.get()
+
+        # Validate selection
+        if scope == 'current' and self.current_orb_ind < 0:
+            messagebox.showerror('Export Error', 'No orbital is currently selected.')
+            return
+
+        if file_format == 'cube' and scope == 'all':
+            messagebox.showerror(
+                'Export Error',
+                'Cube format only supports exporting a single orbital.\n\n'
+                'Please select "Current orbital" or choose VTK format.',
+            )
+            return
+
+        # Determine file extension and default name
+        ext = '.vtk' if file_format == 'vtk' else '.cube'
+        default_name = f'orbitals_all{ext}' if scope == 'all' else f'orbital_{self.current_orb_ind}{ext}'
+
+        # Show file save dialog
+        file_path = filedialog.asksaveasfilename(
+            parent=export_window,
+            title='Save Orbital Export',
+            defaultextension=ext,
+            initialfile=default_name,
+            filetypes=[('VTK Files', '*.vtk'), ('Gaussian Cube Files', '*.cube'), ('All Files', '*.*')],
+        )
+
+        if not file_path:
+            return  # User cancelled
+
+        # Perform the export
+        try:
+            mo_index = self.current_orb_ind if scope == 'current' else None
+            self.plotter.tabulator.export(file_path, mo_index=mo_index)
+            messagebox.showinfo('Export Successful', f'Orbital(s) exported successfully to:\n{file_path}')
+            export_window.destroy()
+        except (RuntimeError, ValueError) as e:
+            messagebox.showerror('Export Failed', f'Failed to export orbital(s):\n\n{e!s}')
+
     def export_orbitals_dialog(self) -> None:
         """Open a dialog to configure and export molecular orbitals."""
         export_window = tk.Toplevel(self)
@@ -707,50 +760,9 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         button_frame = ttk.Frame(main_frame)
         button_frame.grid(row=6, column=0, columnspan=2, pady=(20, 0))
 
-        def do_export() -> None:
-            """Execute the export operation."""
-            file_format = format_var.get()
-            scope = scope_var.get()
-
-            # Validate selection
-            if scope == 'current' and self.current_orb_ind < 0:
-                messagebox.showerror('Export Error', 'No orbital is currently selected.')
-                return
-
-            if file_format == 'cube' and scope == 'all':
-                messagebox.showerror(
-                    'Export Error',
-                    'Cube format only supports exporting a single orbital.\n\n'
-                    'Please select "Current orbital" or choose VTK format.',
-                )
-                return
-
-            # Determine file extension and default name
-            ext = '.vtk' if file_format == 'vtk' else '.cube'
-            default_name = f'orbitals_all{ext}' if scope == 'all' else f'orbital_{self.current_orb_ind}{ext}'
-
-            # Show file save dialog
-            file_path = filedialog.asksaveasfilename(
-                parent=export_window,
-                title='Save Orbital Export',
-                defaultextension=ext,
-                initialfile=default_name,
-                filetypes=[('VTK Files', '*.vtk'), ('Gaussian Cube Files', '*.cube'), ('All Files', '*.*')],
-            )
-
-            if not file_path:
-                return  # User cancelled
-
-            # Perform the export
-            try:
-                mo_index = self.current_orb_ind if scope == 'current' else None
-                self.plotter.tabulator.export(file_path, mo_index=mo_index)
-                messagebox.showinfo('Export Successful', f'Orbital(s) exported successfully to:\n{file_path}')
-                export_window.destroy()
-            except (RuntimeError, ValueError) as e:
-                messagebox.showerror('Export Failed', f'Failed to export orbital(s):\n\n{e!s}')
-
-        ttk.Button(button_frame, text='Export', command=do_export).pack(side=tk.LEFT, padx=5)
+        ttk.Button(
+            button_frame, text='Export', command=lambda: self._do_export(export_window, format_var, scope_var),
+        ).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text='Cancel', command=export_window.destroy).pack(side=tk.LEFT, padx=5)
 
     def update_button_states(self) -> None:
