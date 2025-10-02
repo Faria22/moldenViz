@@ -25,11 +25,11 @@ Always run the test suite and static checks before pushing:
 
 .. code-block:: bash
 
-   pytest
-   ruff check src tests
-   basedpyright src tests
+   hatch run test
+   hatch run lint
+   hatch run typecheck
 
-Linting auto-fixes are available with ``ruff format src tests``.
+Linting auto-fixes are available with ``hatch run lint --fix``.
 
 Build Documentation
 -------------------
