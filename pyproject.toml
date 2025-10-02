@@ -62,6 +62,7 @@ dependencies = [
 lint = "ruff check {args:src tests}"
 typecheck = "basedpyright {args:src tests}"
 test = "pytest {args:tests}"
+all = ["lint", "typecheck", "test"]
 
 [tool.basedpyright]
 typeCheckingMode = "basic"
