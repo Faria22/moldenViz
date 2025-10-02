@@ -174,7 +174,6 @@ Tighten radius settings for a very large biomolecule to keep rendering performan
 
    [molecule.bond]
    radius = 0.05
-   show = true
 
 For troubleshooting tips tied to these overrides, see :doc:`Troubleshooting <troubleshooting>`, especially the sections on configuration validation and export errors.
 
