@@ -9,7 +9,7 @@ import pyvista as pv
 from matplotlib.colors import LinearSegmentedColormap
 from numpy.typing import NDArray
 from pyvistaqt import BackgroundPlotter
-from qtpy.QtWidgets import QAction  # pyright: ignore[reportPrivateImportUsage]
+from qtpy.QtWidgets import QAction, QMenu  # pyright: ignore[reportPrivateImportUsage]
 from shiboken6 import isValid
 
 from ._config_module import Config
@@ -184,16 +184,28 @@ class Plotter:
 
     def _add_orbital_menus_to_pv_plotter(self) -> None:
         """Add Settings and Export menus to the PyVista plotter's main menu."""
-        # Create Settings action
-        settings_action = QAction('Settings', self.pv_plotter.app_window)
-        settings_action.triggered.connect(self.selection_screen.settings_screen)
+        # Create Settings menu with dropdown
+        settings_menu = QMenu('Settings', self.pv_plotter.app_window)
+
+        # Add Settings submenu items
+        grid_settings_action = QAction('Grid Settings', self.pv_plotter.app_window)
+        grid_settings_action.triggered.connect(self.selection_screen.grid_settings_screen)
+        settings_menu.addAction(grid_settings_action)
+
+        mo_settings_action = QAction('MO Settings', self.pv_plotter.app_window)
+        mo_settings_action.triggered.connect(self.selection_screen.mo_settings_screen)
+        settings_menu.addAction(mo_settings_action)
+
+        molecule_settings_action = QAction('Molecule Settings', self.pv_plotter.app_window)
+        molecule_settings_action.triggered.connect(self.selection_screen.molecule_settings_screen)
+        settings_menu.addAction(molecule_settings_action)
 
         # Create Export action
         export_action = QAction('Export', self.pv_plotter.app_window)
         export_action.triggered.connect(self.selection_screen.export_orbitals_dialog)
 
-        # Add actions to main menu
-        self.pv_plotter.main_menu.addAction(settings_action)
+        # Add menus to main menu bar
+        self.pv_plotter.main_menu.addMenu(settings_menu)
         self.pv_plotter.main_menu.addAction(export_action)
 
     def _clear_all(self) -> None:
