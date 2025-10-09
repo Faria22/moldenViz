@@ -10,7 +10,7 @@ import pyvista as pv
 from matplotlib.colors import LinearSegmentedColormap
 from numpy.typing import NDArray
 from pyvistaqt import BackgroundPlotter
-from qtpy.QtWidgets import QAction
+from qtpy.QtWidgets import QAction  # pyright: ignore[reportPrivateImportUsage]
 from shiboken6 import isValid
 
 from ._config_module import Config
