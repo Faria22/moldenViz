@@ -1,4 +1,5 @@
 smooth_shading = true
+background_color = 'white'
 
 [grid]
 min_radius = 5
