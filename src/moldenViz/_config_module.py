@@ -175,9 +175,34 @@ class MainConfig(BaseModel):
     """Main configuration model for moldenViz."""
 
     smooth_shading: bool = Field(True, description='Enable smooth shading')
+    background_color: str = Field('white', description='Background color for 3D visualization')
     grid: GridConfig = Field(default_factory=GridConfig)
     mo: MOConfig = Field(default_factory=MOConfig)
     molecule: MoleculeConfig = Field(default_factory=MoleculeConfig)
+
+    @field_validator('background_color')
+    @classmethod
+    def validate_background_color(cls, v: str) -> str:
+        """Validate background color using matplotlib.colors.is_color_like.
+
+        Parameters
+        ----------
+        v : str
+            The background color to validate.
+
+        Returns
+        -------
+        str
+            The validated background color string.
+
+        Raises
+        ------
+        ValueError
+            If the background color is not a valid matplotlib color.
+        """
+        if mcolors.is_color_like(v):
+            return v
+        raise ValueError(f'Background color must be a valid matplotlib color. Got: {v}')
 
     class ConfigDict:
         populate_by_name = True

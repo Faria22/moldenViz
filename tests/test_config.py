@@ -75,3 +75,24 @@ def test_custom_colors_with_empty_list_raises_error() -> None:
     """Test that empty list for custom_colors raises ValidationError."""
     with pytest.raises(ValidationError, match='at least 2 items'):
         config_module.MOConfig(custom_colors=[])
+
+
+def test_default_background_color() -> None:
+    """Test that default background color is 'white'."""
+    main_config = config_module.MainConfig()
+    assert main_config.background_color == 'white'
+
+
+def test_valid_background_color() -> None:
+    """Test that valid matplotlib colors are accepted for background."""
+    valid_colors = ['white', 'black', 'red', 'blue', '#FF0000', '#FFFFFF', 'lightgray']
+    for color in valid_colors:
+        main_config = config_module.MainConfig(background_color=color)
+        assert main_config.background_color == color
+
+
+def test_invalid_background_color_raises_error() -> None:
+    """Test that invalid color for background raises ValidationError."""
+    message = 'Background color must be a valid matplotlib color'
+    with pytest.raises(ValidationError, match=message):
+        config_module.MainConfig(background_color='not_a_valid_color')
