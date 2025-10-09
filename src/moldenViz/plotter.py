@@ -289,8 +289,8 @@ class Plotter:
 class _OrbitalSelectionScreen(tk.Toplevel):
     """Modal dialog that lets users browse and configure molecular orbitals."""
 
-    SPHERICAL_GRID_SETTINGS_WINDOW_SIZE = '600x500'
-    CARTESIAN_GRID_SETTINGS_WINDOW_SIZE = '800x500'
+    SPHERICAL_GRID_SETTINGS_WINDOW_SIZE = '400x350'
+    CARTESIAN_GRID_SETTINGS_WINDOW_SIZE = '650x400'
 
     def __init__(self, plotter: Plotter, tk_master: tk.Tk) -> None:
         """Create the orbital selection dialog for a plotter instance.
@@ -720,7 +720,6 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         if self.grid_type_radio_var.get() == GridType.SPHERICAL.value:
             self.grid_settings_window.geometry(self.SPHERICAL_GRID_SETTINGS_WINDOW_SIZE)
             self.cart_grid_params_frame.grid_forget()
-            self.grid_settings_window.geometry()
             self.sph_grid_params_frame.grid(row=2, column=0, padx=5, pady=5, rowspan=6, columnspan=4)
             self.sph_grid_params_frame_setup()
         else:
