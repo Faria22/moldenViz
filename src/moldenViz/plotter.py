@@ -232,12 +232,13 @@ class Plotter:
 
     def _connect_pv_plotter_close_signal(self) -> None:
         """Connect the PyVista plotter close signal to handle closing both windows."""
+
         def on_pv_plotter_close() -> None:
             """Handle PyVista plotter close event by closing the selection screen and quitting."""
             if self.on_screen:
                 self.on_screen = False
-                if self.selction_screen and self.selction_screen.winfo_exists():
-                    self.selction_screen.destroy()
+                if self.selection_screen and self.selection_screen.winfo_exists():
+                    self.selection_screen.destroy()
                 if self.tk_root and self._no_prev_tk_root:
                     self.tk_root.quit()
 
