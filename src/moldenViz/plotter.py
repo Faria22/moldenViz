@@ -10,6 +10,7 @@ import pyvista as pv
 from matplotlib.colors import LinearSegmentedColormap
 from numpy.typing import NDArray
 from pyvistaqt import BackgroundPlotter
+from qtpy.QtWidgets import QAction
 from shiboken6 import isValid
 
 from ._config_module import Config
@@ -160,6 +161,7 @@ class Plotter:
             self.cmap = config.mo.color_scheme
 
         self.selction_screen = _OrbitalSelectionScreen(self, self.tk_root)
+        self._add_orbital_menus_to_pv_plotter()
 
         self.tk_root.mainloop()
 
@@ -180,6 +182,20 @@ class Plotter:
                     pass
                 action.triggered.connect(self._clear_all)
                 break
+
+    def _add_orbital_menus_to_pv_plotter(self) -> None:
+        """Add Settings and Export menus to the PyVista plotter's main menu."""
+        # Create Settings action
+        settings_action = QAction('Settings', self.pv_plotter.app_window)
+        settings_action.triggered.connect(self.selction_screen.settings_screen)
+
+        # Create Export action
+        export_action = QAction('Export', self.pv_plotter.app_window)
+        export_action.triggered.connect(self.selction_screen.export_orbitals_dialog)
+
+        # Add actions to main menu
+        self.pv_plotter.main_menu.addAction(settings_action)
+        self.pv_plotter.main_menu.addAction(export_action)
 
     def _clear_all(self) -> None:
         """Clear all actors from the plotter, including molecule and orbitals."""
@@ -283,20 +299,6 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self._export_window = None
         self._export_current_orb_radio = None
         self._export_all_orb_radio = None
-
-        # Create menubar
-        menubar = tk.Menu(self)
-        self.config(menu=menubar)
-
-        # Add Settings menu
-        settings_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label='Settings', menu=settings_menu)
-        settings_menu.add_command(label='Open Settings', command=self.settings_screen)
-
-        # Add Export menu
-        export_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label='Export', menu=export_menu)
-        export_menu.add_command(label='Export Orbital(s)...', command=self.export_orbitals_dialog)
 
         nav_frame = ttk.Frame(self)
         nav_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)

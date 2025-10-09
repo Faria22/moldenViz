@@ -53,11 +53,11 @@ The ``Plotter`` class renders atoms, bonds, and (optionally) orbital isosurfaces
 Exporting from the GUI
 ~~~~~~~~~~~~~~~~~~~~~~
 
-When using the ``Plotter`` GUI, you can export molecular orbitals directly from the Orbitals window:
+When using the ``Plotter`` GUI, you can export molecular orbitals directly from the PyVista plotter window:
 
-1. Open the Orbitals window (appears automatically when plotting with orbitals enabled)
-2. Click the **Export** menu in the menubar
-3. Select **Export Orbital(s)...** to open the export dialog
+1. Open the plotter (the Orbitals window appears automatically when plotting with orbitals enabled)
+2. Click the **Export** menu in the PyVista plotter menubar (next to File, View, and Tools)
+3. The export dialog will open
 4. Choose your export format:
 
    - **VTK (.vtk)**: Exports single orbital or all orbitals in a multi-block VTK file
