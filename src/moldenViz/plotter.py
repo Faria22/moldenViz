@@ -120,6 +120,7 @@ class Plotter:
                 self.tk_root.withdraw()  # Hides window
 
         self.pv_plotter = BackgroundPlotter(editor=False)
+        self.pv_plotter.set_background(config.background_color)
         self.pv_plotter.show_axes()
         self._override_clear_all_button()
         self.molecule_actors = self.molecule.add_meshes(self.pv_plotter, self.molecule_opacity)
