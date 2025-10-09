@@ -516,10 +516,18 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         reset_button.grid(row=row, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
         row += 1
 
-        # Apply settings button (note: requires molecule reload for some settings)
-        apply_button = ttk.Button(
-            settings_frame, text='Apply (Note: Some settings require reload)', command=self.apply_molecule_settings,
+        # Note label about settings requiring reload
+        note_label = ttk.Label(
+            settings_frame,
+            text='Note: Some settings require reloading the molecule to take effect',
+            font=('TkDefaultFont', 8, 'italic'),
+            foreground='gray',
         )
+        note_label.grid(row=row, column=0, columnspan=2, padx=5, pady=(5, 0), sticky='ew')
+        row += 1
+
+        # Apply settings button
+        apply_button = ttk.Button(settings_frame, text='Apply', command=self.apply_molecule_settings)
         apply_button.grid(row=row, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
 
     def place_grid_params_frame(self) -> None:
@@ -842,14 +850,28 @@ class _OrbitalSelectionScreen(tk.Toplevel):
             changed_settings.append('Show Atoms')
         if self.show_bonds_var.get() != config.molecule.bond.show:
             changed_settings.append('Show Bonds')
-        if float(self.bond_max_length_entry.get()) != config.molecule.bond.max_length:
-            changed_settings.append('Bond Max Length')
+
+        # Validate numeric inputs with error handling
+        try:
+            bond_max_length = float(self.bond_max_length_entry.get())
+            if bond_max_length != config.molecule.bond.max_length:
+                changed_settings.append('Bond Max Length')
+        except ValueError:
+            messagebox.showerror('Invalid Input', 'Bond Max Length must be a valid number.')
+            return
+
         if self.bond_color_type_var.get() != config.molecule.bond.color_type:
             changed_settings.append('Bond Color Type')
         if self.bond_color_entry.get() != config.molecule.bond.color:
             changed_settings.append('Bond Color')
-        if float(self.bond_radius_entry.get()) != config.molecule.bond.radius:
-            changed_settings.append('Bond Radius')
+
+        try:
+            bond_radius = float(self.bond_radius_entry.get())
+            if bond_radius != config.molecule.bond.radius:
+                changed_settings.append('Bond Radius')
+        except ValueError:
+            messagebox.showerror('Invalid Input', 'Bond Radius must be a valid number.')
+            return
 
         if changed_settings:
             messagebox.showinfo(
