@@ -290,7 +290,9 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         # Add Settings menu
         settings_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label='Settings', menu=settings_menu)
-        settings_menu.add_command(label='Open Settings', command=self.settings_screen)
+        settings_menu.add_command(label='Grid Settings', command=self.grid_settings_screen)
+        settings_menu.add_command(label='MO Settings', command=self.mo_settings_screen)
+        settings_menu.add_command(label='Molecule Settings', command=self.molecule_settings_screen)
 
         # Add Export menu
         export_menu = tk.Menu(menubar, tearoff=0)
@@ -328,54 +330,21 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.bind('<Control-q>', lambda _event: self.on_close())
         self.bind('<Control-w>', lambda _event: self.on_close())
 
-    def settings_screen(self) -> None:
-        """Open the settings window for molecule and grid configuration."""
-        self.settings_window = tk.Toplevel(self)
-        self.settings_window.title('Settings')
+    def grid_settings_screen(self) -> None:
+        """Open the grid settings window."""
+        self.grid_settings_window = tk.Toplevel(self)
+        self.grid_settings_window.title('Grid Settings')
 
-        settings_frame = ttk.Frame(self.settings_window)
+        settings_frame = ttk.Frame(self.grid_settings_window)
         settings_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        # Contour level
-        contour_label = ttk.Label(settings_frame, text='Molecular Orbital Contour:')
-        contour_label.grid(row=0, column=0, padx=5, pady=5)
-        self.contour_entry = ttk.Entry(settings_frame)
-        self.contour_entry.insert(0, str(self.plotter.contour))
-        self.contour_entry.grid(row=1, column=0, padx=5, pady=5)
-
-        # Opacity
-        opacity_label = ttk.Label(settings_frame)
-        opacity_label.grid(row=2, column=0, padx=5, pady=5)
-        self.opacity_scale = ttk.Scale(
-            settings_frame,
-            length=150,
-            command=lambda val: opacity_label.config(text=f'Molecular Orbital Opacity: {float(val):.2f}'),
-        )
-        self.opacity_scale.set(self.plotter.opacity)
-        self.opacity_scale.grid(row=3, column=0, padx=5, pady=5)
-
-        # Molecule Opacity
-        molecule_opacity_label = ttk.Label(settings_frame)
-        molecule_opacity_label.grid(row=4, column=0, padx=5, pady=5)
-        self.molecule_opacity_scale = ttk.Scale(
-            settings_frame,
-            length=150,
-            command=lambda val: molecule_opacity_label.config(text=f'Molecule Opacity: {float(val):.2f}'),
-        )
-        self.molecule_opacity_scale.set(self.plotter.molecule_opacity)
-        self.molecule_opacity_scale.grid(row=5, column=0, padx=5, pady=5)
-
-        # Toggle molecule visibility
-        toggle_mol_button = ttk.Button(settings_frame, text='Toggle Molecule', command=self.plotter.toggle_molecule)
-        toggle_mol_button.grid(row=6, column=0, padx=5, pady=5)
-
         # Grid parameters
-        ttk.Label(settings_frame, text='MO Grid parameters').grid(row=0, column=1, padx=5, pady=5, columnspan=4)
+        ttk.Label(settings_frame, text='MO Grid parameters').grid(row=0, column=0, padx=5, pady=5, columnspan=5)
 
         self.grid_type_radio_var = tk.StringVar()
         self.grid_type_radio_var.set(self.plotter.tabulator._grid_type.value)  # noqa: SLF001
 
-        ttk.Label(settings_frame, text='Spherical grid:').grid(row=1, column=1, padx=5, pady=5)
+        ttk.Label(settings_frame, text='Spherical grid:').grid(row=1, column=0, padx=5, pady=5)
         sph_grid_type_button = ttk.Radiobutton(
             settings_frame,
             variable=self.grid_type_radio_var,
@@ -383,7 +352,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
             command=self.place_grid_params_frame,
         )
 
-        ttk.Label(settings_frame, text='Cartesian grid:').grid(row=1, column=3, padx=5, pady=5)
+        ttk.Label(settings_frame, text='Cartesian grid:').grid(row=1, column=2, padx=5, pady=5)
         cart_grid_type_button = ttk.Radiobutton(
             settings_frame,
             variable=self.grid_type_radio_var,
@@ -391,8 +360,8 @@ class _OrbitalSelectionScreen(tk.Toplevel):
             command=self.place_grid_params_frame,
         )
 
-        sph_grid_type_button.grid(row=1, column=2, padx=5, pady=5)
-        cart_grid_type_button.grid(row=1, column=4, padx=5, pady=5)
+        sph_grid_type_button.grid(row=1, column=1, padx=5, pady=5)
+        cart_grid_type_button.grid(row=1, column=3, padx=5, pady=5)
 
         self.sph_grid_params_frame = self.sph_grid_params_frame_widgets(settings_frame)
         self.cart_grid_params_frame = self.cart_grid_params_frame_widgets(settings_frame)
@@ -400,25 +369,96 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.place_grid_params_frame()
 
         # Reset button
-        reset_button = ttk.Button(settings_frame, text='Reset', command=self.reset_settings)
+        reset_button = ttk.Button(settings_frame, text='Reset', command=self.reset_grid_settings)
         reset_button.grid(row=8, column=0, padx=5, pady=5, columnspan=5)
 
-        # Save settings button
-        save_button = ttk.Button(settings_frame, text='Apply', command=self.apply_settings)
-        save_button.grid(row=9, column=0, padx=5, pady=5, columnspan=5)
+        # Apply settings button
+        apply_button = ttk.Button(settings_frame, text='Apply', command=self.apply_grid_settings)
+        apply_button.grid(row=9, column=0, padx=5, pady=5, columnspan=5)
+
+    def mo_settings_screen(self) -> None:
+        """Open the molecular orbital settings window."""
+        self.mo_settings_window = tk.Toplevel(self)
+        self.mo_settings_window.title('MO Settings')
+
+        settings_frame = ttk.Frame(self.mo_settings_window)
+        settings_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Contour level
+        contour_label = ttk.Label(settings_frame, text='Molecular Orbital Contour:')
+        contour_label.grid(row=0, column=0, padx=5, pady=5, sticky='w')
+        self.contour_entry = ttk.Entry(settings_frame)
+        self.contour_entry.insert(0, str(self.plotter.contour))
+        self.contour_entry.grid(row=1, column=0, padx=5, pady=5, sticky='ew')
+
+        # Opacity
+        opacity_label = ttk.Label(settings_frame)
+        opacity_label.grid(row=2, column=0, padx=5, pady=5, sticky='w')
+        self.opacity_scale = ttk.Scale(
+            settings_frame,
+            length=200,
+            command=lambda val: opacity_label.config(text=f'Molecular Orbital Opacity: {float(val):.2f}'),
+        )
+        self.opacity_scale.set(self.plotter.opacity)
+        self.opacity_scale.grid(row=3, column=0, padx=5, pady=5, sticky='ew')
+
+        # Configure grid column weight for proper resizing
+        settings_frame.columnconfigure(0, weight=1)
+
+        # Reset button
+        reset_button = ttk.Button(settings_frame, text='Reset', command=self.reset_mo_settings)
+        reset_button.grid(row=4, column=0, padx=5, pady=5, sticky='ew')
+
+        # Apply settings button
+        apply_button = ttk.Button(settings_frame, text='Apply', command=self.apply_mo_settings)
+        apply_button.grid(row=5, column=0, padx=5, pady=5, sticky='ew')
+
+    def molecule_settings_screen(self) -> None:
+        """Open the molecule settings window."""
+        self.molecule_settings_window = tk.Toplevel(self)
+        self.molecule_settings_window.title('Molecule Settings')
+
+        settings_frame = ttk.Frame(self.molecule_settings_window)
+        settings_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Molecule Opacity
+        molecule_opacity_label = ttk.Label(settings_frame)
+        molecule_opacity_label.grid(row=0, column=0, padx=5, pady=5, sticky='w')
+        self.molecule_opacity_scale = ttk.Scale(
+            settings_frame,
+            length=200,
+            command=lambda val: molecule_opacity_label.config(text=f'Molecule Opacity: {float(val):.2f}'),
+        )
+        self.molecule_opacity_scale.set(self.plotter.molecule_opacity)
+        self.molecule_opacity_scale.grid(row=1, column=0, padx=5, pady=5, sticky='ew')
+
+        # Toggle molecule visibility
+        toggle_mol_button = ttk.Button(settings_frame, text='Toggle Molecule', command=self.plotter.toggle_molecule)
+        toggle_mol_button.grid(row=2, column=0, padx=5, pady=5, sticky='ew')
+
+        # Configure grid column weight for proper resizing
+        settings_frame.columnconfigure(0, weight=1)
+
+        # Reset button
+        reset_button = ttk.Button(settings_frame, text='Reset', command=self.reset_molecule_settings)
+        reset_button.grid(row=3, column=0, padx=5, pady=5, sticky='ew')
+
+        # Apply settings button
+        apply_button = ttk.Button(settings_frame, text='Apply', command=self.apply_molecule_settings)
+        apply_button.grid(row=4, column=0, padx=5, pady=5, sticky='ew')
 
     def place_grid_params_frame(self) -> None:
         """Render the parameter frame that matches the selected grid type."""
         if self.grid_type_radio_var.get() == GridType.SPHERICAL.value:
-            self.settings_window.geometry(self.SPHERICAL_GRID_SETTINGS_WINDOW_SIZE)
+            self.grid_settings_window.geometry(self.SPHERICAL_GRID_SETTINGS_WINDOW_SIZE)
             self.cart_grid_params_frame.grid_forget()
-            self.settings_window.geometry()
-            self.sph_grid_params_frame.grid(row=2, column=1, padx=5, pady=5, rowspan=6, columnspan=4)
+            self.grid_settings_window.geometry()
+            self.sph_grid_params_frame.grid(row=2, column=0, padx=5, pady=5, rowspan=6, columnspan=4)
             self.sph_grid_params_frame_setup()
         else:
-            self.settings_window.geometry(self.CARTESIAN_GRID_SETTINGS_WINDOW_SIZE)
+            self.grid_settings_window.geometry(self.CARTESIAN_GRID_SETTINGS_WINDOW_SIZE)
             self.sph_grid_params_frame.grid_forget()
-            self.cart_grid_params_frame.grid(row=2, column=1, padx=5, pady=5, rowspan=6, columnspan=4)
+            self.cart_grid_params_frame.grid(row=2, column=0, padx=5, pady=5, rowspan=6, columnspan=4)
             self.cart_grid_params_frame_setup()
 
     def sph_grid_params_frame_widgets(self, master: ttk.Frame) -> ttk.Frame:
@@ -592,15 +632,8 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.z_max_entry.insert(0, str(z_max))
         self.z_num_points_entry.insert(0, str(z_num))
 
-    def reset_settings(self) -> None:
-        """Restore all settings widgets back to configuration defaults."""
-        self.contour_entry.delete(0, tk.END)
-        self.contour_entry.insert(0, str(config.mo.contour))
-
-        self.opacity_scale.set(config.mo.opacity)
-
-        self.molecule_opacity_scale.set(config.molecule.opacity)
-
+    def reset_grid_settings(self) -> None:
+        """Restore grid settings widgets back to configuration defaults."""
         self.grid_type_radio_var.set(GridType.SPHERICAL.value)
 
         self.radius_entry.delete(0, tk.END)
@@ -618,12 +651,21 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.phi_points_entry.delete(0, tk.END)
         self.phi_points_entry.insert(0, str(config.grid.spherical.num_phi_points))
 
-    def apply_settings(self) -> None:
-        """Validate UI inputs and apply the chosen rendering parameters."""
-        self.plotter.molecule_opacity = round(self.molecule_opacity_scale.get(), 2)
-        for actor in self.plotter.molecule_actors:
-            actor.GetProperty().SetOpacity(self.plotter.molecule_opacity)
+        self.place_grid_params_frame()
 
+    def reset_mo_settings(self) -> None:
+        """Restore MO settings widgets back to configuration defaults."""
+        self.contour_entry.delete(0, tk.END)
+        self.contour_entry.insert(0, str(config.mo.contour))
+
+        self.opacity_scale.set(config.mo.opacity)
+
+    def reset_molecule_settings(self) -> None:
+        """Restore molecule settings widgets back to configuration defaults."""
+        self.molecule_opacity_scale.set(config.molecule.opacity)
+
+    def apply_grid_settings(self) -> None:
+        """Validate UI inputs and apply the chosen grid parameters."""
         if self.grid_type_radio_var.get() == GridType.SPHERICAL.value:
             radius = float(self.radius_entry.get())
             if radius <= 0:
@@ -678,12 +720,26 @@ class _OrbitalSelectionScreen(tk.Toplevel):
             if not np.array_equal(new_grid, self.plotter.tabulator.grid):
                 self.plotter.update_mesh(x, y, z, GridType.CARTESIAN)
 
-        self.plotter.contour = float(self.contour_entry.get().strip())
+        # Replot the current orbital with the new grid
         self.plot_orbital(self.current_orb_ind)
 
+    def apply_mo_settings(self) -> None:
+        """Validate UI inputs and apply the chosen MO rendering parameters."""
+        self.plotter.contour = float(self.contour_entry.get().strip())
         self.plotter.opacity = round(self.opacity_scale.get(), 2)
+
+        # Replot the current orbital with the new settings
+        self.plot_orbital(self.current_orb_ind)
+
+        # Update opacity if actor exists
         if self.plotter.orb_actor:
             self.plotter.orb_actor.GetProperty().SetOpacity(self.plotter.opacity)
+
+    def apply_molecule_settings(self) -> None:
+        """Validate UI inputs and apply the chosen molecule rendering parameters."""
+        self.plotter.molecule_opacity = round(self.molecule_opacity_scale.get(), 2)
+        for actor in self.plotter.molecule_actors:
+            actor.GetProperty().SetOpacity(self.plotter.molecule_opacity)
 
     def next_plot(self) -> None:
         """Advance to the next molecular orbital."""
