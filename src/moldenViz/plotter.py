@@ -3,14 +3,13 @@
 import logging
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from typing import Optional
 
 import numpy as np
 import pyvista as pv
 from matplotlib.colors import LinearSegmentedColormap
 from numpy.typing import NDArray
 from pyvistaqt import BackgroundPlotter
-from qtpy.QtWidgets import QAction
+from qtpy.QtWidgets import QAction  # pyright: ignore[reportPrivateImportUsage]
 from shiboken6 import isValid
 
 from ._config_module import Config
@@ -85,8 +84,8 @@ class Plotter:
         self,
         source: str | list[str],
         only_molecule: bool = False,
-        tabulator: Optional[Tabulator] = None,
-        tk_root: Optional[tk.Tk] = None,
+        tabulator: Tabulator | None = None,
+        tk_root: tk.Tk | None = None,
     ) -> None:
         self.on_screen = True
 
@@ -160,7 +159,7 @@ class Plotter:
         else:
             self.cmap = config.mo.color_scheme
 
-        self.selction_screen = _OrbitalSelectionScreen(self, self.tk_root)
+        self.selection_screen = _OrbitalSelectionScreen(self, self.tk_root)
         self._add_orbital_menus_to_pv_plotter()
 
         self.tk_root.mainloop()
@@ -187,11 +186,11 @@ class Plotter:
         """Add Settings and Export menus to the PyVista plotter's main menu."""
         # Create Settings action
         settings_action = QAction('Settings', self.pv_plotter.app_window)
-        settings_action.triggered.connect(self.selction_screen.settings_screen)
+        settings_action.triggered.connect(self.selection_screen.settings_screen)
 
         # Create Export action
         export_action = QAction('Export', self.pv_plotter.app_window)
-        export_action.triggered.connect(self.selction_screen.export_orbitals_dialog)
+        export_action.triggered.connect(self.selection_screen.export_orbitals_dialog)
 
         # Add actions to main menu
         self.pv_plotter.main_menu.addAction(settings_action)
@@ -206,8 +205,8 @@ class Plotter:
         if self.orb_actor:
             self.pv_plotter.remove_actor(self.orb_actor)
             self.orb_actor = None
-            self.selction_screen.current_orb_ind = -1
-            self.selction_screen.update_button_states()
+            self.selection_screen.current_orb_ind = -1
+            self.selection_screen.update_button_states()
 
     def toggle_molecule(self) -> None:
         """Toggle the visibility of the molecule."""
@@ -1117,7 +1116,7 @@ class _OrbitalsTreeview(ttk.Treeview):
 
         super().__init__(selection_screen, columns=columns, show='headings', height=20)
 
-        for col, w in zip(columns, widths):
+        for col, w in zip(columns, widths, strict=False):
             self.heading(col, text=col)
             self.column(col, width=w)
 
