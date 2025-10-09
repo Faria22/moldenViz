@@ -57,6 +57,10 @@ class Plotter:
         The opacity of the molecule in the visualization.
     molecule_actors : list[pv.Actor]
         List of PyVista actors representing the molecule.
+    atom_actors : list[pv.Actor]
+        List of PyVista actors representing the atoms.
+    bond_actors : list[pv.Actor]
+        List of PyVista actors representing the bonds.
     tk_root : tk.Tk | None
         The Tkinter root window.
     pv_plotter : BackgroundPlotter
@@ -110,9 +114,6 @@ class Plotter:
         else:
             self.tabulator = Tabulator(source, only_molecule=only_molecule)
 
-        self.molecule = Molecule(self.tabulator._parser.atoms)  # noqa: SLF001
-        self.molecule_opacity = config.molecule.opacity
-
         if not only_molecule:
             self.tk_root = tk_root
             self._no_prev_tk_root = self.tk_root is None
@@ -124,7 +125,10 @@ class Plotter:
         self.pv_plotter.set_background(config.background_color)
         self.pv_plotter.show_axes()
         self._override_clear_all_button()
-        self.molecule_actors = self.molecule.add_meshes(self.pv_plotter, self.molecule_opacity)
+
+        self.molecule: Molecule
+        self.molecule_opacity = config.molecule.opacity
+        self.load_molecule(config)
 
         # If we want to have the molecular orbitals, we need to initiate Tk before Qt
         # That is why we have this weird if statement separated this way
@@ -164,6 +168,18 @@ class Plotter:
         self._add_orbital_menus_to_pv_plotter()
 
         self.tk_root.mainloop()
+
+    def load_molecule(self, config: Config) -> None:
+        """Reload the molecule from the parser data."""
+        self.molecule = Molecule(self.tabulator._parser.atoms, config)  # noqa: SLF001
+
+        for actor in self.molecule_actors if hasattr(self, 'molecule_actors') else []:
+            self.pv_plotter.remove_actor(actor)
+
+        self.molecule_actors, self.atom_actors, self.bond_actors = self.molecule.add_meshes(
+            self.pv_plotter,
+            self.molecule_opacity,
+        )
 
     def _override_clear_all_button(self) -> None:
         """Override the default "Clear All" action in the PyVista plotter's View menu."""
@@ -223,14 +239,74 @@ class Plotter:
             self.pv_plotter.remove_actor(self.orb_actor)
             self.orb_actor = None
             self.selection_screen.current_orb_ind = -1
-            self.selection_screen.update_button_states()
+            self.selection_screen.update_nav_button_states()
 
     def toggle_molecule(self) -> None:
         """Toggle the visibility of the molecule."""
-        if self.molecule_actors:
+        if not self.molecule_actors:
+            return
+
+        if self.are_bonds_visible() != self.are_atoms_visible():
+            if self.are_bonds_visible():
+                self.toggle_atoms()
+            else:
+                self.toggle_bonds()
+        else:
             for actor in self.molecule_actors:
                 actor.SetVisibility(not actor.GetVisibility())
             self.pv_plotter.update()
+
+        self.selection_screen.update_settings_button_states()
+
+    def toggle_atoms(self) -> None:
+        """Toggle the visibility of the molecule."""
+        if self.atom_actors:
+            for actor in self.atom_actors:
+                actor.SetVisibility(not actor.GetVisibility())
+            self.pv_plotter.update()
+
+    def toggle_bonds(self) -> None:
+        """Toggle the visibility of the molecule."""
+        if self.bond_actors:
+            for actor in self.bond_actors:
+                actor.SetVisibility(not actor.GetVisibility())
+            self.pv_plotter.update()
+
+    def is_molecule_visible(self) -> bool:
+        """Check if the molecule is currently visible in the plotter.
+
+        Returns
+        -------
+        bool
+            `True` if the molecule is visible, `False` otherwise.
+        """
+        if self.molecule_actors:
+            return bool(self.molecule_actors[0].GetVisibility())  # Check visibility of the first actor
+        return False
+
+    def are_atoms_visible(self) -> bool:
+        """Check if the atoms are currently visible in the plotter.
+
+        Returns
+        -------
+        bool
+            `True` if the atoms are visible, `False` otherwise.
+        """
+        if self.atom_actors:
+            return bool(self.atom_actors[0].GetVisibility())  # Check visibility of the first actor
+        return False
+
+    def are_bonds_visible(self) -> bool:
+        """Check if the bonds are currently visible in the plotter.
+
+        Returns
+        -------
+        bool
+            `True` if the bonds are visible, `False` otherwise.
+        """
+        if self.bond_actors:
+            return bool(self.bond_actors[0].GetVisibility())  # Check visibility of the first actor
+        return False
 
     def _create_mo_mesh(self) -> pv.StructuredGrid:
         """Create a mesh for the orbitals.
@@ -316,9 +392,6 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self._export_current_orb_radio = None
         self._export_all_orb_radio = None
 
-        # Initialize preference for showing persistent changes popup
-        self._show_persistent_changes_popup = True
-
         nav_frame = ttk.Frame(self)
         nav_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
@@ -328,7 +401,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.next_button = ttk.Button(nav_frame, text='Next >>', command=self.next_plot)
         self.next_button.pack(side=tk.RIGHT, padx=5, pady=10)
 
-        self.update_button_states()  # Update buttons for initial state
+        self.update_nav_button_states()  # Update buttons for initial state
 
         self.orb_tv = _OrbitalsTreeview(self)
         self.orb_tv.populate_tree(self.plotter.tabulator._parser.mos)  # noqa: SLF001
@@ -410,6 +483,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.contour_entry = ttk.Entry(settings_frame)
         self.contour_entry.insert(0, str(self.plotter.contour))
         self.contour_entry.grid(row=1, column=0, padx=5, pady=5, sticky='ew')
+
         # Bind to apply changes on Enter key or focus out
         self.contour_entry.bind('<Return>', lambda _e: self.apply_mo_contour())
         self.contour_entry.bind('<FocusOut>', lambda _e: self.apply_mo_contour())
@@ -440,6 +514,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.plotter.opacity = opacity
         if self.plotter.orb_actor:
             self.plotter.orb_actor.GetProperty().SetOpacity(opacity)
+
         # Update label
         for widget in self.mo_settings_window.winfo_children():
             for child in widget.winfo_children():
@@ -457,6 +532,14 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         except ValueError:
             pass  # Ignore invalid input
 
+    def update_settings_button_states(self) -> None:
+        """Update the state of the settings buttons based on current plotter state."""
+        self.show_atoms_var.set(self.plotter.are_atoms_visible())
+        self.show_bonds_var.set(self.plotter.are_bonds_visible())
+
+        config.molecule.atom.show = self.plotter.are_atoms_visible()
+        config.molecule.bond.show = self.plotter.are_bonds_visible()
+
     def molecule_settings_screen(self) -> None:
         """Open the molecule settings window."""
         self.molecule_settings_window = tk.Toplevel(self)
@@ -465,83 +548,65 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         settings_frame = ttk.Frame(self.molecule_settings_window)
         settings_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        row = 0
-
         # Molecule Opacity
         molecule_opacity_label = ttk.Label(settings_frame)
-        molecule_opacity_label.grid(row=row, column=0, columnspan=2, padx=5, pady=5, sticky='w')
-        row += 1
+        molecule_opacity_label.grid(row=0, column=0, columnspan=2, padx=5, pady=5, sticky='w')
         self.molecule_opacity_scale = ttk.Scale(
             settings_frame,
-            length=200,
+            length=100,
             command=self.on_molecule_opacity_change,
         )
         self.molecule_opacity_scale.set(self.plotter.molecule_opacity)
-        self.molecule_opacity_scale.grid(row=row, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
+        self.molecule_opacity_scale.grid(row=1, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
         # Initialize label
         molecule_opacity_label.config(text=f'Molecule Opacity: {self.plotter.molecule_opacity:.2f}')
-        row += 1
 
         # Toggle molecule visibility
-        toggle_mol_button = ttk.Button(settings_frame, text='Toggle Molecule', command=self.plotter.toggle_molecule)
-        toggle_mol_button.grid(row=row, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
-        row += 1
+        toggle_mol_button = ttk.Button(
+            settings_frame,
+            text='Toggle Molecule',
+            command=self.plotter.toggle_molecule,
+            width=20,
+        )
+        toggle_mol_button.grid(row=2, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
 
         # Separator
-        ttk.Separator(settings_frame, orient='horizontal').grid(row=row, column=0, columnspan=2, sticky='ew', pady=10)
-        row += 1
-
-        # Atom settings section
-        ttk.Label(settings_frame, text='Atom Settings', font=('TkDefaultFont', 10, 'bold')).grid(
-            row=row,
-            column=0,
-            columnspan=2,
-            padx=5,
-            pady=5,
-            sticky='w',
-        )
-        row += 1
+        ttk.Separator(settings_frame, orient='horizontal').grid(row=3, column=0, columnspan=2, sticky='ew', pady=10)
 
         # Show atoms checkbox
         self.show_atoms_var = tk.BooleanVar(value=config.molecule.atom.show)
-        show_atoms_check = ttk.Checkbutton(settings_frame, text='Show Atoms', variable=self.show_atoms_var)
-        show_atoms_check.grid(row=row, column=0, columnspan=2, padx=5, pady=5, sticky='w')
-        row += 1
-
-        # Separator
-        ttk.Separator(settings_frame, orient='horizontal').grid(row=row, column=0, columnspan=2, sticky='ew', pady=10)
-        row += 1
-
-        # Bond settings section
-        ttk.Label(settings_frame, text='Bond Settings', font=('TkDefaultFont', 10, 'bold')).grid(
-            row=row,
-            column=0,
-            columnspan=2,
-            padx=5,
-            pady=5,
-            sticky='w',
+        show_atoms_check = ttk.Checkbutton(
+            settings_frame,
+            text='Show Atoms',
+            variable=self.show_atoms_var,
+            command=self.plotter.toggle_atoms,
         )
-        row += 1
+        show_atoms_check.grid(row=5, column=0, columnspan=2, padx=5, pady=5, sticky='w')
 
         # Show bonds checkbox
         self.show_bonds_var = tk.BooleanVar(value=config.molecule.bond.show)
-        show_bonds_check = ttk.Checkbutton(settings_frame, text='Show Bonds', variable=self.show_bonds_var)
-        show_bonds_check.grid(row=row, column=0, columnspan=2, padx=5, pady=5, sticky='w')
-        row += 1
+        show_bonds_check = ttk.Checkbutton(
+            settings_frame,
+            text='Show Bonds',
+            variable=self.show_bonds_var,
+            command=self.plotter.toggle_bonds,
+        )
+        show_bonds_check.grid(row=8, column=0, columnspan=2, padx=5, pady=5, sticky='w')
+
+        # Separator
+        ttk.Separator(settings_frame, orient='horizontal').grid(row=9, column=0, columnspan=2, sticky='ew', pady=10)
 
         # Bond max length
-        ttk.Label(settings_frame, text='Max Bond Length:').grid(row=row, column=0, padx=5, pady=5, sticky='w')
+        ttk.Label(settings_frame, text='Max Bond Length:').grid(row=10, column=0, padx=5, pady=5, sticky='w')
         self.bond_max_length_entry = ttk.Entry(settings_frame, width=15)
         self.bond_max_length_entry.insert(0, str(config.molecule.bond.max_length))
-        self.bond_max_length_entry.grid(row=row, column=1, padx=5, pady=5, sticky='w')
-        row += 1
+        self.bond_max_length_entry.grid(row=10, column=1, padx=5, pady=5, sticky='w')
 
         # Bond radius
-        ttk.Label(settings_frame, text='Bond Radius:').grid(row=row, column=0, padx=5, pady=5, sticky='w')
+        ttk.Label(settings_frame, text='Bond Radius:').grid(row=12, column=0, padx=5, pady=5, sticky='w')
         self.bond_radius_entry = ttk.Entry(settings_frame, width=15)
         self.bond_radius_entry.insert(0, str(config.molecule.bond.radius))
-        self.bond_radius_entry.grid(row=row, column=1, padx=5, pady=5, sticky='w')
-        row += 1
+        self.bond_radius_entry.grid(row=12, column=1, padx=5, pady=5, sticky='w')
 
         # Configure grid column weights for proper resizing
         settings_frame.columnconfigure(0, weight=1)
@@ -549,22 +614,11 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
         # Reset button
         reset_button = ttk.Button(settings_frame, text='Reset', command=self.reset_molecule_settings)
-        reset_button.grid(row=row, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
-        row += 1
-
-        # Note label about settings requiring reload
-        note_label = ttk.Label(
-            settings_frame,
-            text='Note: Atom and bond settings require reloading the molecule to take effect',
-            font=('TkDefaultFont', 8, 'italic'),
-            foreground='gray',
-        )
-        note_label.grid(row=row, column=0, columnspan=2, padx=5, pady=(5, 0), sticky='ew')
-        row += 1
+        reset_button.grid(row=13, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
 
         # Apply settings button
         apply_button = ttk.Button(settings_frame, text='Apply', command=self.apply_molecule_settings)
-        apply_button.grid(row=row, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
+        apply_button.grid(row=14, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
 
     def on_molecule_opacity_change(self, val: str) -> None:
         """Handle molecule opacity slider changes and apply immediately."""
@@ -712,7 +766,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         row += 1
 
         # Apply settings button
-        apply_button = ttk.Button(settings_frame, text='Apply', command=self.apply_color_settings)
+        apply_button = ttk.Button(settings_frame, text='Apply', command=self.apply_bond_color_settings)
         apply_button.grid(row=row, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
 
     def place_grid_params_frame(self) -> None:
@@ -1029,22 +1083,18 @@ class _OrbitalSelectionScreen(tk.Toplevel):
             self.plotter.orb_actor.GetProperty().SetOpacity(self.plotter.opacity)
 
     def apply_molecule_settings(self) -> None:
-        """Validate UI inputs and apply the chosen molecule rendering parameters."""
-        # Note: Molecule opacity is already applied immediately
-        # This method only handles atom and bond settings that require reload
+        """Validate UI inputs and apply the chosen molecule rendering parameters.
 
-        # Display a message about settings that require reload
-        changed_settings = []
-        if self.show_atoms_var.get() != config.molecule.atom.show:
-            changed_settings.append('Show Atoms')
-        if self.show_bonds_var.get() != config.molecule.bond.show:
-            changed_settings.append('Show Bonds')
+        This method only handles bond settings that require reload.
+        """
+        redraw_molecule = False  # Track if we need to redraw the molecule
 
         # Validate numeric inputs with error handling
         try:
             bond_max_length = float(self.bond_max_length_entry.get())
             if bond_max_length != config.molecule.bond.max_length:
-                changed_settings.append('Bond Max Length')
+                config.molecule.bond.max_length = bond_max_length
+                redraw_molecule = True
         except ValueError:
             messagebox.showerror('Invalid Input', 'Bond Max Length must be a valid number.')
             return
@@ -1052,60 +1102,19 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         try:
             bond_radius = float(self.bond_radius_entry.get())
             if bond_radius != config.molecule.bond.radius:
-                changed_settings.append('Bond Radius')
+                config.molecule.bond.radius = bond_radius
+                redraw_molecule = True
         except ValueError:
             messagebox.showerror('Invalid Input', 'Bond Radius must be a valid number.')
             return
 
-        if changed_settings and self._show_persistent_changes_popup:
-            # Create a custom dialog with "don't show again" checkbox
-            dialog = tk.Toplevel(self)
-            dialog.title('Settings Updated')
-            dialog.geometry('450x250')
-            dialog.transient(self)
-            dialog.grab_set()
+        if redraw_molecule:
+            self.plotter.load_molecule(config)
 
-            # Message
-            message = (
-                'The following settings have been noted but require reloading '
-                'the molecule to take effect:\n\n' + '\n'.join(f'• {s}' for s in changed_settings) + '\n\n'
-                'To make these changes persistent, update your config file at:\n'
-                '~/.config/moldenViz/config.toml'
-            )
-            msg_label = ttk.Label(dialog, text=message, wraplength=400, justify='left')
-            msg_label.pack(padx=20, pady=20)
-
-            # Don't show again checkbox
-            dont_show_var = tk.BooleanVar(value=False)
-            dont_show_check = ttk.Checkbutton(
-                dialog,
-                text="Don't show this message again",
-                variable=dont_show_var,
-            )
-            dont_show_check.pack(padx=20, pady=5)
-
-            # OK button
-            def on_ok() -> None:
-                if dont_show_var.get():
-                    self._show_persistent_changes_popup = False
-                dialog.destroy()
-
-            ok_button = ttk.Button(dialog, text='OK', command=on_ok)
-            ok_button.pack(pady=10)
-
-            # Center the dialog
-            dialog.update_idletasks()
-            x = (dialog.winfo_screenwidth() // 2) - (dialog.winfo_width() // 2)
-            y = (dialog.winfo_screenheight() // 2) - (dialog.winfo_height() // 2)
-            dialog.geometry(f'+{x}+{y}')
-
-    def apply_color_settings(self) -> None:
-        """Validate UI inputs and apply the chosen color settings."""
-        # Background color is already applied immediately via the entry field binding
-        # This method handles MO and bond colors that require reload
-
-        changed_settings = []
-
+    def apply_mo_color_settings(self) -> None:
+        """Validate UI inputs and apply the chosen MO color settings."""
+        raise NotImplementedError
+        changed_settings = []  # Track which settings have changed
         # Check MO color scheme
         if self.mo_color_scheme_entry.get().strip() != config.mo.color_scheme:
             changed_settings.append('MO Color Scheme')
@@ -1119,60 +1128,29 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         elif config.mo.custom_colors:
             changed_settings.append('MO Custom Colors')
 
+        if changed_settings and self.current_orb_ind >= 0:
+            self.plot_orbital(self.current_orb_ind)
+
+    def apply_bond_color_settings(self) -> None:
+        """Validate UI inputs and apply the chosen color settings.
+
+        This method handles bond colors that require reload
+        """
         # Check bond color type
         if self.bond_color_type_var.get() != config.molecule.bond.color_type:
-            changed_settings.append('Bond Color Type')
+            redrawn_molecule = True
 
         # Check bond color
         if self.bond_color_entry.get() != config.molecule.bond.color:
-            changed_settings.append('Bond Color')
+            redrawn_molecule = True
 
-        if changed_settings and self._show_persistent_changes_popup:
-            # Create a custom dialog with "don't show again" checkbox
-            dialog = tk.Toplevel(self)
-            dialog.title('Settings Updated')
-            dialog.geometry('450x250')
-            dialog.transient(self)
-            dialog.grab_set()
-
-            # Message
-            message = (
-                'The following color settings have been noted but require reloading '
-                'to take effect:\n\n' + '\n'.join(f'• {s}' for s in changed_settings) + '\n\n'
-                'To make these changes persistent, update your config file at:\n'
-                '~/.config/moldenViz/config.toml'
-            )
-            msg_label = ttk.Label(dialog, text=message, wraplength=400, justify='left')
-            msg_label.pack(padx=20, pady=20)
-
-            # Don't show again checkbox
-            dont_show_var = tk.BooleanVar(value=False)
-            dont_show_check = ttk.Checkbutton(
-                dialog,
-                text="Don't show this message again",
-                variable=dont_show_var,
-            )
-            dont_show_check.pack(padx=20, pady=5)
-
-            # OK button
-            def on_ok() -> None:
-                if dont_show_var.get():
-                    self._show_persistent_changes_popup = False
-                dialog.destroy()
-
-            ok_button = ttk.Button(dialog, text='OK', command=on_ok)
-            ok_button.pack(pady=10)
-
-            # Center the dialog
-            dialog.update_idletasks()
-            x = (dialog.winfo_screenwidth() // 2) - (dialog.winfo_width() // 2)
-            y = (dialog.winfo_screenheight() // 2) - (dialog.winfo_height() // 2)
-            dialog.geometry(f'+{x}+{y}')
+        if redrawn_molecule:
+            self.plotter.load_molecule(config)
 
     def next_plot(self) -> None:
         """Advance to the next molecular orbital."""
         self.current_orb_ind += 1
-        self.update_button_states()
+        self.update_nav_button_states()
         self.orb_tv.highlight_orbital(self.current_orb_ind)
         self.plot_orbital(self.current_orb_ind)
 
@@ -1180,7 +1158,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         """Return to the previous molecular orbital."""
         self.current_orb_ind -= 1
         self.orb_tv.highlight_orbital(self.current_orb_ind)
-        self.update_button_states()
+        self.update_nav_button_states()
         self.plot_orbital(self.current_orb_ind)
 
     def _do_export(self, export_window: tk.Toplevel, format_var: tk.StringVar, scope_var: tk.StringVar) -> None:
@@ -1333,7 +1311,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         ttk.Button(button_frame, text='Cancel', command=on_close).pack(side=tk.LEFT, padx=5)
         export_window.protocol('WM_DELETE_WINDOW', on_close)
 
-    def update_button_states(self) -> None:
+    def update_nav_button_states(self) -> None:
         """Synchronize navigation button state with the current orbital index."""
         can_go_prev = self.current_orb_ind > 0
         can_go_next = self.current_orb_ind < len(self.plotter.tabulator._parser.mos) - 1  # noqa: SLF001
@@ -1458,4 +1436,4 @@ class _OrbitalsTreeview(ttk.Treeview):
             self.highlight_orbital(orb_ind)
             self.selection_screen.current_orb_ind = orb_ind
             self.selection_screen.plot_orbital(orb_ind)
-            self.selection_screen.update_button_states()
+            self.selection_screen.update_nav_button_states()
