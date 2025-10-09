@@ -32,7 +32,7 @@ Control the appearance of the 3D visualization window:
 
    background_color = 'white'  # Background color for the 3D plot window
 
-The ``background_color`` option accepts any valid matplotlib color format (color names, hex codes, RGB tuples as strings). Common choices include:
+The ``background_color`` option accepts any valid matplotlib color format (color names, hex codes). Common choices include:
 
 - ``'white'`` (default)
 - ``'black'``
