@@ -201,6 +201,10 @@ class Plotter:
         molecule_settings_action.triggered.connect(self.selection_screen.molecule_settings_screen)
         settings_menu.addAction(molecule_settings_action)
 
+        color_settings_action = QAction('Color Settings', self.pv_plotter.app_window)
+        color_settings_action.triggered.connect(self.selection_screen.color_settings_screen)
+        settings_menu.addAction(color_settings_action)
+
         # Create Export action
         export_action = QAction('Export', self.pv_plotter.app_window)
         export_action.triggered.connect(self.selection_screen.export_orbitals_dialog)
@@ -478,16 +482,6 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         molecule_opacity_label.config(text=f'Molecule Opacity: {self.plotter.molecule_opacity:.2f}')
         row += 1
 
-        # Background Color
-        ttk.Label(settings_frame, text='Background Color:').grid(row=row, column=0, padx=5, pady=5, sticky='w')
-        self.background_color_entry = ttk.Entry(settings_frame, width=15)
-        self.background_color_entry.insert(0, str(config.background_color))
-        self.background_color_entry.grid(row=row, column=1, padx=5, pady=5, sticky='w')
-        # Bind to apply changes on Enter key or focus out
-        self.background_color_entry.bind('<Return>', lambda _e: self.apply_background_color())
-        self.background_color_entry.bind('<FocusOut>', lambda _e: self.apply_background_color())
-        row += 1
-
         # Toggle molecule visibility
         toggle_mol_button = ttk.Button(settings_frame, text='Toggle Molecule', command=self.plotter.toggle_molecule)
         toggle_mol_button.grid(row=row, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
@@ -542,26 +536,6 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.bond_max_length_entry.grid(row=row, column=1, padx=5, pady=5, sticky='w')
         row += 1
 
-        # Bond color type
-        ttk.Label(settings_frame, text='Bond Color Type:').grid(row=row, column=0, padx=5, pady=5, sticky='w')
-        self.bond_color_type_var = tk.StringVar(value=config.molecule.bond.color_type)
-        bond_color_frame = ttk.Frame(settings_frame)
-        bond_color_frame.grid(row=row, column=1, padx=5, pady=5, sticky='w')
-        ttk.Radiobutton(bond_color_frame, text='Uniform', variable=self.bond_color_type_var, value='uniform').pack(
-            side=tk.LEFT,
-        )
-        ttk.Radiobutton(bond_color_frame, text='Split', variable=self.bond_color_type_var, value='split').pack(
-            side=tk.LEFT,
-        )
-        row += 1
-
-        # Bond color (for uniform type)
-        ttk.Label(settings_frame, text='Bond Color:').grid(row=row, column=0, padx=5, pady=5, sticky='w')
-        self.bond_color_entry = ttk.Entry(settings_frame, width=15)
-        self.bond_color_entry.insert(0, str(config.molecule.bond.color))
-        self.bond_color_entry.grid(row=row, column=1, padx=5, pady=5, sticky='w')
-        row += 1
-
         # Bond radius
         ttk.Label(settings_frame, text='Bond Radius:').grid(row=row, column=0, padx=5, pady=5, sticky='w')
         self.bond_radius_entry = ttk.Entry(settings_frame, width=15)
@@ -614,6 +588,132 @@ class _OrbitalSelectionScreen(tk.Toplevel):
                 messagebox.showerror('Invalid Input', f'"{color}" is not a valid color.')
         except (ValueError, RuntimeError) as e:
             messagebox.showerror('Error', f'Failed to set background color: {e!s}')
+
+    def color_settings_screen(self) -> None:
+        """Open the color settings window."""
+        self.color_settings_window = tk.Toplevel(self)
+        self.color_settings_window.title('Color Settings')
+
+        settings_frame = ttk.Frame(self.color_settings_window)
+        settings_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        row = 0
+
+        # Background Color section
+        ttk.Label(settings_frame, text='Background Color', font=('TkDefaultFont', 10, 'bold')).grid(
+            row=row,
+            column=0,
+            columnspan=2,
+            padx=5,
+            pady=5,
+            sticky='w',
+        )
+        row += 1
+
+        ttk.Label(settings_frame, text='Background Color:').grid(row=row, column=0, padx=5, pady=5, sticky='w')
+        self.background_color_entry = ttk.Entry(settings_frame, width=15)
+        self.background_color_entry.insert(0, str(config.background_color))
+        self.background_color_entry.grid(row=row, column=1, padx=5, pady=5, sticky='w')
+        # Bind to apply changes on Enter key or focus out
+        self.background_color_entry.bind('<Return>', lambda _e: self.apply_background_color())
+        self.background_color_entry.bind('<FocusOut>', lambda _e: self.apply_background_color())
+        row += 1
+
+        # Separator
+        ttk.Separator(settings_frame, orient='horizontal').grid(row=row, column=0, columnspan=2, sticky='ew', pady=10)
+        row += 1
+
+        # MO Color section
+        ttk.Label(settings_frame, text='Molecular Orbital Colors', font=('TkDefaultFont', 10, 'bold')).grid(
+            row=row,
+            column=0,
+            columnspan=2,
+            padx=5,
+            pady=5,
+            sticky='w',
+        )
+        row += 1
+
+        ttk.Label(settings_frame, text='Color Scheme:').grid(row=row, column=0, padx=5, pady=5, sticky='w')
+        self.mo_color_scheme_entry = ttk.Entry(settings_frame, width=15)
+        self.mo_color_scheme_entry.insert(0, str(config.mo.color_scheme))
+        self.mo_color_scheme_entry.grid(row=row, column=1, padx=5, pady=5, sticky='w')
+        row += 1
+
+        ttk.Label(settings_frame, text='Custom Colors:').grid(row=row, column=0, padx=5, pady=5, sticky='w')
+        self.mo_custom_colors_entry = ttk.Entry(settings_frame, width=15)
+        if config.mo.custom_colors:
+            self.mo_custom_colors_entry.insert(0, ', '.join(config.mo.custom_colors))
+        self.mo_custom_colors_entry.grid(row=row, column=1, padx=5, pady=5, sticky='w')
+        row += 1
+
+        # Helper text for custom colors
+        helper_label = ttk.Label(
+            settings_frame,
+            text='(comma-separated, e.g., "blue, red")',
+            font=('TkDefaultFont', 8, 'italic'),
+            foreground='gray',
+        )
+        helper_label.grid(row=row, column=1, padx=5, pady=(0, 5), sticky='w')
+        row += 1
+
+        # Separator
+        ttk.Separator(settings_frame, orient='horizontal').grid(row=row, column=0, columnspan=2, sticky='ew', pady=10)
+        row += 1
+
+        # Bond Color section
+        ttk.Label(settings_frame, text='Bond Colors', font=('TkDefaultFont', 10, 'bold')).grid(
+            row=row,
+            column=0,
+            columnspan=2,
+            padx=5,
+            pady=5,
+            sticky='w',
+        )
+        row += 1
+
+        # Bond color type
+        ttk.Label(settings_frame, text='Bond Color Type:').grid(row=row, column=0, padx=5, pady=5, sticky='w')
+        self.bond_color_type_var = tk.StringVar(value=config.molecule.bond.color_type)
+        bond_color_frame = ttk.Frame(settings_frame)
+        bond_color_frame.grid(row=row, column=1, padx=5, pady=5, sticky='w')
+        ttk.Radiobutton(bond_color_frame, text='Uniform', variable=self.bond_color_type_var, value='uniform').pack(
+            side=tk.LEFT,
+        )
+        ttk.Radiobutton(bond_color_frame, text='Split', variable=self.bond_color_type_var, value='split').pack(
+            side=tk.LEFT,
+        )
+        row += 1
+
+        # Bond color (for uniform type)
+        ttk.Label(settings_frame, text='Bond Color:').grid(row=row, column=0, padx=5, pady=5, sticky='w')
+        self.bond_color_entry = ttk.Entry(settings_frame, width=15)
+        self.bond_color_entry.insert(0, str(config.molecule.bond.color))
+        self.bond_color_entry.grid(row=row, column=1, padx=5, pady=5, sticky='w')
+        row += 1
+
+        # Configure grid column weights for proper resizing
+        settings_frame.columnconfigure(0, weight=1)
+        settings_frame.columnconfigure(1, weight=1)
+
+        # Reset button
+        reset_button = ttk.Button(settings_frame, text='Reset', command=self.reset_color_settings)
+        reset_button.grid(row=row, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
+        row += 1
+
+        # Note label about settings requiring reload
+        note_label = ttk.Label(
+            settings_frame,
+            text='Note: MO and bond color changes require reloading to take effect',
+            font=('TkDefaultFont', 8, 'italic'),
+            foreground='gray',
+        )
+        note_label.grid(row=row, column=0, columnspan=2, padx=5, pady=(5, 0), sticky='ew')
+        row += 1
+
+        # Apply settings button
+        apply_button = ttk.Button(settings_frame, text='Apply', command=self.apply_color_settings)
+        apply_button.grid(row=row, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
 
     def place_grid_params_frame(self) -> None:
         """Render the parameter frame that matches the selected grid type."""
@@ -832,22 +932,31 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         """Restore molecule settings widgets back to configuration defaults."""
         self.molecule_opacity_scale.set(config.molecule.opacity)
 
-        self.background_color_entry.delete(0, tk.END)
-        self.background_color_entry.insert(0, str(config.background_color))
-
         self.show_atoms_var.set(config.molecule.atom.show)
         self.show_bonds_var.set(config.molecule.bond.show)
 
         self.bond_max_length_entry.delete(0, tk.END)
         self.bond_max_length_entry.insert(0, str(config.molecule.bond.max_length))
 
+        self.bond_radius_entry.delete(0, tk.END)
+        self.bond_radius_entry.insert(0, str(config.molecule.bond.radius))
+
+    def reset_color_settings(self) -> None:
+        """Restore color settings widgets back to configuration defaults."""
+        self.background_color_entry.delete(0, tk.END)
+        self.background_color_entry.insert(0, str(config.background_color))
+
+        self.mo_color_scheme_entry.delete(0, tk.END)
+        self.mo_color_scheme_entry.insert(0, str(config.mo.color_scheme))
+
+        self.mo_custom_colors_entry.delete(0, tk.END)
+        if config.mo.custom_colors:
+            self.mo_custom_colors_entry.insert(0, ', '.join(config.mo.custom_colors))
+
         self.bond_color_type_var.set(config.molecule.bond.color_type)
 
         self.bond_color_entry.delete(0, tk.END)
         self.bond_color_entry.insert(0, str(config.molecule.bond.color))
-
-        self.bond_radius_entry.delete(0, tk.END)
-        self.bond_radius_entry.insert(0, str(config.molecule.bond.radius))
 
     def apply_grid_settings(self) -> None:
         """Validate UI inputs and apply the chosen grid parameters."""
@@ -922,7 +1031,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
     def apply_molecule_settings(self) -> None:
         """Validate UI inputs and apply the chosen molecule rendering parameters."""
-        # Note: Molecule opacity and background color are already applied immediately
+        # Note: Molecule opacity is already applied immediately
         # This method only handles atom and bond settings that require reload
 
         # Display a message about settings that require reload
@@ -940,11 +1049,6 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         except ValueError:
             messagebox.showerror('Invalid Input', 'Bond Max Length must be a valid number.')
             return
-
-        if self.bond_color_type_var.get() != config.molecule.bond.color_type:
-            changed_settings.append('Bond Color Type')
-        if self.bond_color_entry.get() != config.molecule.bond.color:
-            changed_settings.append('Bond Color')
 
         try:
             bond_radius = float(self.bond_radius_entry.get())
@@ -966,6 +1070,76 @@ class _OrbitalSelectionScreen(tk.Toplevel):
             message = (
                 'The following settings have been noted but require reloading '
                 'the molecule to take effect:\n\n' + '\n'.join(f'• {s}' for s in changed_settings) + '\n\n'
+                'To make these changes persistent, update your config file at:\n'
+                '~/.config/moldenViz/config.toml'
+            )
+            msg_label = ttk.Label(dialog, text=message, wraplength=400, justify='left')
+            msg_label.pack(padx=20, pady=20)
+
+            # Don't show again checkbox
+            dont_show_var = tk.BooleanVar(value=False)
+            dont_show_check = ttk.Checkbutton(
+                dialog,
+                text="Don't show this message again",
+                variable=dont_show_var,
+            )
+            dont_show_check.pack(padx=20, pady=5)
+
+            # OK button
+            def on_ok() -> None:
+                if dont_show_var.get():
+                    self._show_persistent_changes_popup = False
+                dialog.destroy()
+
+            ok_button = ttk.Button(dialog, text='OK', command=on_ok)
+            ok_button.pack(pady=10)
+
+            # Center the dialog
+            dialog.update_idletasks()
+            x = (dialog.winfo_screenwidth() // 2) - (dialog.winfo_width() // 2)
+            y = (dialog.winfo_screenheight() // 2) - (dialog.winfo_height() // 2)
+            dialog.geometry(f'+{x}+{y}')
+
+    def apply_color_settings(self) -> None:
+        """Validate UI inputs and apply the chosen color settings."""
+        # Background color is already applied immediately via the entry field binding
+        # This method handles MO and bond colors that require reload
+
+        changed_settings = []
+
+        # Check MO color scheme
+        if self.mo_color_scheme_entry.get().strip() != config.mo.color_scheme:
+            changed_settings.append('MO Color Scheme')
+
+        # Check MO custom colors
+        custom_colors_input = self.mo_custom_colors_entry.get().strip()
+        if custom_colors_input:
+            custom_colors = [c.strip() for c in custom_colors_input.split(',')]
+            if custom_colors != config.mo.custom_colors:
+                changed_settings.append('MO Custom Colors')
+        elif config.mo.custom_colors:
+            changed_settings.append('MO Custom Colors')
+
+        # Check bond color type
+        if self.bond_color_type_var.get() != config.molecule.bond.color_type:
+            changed_settings.append('Bond Color Type')
+
+        # Check bond color
+        if self.bond_color_entry.get() != config.molecule.bond.color:
+            changed_settings.append('Bond Color')
+
+        if changed_settings and self._show_persistent_changes_popup:
+            # Create a custom dialog with "don't show again" checkbox
+            dialog = tk.Toplevel(self)
+            dialog.title('Settings Updated')
+            dialog.geometry('450x250')
+            dialog.transient(self)
+            dialog.grab_set()
+
+            # Message
+            message = (
+                'The following color settings have been noted but require reloading '
+                'to take effect:\n\n' + '\n'.join(f'• {s}' for s in changed_settings) + '\n\n'
                 'To make these changes persistent, update your config file at:\n'
                 '~/.config/moldenViz/config.toml'
             )
