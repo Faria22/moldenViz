@@ -10,6 +10,7 @@ import pyvista as pv
 from matplotlib.colors import LinearSegmentedColormap
 from numpy.typing import NDArray
 from pyvistaqt import BackgroundPlotter
+from shiboken6 import isValid
 
 from ._config_module import Config
 from ._plotting_objects import Molecule
@@ -162,20 +163,26 @@ class Plotter:
         self.tk_root.mainloop()
 
     def _override_clear_all_button(self) -> None:
-        for action in self.pv_plotter.main_menu_bar.actions():
+        """Override the default "Clear All" action in the PyVista plotter's View menu."""
+        view_menu = None
+        for action in self.pv_plotter.main_menu.actions():
             if action.text() == 'View':
                 view_menu = action.menu()
                 break
 
-        # Remove only the "Clear All" action
-        for action in view_menu.actions():
-            if action.text().lower() == 'clear all':
-                action.triggered.disconnect()
+        if view_menu is None:
+            raise RuntimeError('Could not find View menu in PyVista plotter.')
+
+        for action in view_menu.actions():  # pyright: ignore[reportAttributeAccessIssue]
+            if action is not None and isValid(action) and action.text().lower() == 'clear all':
+                while action.triggered.disconnect():
+                    pass
                 action.triggered.connect(self._clear_all)
                 break
 
     def _clear_all(self) -> None:
         """Clear all actors from the plotter, including molecule and orbitals."""
+        print('Running clear all')
         if self.molecule_actors:
             for actor in self.molecule_actors:
                 actor.SetVisibility(False)
