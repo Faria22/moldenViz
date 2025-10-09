@@ -3,4 +3,5 @@ numpy>=1.20
 scipy>=1.7
 pydantic>=2.0.0
 toml
+PyQt5
 pydata-sphinx-theme>=0.14
