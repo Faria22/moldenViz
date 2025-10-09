@@ -421,31 +421,106 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         settings_frame = ttk.Frame(self.molecule_settings_window)
         settings_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
+        row = 0
+
         # Molecule Opacity
         molecule_opacity_label = ttk.Label(settings_frame)
-        molecule_opacity_label.grid(row=0, column=0, padx=5, pady=5, sticky='w')
+        molecule_opacity_label.grid(row=row, column=0, columnspan=2, padx=5, pady=5, sticky='w')
+        row += 1
         self.molecule_opacity_scale = ttk.Scale(
             settings_frame,
             length=200,
             command=lambda val: molecule_opacity_label.config(text=f'Molecule Opacity: {float(val):.2f}'),
         )
         self.molecule_opacity_scale.set(self.plotter.molecule_opacity)
-        self.molecule_opacity_scale.grid(row=1, column=0, padx=5, pady=5, sticky='ew')
+        self.molecule_opacity_scale.grid(row=row, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
+        row += 1
 
         # Toggle molecule visibility
         toggle_mol_button = ttk.Button(settings_frame, text='Toggle Molecule', command=self.plotter.toggle_molecule)
-        toggle_mol_button.grid(row=2, column=0, padx=5, pady=5, sticky='ew')
+        toggle_mol_button.grid(row=row, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
+        row += 1
 
-        # Configure grid column weight for proper resizing
+        # Separator
+        ttk.Separator(settings_frame, orient='horizontal').grid(row=row, column=0, columnspan=2, sticky='ew', pady=10)
+        row += 1
+
+        # Atom settings section
+        ttk.Label(settings_frame, text='Atom Settings', font=('TkDefaultFont', 10, 'bold')).grid(
+            row=row, column=0, columnspan=2, padx=5, pady=5, sticky='w',
+        )
+        row += 1
+
+        # Show atoms checkbox
+        self.show_atoms_var = tk.BooleanVar(value=config.molecule.atom.show)
+        show_atoms_check = ttk.Checkbutton(settings_frame, text='Show Atoms', variable=self.show_atoms_var)
+        show_atoms_check.grid(row=row, column=0, columnspan=2, padx=5, pady=5, sticky='w')
+        row += 1
+
+        # Separator
+        ttk.Separator(settings_frame, orient='horizontal').grid(row=row, column=0, columnspan=2, sticky='ew', pady=10)
+        row += 1
+
+        # Bond settings section
+        ttk.Label(settings_frame, text='Bond Settings', font=('TkDefaultFont', 10, 'bold')).grid(
+            row=row, column=0, columnspan=2, padx=5, pady=5, sticky='w',
+        )
+        row += 1
+
+        # Show bonds checkbox
+        self.show_bonds_var = tk.BooleanVar(value=config.molecule.bond.show)
+        show_bonds_check = ttk.Checkbutton(settings_frame, text='Show Bonds', variable=self.show_bonds_var)
+        show_bonds_check.grid(row=row, column=0, columnspan=2, padx=5, pady=5, sticky='w')
+        row += 1
+
+        # Bond max length
+        ttk.Label(settings_frame, text='Max Bond Length:').grid(row=row, column=0, padx=5, pady=5, sticky='w')
+        self.bond_max_length_entry = ttk.Entry(settings_frame, width=15)
+        self.bond_max_length_entry.insert(0, str(config.molecule.bond.max_length))
+        self.bond_max_length_entry.grid(row=row, column=1, padx=5, pady=5, sticky='w')
+        row += 1
+
+        # Bond color type
+        ttk.Label(settings_frame, text='Bond Color Type:').grid(row=row, column=0, padx=5, pady=5, sticky='w')
+        self.bond_color_type_var = tk.StringVar(value=config.molecule.bond.color_type)
+        bond_color_frame = ttk.Frame(settings_frame)
+        bond_color_frame.grid(row=row, column=1, padx=5, pady=5, sticky='w')
+        ttk.Radiobutton(bond_color_frame, text='Uniform', variable=self.bond_color_type_var, value='uniform').pack(
+            side=tk.LEFT,
+        )
+        ttk.Radiobutton(bond_color_frame, text='Split', variable=self.bond_color_type_var, value='split').pack(
+            side=tk.LEFT,
+        )
+        row += 1
+
+        # Bond color (for uniform type)
+        ttk.Label(settings_frame, text='Bond Color:').grid(row=row, column=0, padx=5, pady=5, sticky='w')
+        self.bond_color_entry = ttk.Entry(settings_frame, width=15)
+        self.bond_color_entry.insert(0, str(config.molecule.bond.color))
+        self.bond_color_entry.grid(row=row, column=1, padx=5, pady=5, sticky='w')
+        row += 1
+
+        # Bond radius
+        ttk.Label(settings_frame, text='Bond Radius:').grid(row=row, column=0, padx=5, pady=5, sticky='w')
+        self.bond_radius_entry = ttk.Entry(settings_frame, width=15)
+        self.bond_radius_entry.insert(0, str(config.molecule.bond.radius))
+        self.bond_radius_entry.grid(row=row, column=1, padx=5, pady=5, sticky='w')
+        row += 1
+
+        # Configure grid column weights for proper resizing
         settings_frame.columnconfigure(0, weight=1)
+        settings_frame.columnconfigure(1, weight=1)
 
         # Reset button
         reset_button = ttk.Button(settings_frame, text='Reset', command=self.reset_molecule_settings)
-        reset_button.grid(row=3, column=0, padx=5, pady=5, sticky='ew')
+        reset_button.grid(row=row, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
+        row += 1
 
-        # Apply settings button
-        apply_button = ttk.Button(settings_frame, text='Apply', command=self.apply_molecule_settings)
-        apply_button.grid(row=4, column=0, padx=5, pady=5, sticky='ew')
+        # Apply settings button (note: requires molecule reload for some settings)
+        apply_button = ttk.Button(
+            settings_frame, text='Apply (Note: Some settings require reload)', command=self.apply_molecule_settings,
+        )
+        apply_button.grid(row=row, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
 
     def place_grid_params_frame(self) -> None:
         """Render the parameter frame that matches the selected grid type."""
@@ -663,6 +738,19 @@ class _OrbitalSelectionScreen(tk.Toplevel):
     def reset_molecule_settings(self) -> None:
         """Restore molecule settings widgets back to configuration defaults."""
         self.molecule_opacity_scale.set(config.molecule.opacity)
+        self.show_atoms_var.set(config.molecule.atom.show)
+        self.show_bonds_var.set(config.molecule.bond.show)
+
+        self.bond_max_length_entry.delete(0, tk.END)
+        self.bond_max_length_entry.insert(0, str(config.molecule.bond.max_length))
+
+        self.bond_color_type_var.set(config.molecule.bond.color_type)
+
+        self.bond_color_entry.delete(0, tk.END)
+        self.bond_color_entry.insert(0, str(config.molecule.bond.color))
+
+        self.bond_radius_entry.delete(0, tk.END)
+        self.bond_radius_entry.insert(0, str(config.molecule.bond.radius))
 
     def apply_grid_settings(self) -> None:
         """Validate UI inputs and apply the chosen grid parameters."""
@@ -737,9 +825,40 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
     def apply_molecule_settings(self) -> None:
         """Validate UI inputs and apply the chosen molecule rendering parameters."""
+        # Apply molecule opacity
         self.plotter.molecule_opacity = round(self.molecule_opacity_scale.get(), 2)
         for actor in self.plotter.molecule_actors:
             actor.GetProperty().SetOpacity(self.plotter.molecule_opacity)
+
+        # Note: Atom and bond settings (show_atoms, show_bonds, bond properties)
+        # require regenerating the molecule visualization, which is beyond the scope
+        # of this simple settings application. These values are stored in config
+        # and will be applied on next molecule load.
+        # Users should save these to their custom config file for persistence.
+
+        # Display a message about settings that require reload
+        changed_settings = []
+        if self.show_atoms_var.get() != config.molecule.atom.show:
+            changed_settings.append('Show Atoms')
+        if self.show_bonds_var.get() != config.molecule.bond.show:
+            changed_settings.append('Show Bonds')
+        if float(self.bond_max_length_entry.get()) != config.molecule.bond.max_length:
+            changed_settings.append('Bond Max Length')
+        if self.bond_color_type_var.get() != config.molecule.bond.color_type:
+            changed_settings.append('Bond Color Type')
+        if self.bond_color_entry.get() != config.molecule.bond.color:
+            changed_settings.append('Bond Color')
+        if float(self.bond_radius_entry.get()) != config.molecule.bond.radius:
+            changed_settings.append('Bond Radius')
+
+        if changed_settings:
+            messagebox.showinfo(
+                'Settings Updated',
+                'The following settings have been noted but require reloading '
+                'the molecule to take effect:\n\n' + '\n'.join(f'• {s}' for s in changed_settings) + '\n\n'
+                'To make these changes persistent, update your config file at:\n'
+                '~/.config/moldenViz/config.toml',
+            )
 
     def next_plot(self) -> None:
         """Advance to the next molecular orbital."""
