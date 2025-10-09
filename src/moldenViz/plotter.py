@@ -182,7 +182,6 @@ class Plotter:
 
     def _clear_all(self) -> None:
         """Clear all actors from the plotter, including molecule and orbitals."""
-        print('Running clear all')
         if self.molecule_actors:
             for actor in self.molecule_actors:
                 actor.SetVisibility(False)
