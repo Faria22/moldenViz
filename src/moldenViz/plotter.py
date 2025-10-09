@@ -120,6 +120,7 @@ class Plotter:
 
         self.pv_plotter = BackgroundPlotter(editor=False)
         self.pv_plotter.show_axes()
+        self._override_clear_all_button()
         self.molecule_actors = self.molecule.add_meshes(self.pv_plotter, self.molecule_opacity)
 
         # If we want to have the molecular orbitals, we need to initiate Tk before Qt
@@ -156,9 +157,34 @@ class Plotter:
         else:
             self.cmap = config.mo.color_scheme
 
-        _OrbitalSelectionScreen(self, self.tk_root)
+        self.selction_screen = _OrbitalSelectionScreen(self, self.tk_root)
 
         self.tk_root.mainloop()
+
+    def _override_clear_all_button(self) -> None:
+        for action in self.pv_plotter.main_menu_bar.actions():
+            if action.text() == 'View':
+                view_menu = action.menu()
+                break
+
+        # Remove only the "Clear All" action
+        for action in view_menu.actions():
+            if action.text().lower() == 'clear all':
+                action.triggered.disconnect()
+                action.triggered.connect(self._clear_all)
+                break
+
+    def _clear_all(self) -> None:
+        """Clear all actors from the plotter, including molecule and orbitals."""
+        if self.molecule_actors:
+            for actor in self.molecule_actors:
+                actor.SetVisibility(False)
+
+        if self.orb_actor:
+            self.pv_plotter.remove_actor(self.orb_actor)
+            self.orb_actor = None
+            self.selction_screen.current_orb_ind = -1
+            self.selction_screen.update_button_states()
 
     def toggle_molecule(self) -> None:
         """Toggle the visibility of the molecule."""
