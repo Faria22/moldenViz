@@ -23,6 +23,32 @@ Create the directory (if needed) and add a config file:
    mkdir -p ~/.config/moldenViz
    $EDITOR ~/.config/moldenViz/config.toml
 
+Visualization Settings
+----------------------
+
+Control the appearance of the 3D visualization window:
+
+.. code-block:: toml
+
+   background_color = 'white'  # Background color for the 3D plot window
+
+The ``background_color`` option accepts any valid matplotlib color format (color names, hex codes, RGB tuples as strings). Common choices include:
+
+- ``'white'`` (default)
+- ``'black'``
+- ``'lightgray'``
+- ``'#F0F0F0'`` (custom hex color)
+
+Examples:
+
+.. code-block:: toml
+
+   # Use a black background
+   background_color = 'black'
+
+   # Or use a custom gray with hex code
+   background_color = '#2A2A2A'
+
 Bond Settings
 -------------
 
@@ -218,6 +244,7 @@ Combine several tweaks in one file:
 .. code-block:: toml
 
    smooth_shading = true
+   background_color = 'white'
 
    [grid]
    min_radius = 3
