@@ -111,12 +111,10 @@ class Plotter:
                 Tabulator._axis_spacing(tabulator.original_axes[2], 'z')  # noqa: SLF001
 
             self.tabulator = tabulator
-            # Use the tabulator's only_molecule flag if a tabulator was provided
-            only_molecule = tabulator._only_molecule  # noqa: SLF001
         else:
             self.tabulator = Tabulator(source, only_molecule=only_molecule)
 
-        # Store the effective only_molecule flag
+        # Store the only_molecule flag
         self._only_molecule = only_molecule
 
         if not only_molecule:
