@@ -1402,19 +1402,14 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
         Only applies predefined color schemes, not custom colors.
         """
-        redraw_mo = False
+        self.on_mo_color_scheme_change(tk.Event())  # Ensure custom entries are shown
 
         # Check MO color scheme
         mo_color_scheme = self.mo_color_scheme_var.get().strip()
-        if mo_color_scheme != config.mo.color_scheme:
-            redraw_mo = True
-
-        # Check MO custom colors
         if mo_color_scheme == 'custom':
-            self.apply_custom_mo_color_settings()
             return
 
-        if redraw_mo:
+        if mo_color_scheme != config.mo.color_scheme:
             self.plotter.cmap = mo_color_scheme
             config.mo.color_scheme = mo_color_scheme
 
