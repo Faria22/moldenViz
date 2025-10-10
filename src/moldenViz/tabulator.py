@@ -2,10 +2,10 @@
 
 import logging
 from enum import Enum
-from functools import lru_cache
+from functools import cache
 from math import factorial
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 import pyvista as pv
@@ -86,7 +86,7 @@ def _cartesian_to_spherical(
     return r, theta, phi
 
 
-@lru_cache(maxsize=None)
+@cache
 def _cached_factorial(n: int) -> int:
     """Compute factorial with caching for non-negative integers.
 
@@ -98,7 +98,7 @@ def _cached_factorial(n: int) -> int:
     return factorial(n)
 
 
-@lru_cache(maxsize=None)
+@cache
 def _binomial(r: float, k: int) -> float:
     """Calculate the generalized binomial coefficient (r over k).
 
@@ -394,7 +394,7 @@ class Tabulator:
         self._gtos = gto_data
         return gto_data
 
-    def tabulate_mos(self, mo_inds: Optional[int | array_like_type] = None) -> NDArray[np.floating]:
+    def tabulate_mos(self, mo_inds: int | array_like_type | None = None) -> NDArray[np.floating]:
         """Tabulate molecular orbitals (MOs) on the current grid.
 
         Parameters
@@ -450,7 +450,7 @@ class Tabulator:
 
         return mo_data
 
-    def export(self, path: str | Path, *, mo_index: Optional[int] = None) -> None:
+    def export(self, path: str | Path, *, mo_index: int | None = None) -> None:
         """Export the current grid data to a VTK-based or cube file.
 
         Parameters
@@ -498,7 +498,7 @@ class Tabulator:
         else:
             raise ValueError("Unsupported export format. Use '.vtk' or '.cube'.")
 
-    def _export_vtk(self, destination: Path, mo_index: Optional[int] = None) -> None:
+    def _export_vtk(self, destination: Path, mo_index: int | None = None) -> None:
         """Write orbital data to a VTK multiblock dataset."""
         if not hasattr(self, 'gtos'):
             self.tabulate_gtos()
