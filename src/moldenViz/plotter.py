@@ -238,6 +238,14 @@ class Plotter:
         color_settings_action.triggered.connect(self.selection_screen.color_settings_screen)
         settings_menu.addAction(color_settings_action)
 
+        # Add separator before Save Settings
+        settings_menu.addSeparator()
+
+        # Add Save Settings action to menu
+        save_settings_action = QAction('Save Settings', self.pv_plotter.app_window)
+        save_settings_action.triggered.connect(self.selection_screen.save_settings)
+        settings_menu.addAction(save_settings_action)
+
         # Create Export action
         export_action = QAction('Export', self.pv_plotter.app_window)
         export_action.triggered.connect(self.selection_screen.export_orbitals_dialog)
@@ -501,10 +509,6 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         apply_button = ttk.Button(settings_frame, text='Apply', command=self.apply_grid_settings)
         apply_button.grid(row=9, column=0, padx=5, pady=5, columnspan=5)
 
-        # Save settings button
-        save_button = ttk.Button(settings_frame, text='Save Settings', command=self.save_settings)
-        save_button.grid(row=10, column=0, padx=5, pady=5, columnspan=5)
-
     def mo_settings_screen(self) -> None:
         """Open the molecular orbital settings window."""
         self.mo_settings_window = tk.Toplevel(self)
@@ -543,10 +547,6 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         # Reset button
         reset_button = ttk.Button(settings_frame, text='Reset', command=self.reset_mo_settings)
         reset_button.grid(row=4, column=0, padx=5, pady=5, sticky='ew')
-
-        # Save settings button
-        save_button = ttk.Button(settings_frame, text='Save Settings', command=self.save_settings)
-        save_button.grid(row=5, column=0, padx=5, pady=5, sticky='ew')
 
     def on_opacity_change(self, val: str) -> None:
         """Handle opacity slider changes and apply immediately."""
@@ -659,10 +659,6 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         # Apply settings button
         apply_button = ttk.Button(settings_frame, text='Apply', command=self.apply_molecule_settings)
         apply_button.grid(row=14, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
-
-        # Save settings button
-        save_button = ttk.Button(settings_frame, text='Save Settings', command=self.save_settings)
-        save_button.grid(row=15, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
 
     def on_molecule_opacity_change(self, val: str) -> None:
         """Handle molecule opacity slider changes and apply immediately."""
@@ -862,10 +858,6 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         # Apply settings button
         apply_button = ttk.Button(settings_frame, text='Apply', command=self.apply_color_settings)
         apply_button.grid(row=13, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
-
-        # Save settings button
-        save_button = ttk.Button(settings_frame, text='Save Settings', command=self.save_settings)
-        save_button.grid(row=14, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
 
     def place_grid_params_frame(self) -> None:
         """Render the parameter frame that matches the selected grid type."""

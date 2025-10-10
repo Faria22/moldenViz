@@ -9,10 +9,14 @@ import matplotlib.pyplot as plt
 import toml
 from pydantic import BaseModel, Field, field_validator
 
-default_configs_dir = Path(__file__).parent / 'default_configs'
+# Global config paths
+DEFAULT_CONFIGS_DIR = Path(__file__).parent / 'default_configs'
+CUSTOM_CONFIGS_DIR = Path().home() / '.config/moldenViz'
+CUSTOM_CONFIGS_DIR.mkdir(parents=True, exist_ok=True)
 
-custom_configs_dir = Path().home() / '.config/moldenViz'
-custom_configs_dir.mkdir(parents=True, exist_ok=True)
+# Maintain backwards compatibility
+default_configs_dir = DEFAULT_CONFIGS_DIR
+custom_configs_dir = CUSTOM_CONFIGS_DIR
 
 
 class AtomType(BaseModel):
