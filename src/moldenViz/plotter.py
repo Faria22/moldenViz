@@ -133,22 +133,32 @@ class Plotter:
         # If we want to have the molecular orbitals, we need to initiate Tk before Qt
         # That is why we have this weird if statement separated this way
         if only_molecule:
+            # Add Export menu with Image option even when only molecule is shown
+            self._add_image_export_menu()
             self.pv_plotter.app.exec_()  # pyright: ignore[reportAttributeAccessIssue]
             return
 
         assert self.tk_root is not None  # To help type hinters
 
         if not tabulator:
-            # Default is a spherical grid
-            self.tabulator.spherical_grid(
-                np.linspace(
-                    0,
-                    max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius),
-                    config.grid.spherical.num_r_points,
-                ),
-                np.linspace(0, np.pi, config.grid.spherical.num_theta_points),
-                np.linspace(0, 2 * np.pi, config.grid.spherical.num_phi_points),
-            )
+            # Use configured default grid type
+            if config.grid.default_type == 'spherical':
+                self.tabulator.spherical_grid(
+                    np.linspace(
+                        0,
+                        max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius),
+                        config.grid.spherical.num_r_points,
+                    ),
+                    np.linspace(0, np.pi, config.grid.spherical.num_theta_points),
+                    np.linspace(0, 2 * np.pi, config.grid.spherical.num_phi_points),
+                )
+            else:  # cartesian
+                r = max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius)
+                self.tabulator.cartesian_grid(
+                    np.linspace(-r, r, config.grid.cartesian.num_x_points),
+                    np.linspace(-r, r, config.grid.cartesian.num_y_points),
+                    np.linspace(-r, r, config.grid.cartesian.num_z_points),
+                )
 
         self.orb_mesh = self._create_mo_mesh()
         self.orb_actor: pv.Actor | None = None
@@ -238,21 +248,163 @@ class Plotter:
         color_settings_action.triggered.connect(self.selection_screen.color_settings_screen)
         settings_menu.addAction(color_settings_action)
 
-        # Add separator before Save Settings
-        settings_menu.addSeparator()
+        # Create Export menu with dropdown
+        export_menu = QMenu('Export', self.pv_plotter.app_window)
 
-        # Add Save Settings action to menu
-        save_settings_action = QAction('Save Settings', self.pv_plotter.app_window)
-        save_settings_action.triggered.connect(self.selection_screen.save_settings)
-        settings_menu.addAction(save_settings_action)
+        # Add Export submenu items
+        export_data_action = QAction('Data', self.pv_plotter.app_window)
+        export_data_action.triggered.connect(self.selection_screen.export_orbitals_dialog)
+        export_menu.addAction(export_data_action)
 
-        # Create Export action
-        export_action = QAction('Export', self.pv_plotter.app_window)
-        export_action.triggered.connect(self.selection_screen.export_orbitals_dialog)
+        export_image_action = QAction('Image', self.pv_plotter.app_window)
+        export_image_action.triggered.connect(self.selection_screen.export_image_dialog)
+        export_menu.addAction(export_image_action)
 
         # Add menus to main menu bar
         self.pv_plotter.main_menu.addMenu(settings_menu)
-        self.pv_plotter.main_menu.addAction(export_action)
+        self.pv_plotter.main_menu.addMenu(export_menu)
+
+    def _add_image_export_menu(self) -> None:
+        """Add Export menu with Image option when only molecule is shown."""
+        export_menu = QMenu('Export', self.pv_plotter.app_window)
+
+        export_image_action = QAction('Image', self.pv_plotter.app_window)
+        export_image_action.triggered.connect(self._show_image_export_dialog)
+        export_menu.addAction(export_image_action)
+
+        self.pv_plotter.main_menu.addMenu(export_menu)
+
+    def _show_image_export_dialog(self) -> None:
+        """Show image export dialog (standalone version for only_molecule mode)."""
+        # Create a temporary tk root if needed
+        temp_root = tk.Tk()
+        temp_root.withdraw()
+
+        export_window = tk.Toplevel(temp_root)
+        export_window.title('Export Image')
+        export_window.geometry('400x250')
+
+        main_frame = ttk.Frame(export_window, padding=20)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        # File format selection
+        ttk.Label(main_frame, text='Image Format:', font=('TkDefaultFont', 10, 'bold')).grid(
+            row=0,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            pady=(0, 10),
+        )
+
+        format_var = tk.StringVar(value='png')
+        ttk.Radiobutton(main_frame, text='PNG (.png) - Raster format', variable=format_var, value='png').grid(
+            row=1,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            padx=20,
+        )
+        ttk.Radiobutton(main_frame, text='JPEG (.jpg) - Raster format', variable=format_var, value='jpeg').grid(
+            row=2,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            padx=20,
+            pady=(5, 0),
+        )
+        ttk.Radiobutton(main_frame, text='SVG (.svg) - Vector format', variable=format_var, value='svg').grid(
+            row=3,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            padx=20,
+            pady=(5, 0),
+        )
+        ttk.Radiobutton(main_frame, text='PDF (.pdf) - Vector format', variable=format_var, value='pdf').grid(
+            row=4,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            padx=20,
+            pady=(5, 15),
+        )
+
+        # Transparent background option (only for PNG)
+        transparent_var = tk.BooleanVar(value=False)
+        transparent_check = ttk.Checkbutton(
+            main_frame,
+            text='Transparent background (PNG only)',
+            variable=transparent_var,
+        )
+        transparent_check.grid(row=5, column=0, columnspan=2, sticky=tk.W, padx=20, pady=(0, 15))
+
+        def update_transparent_option(*_args: object) -> None:
+            """Enable/disable transparent option based on format."""
+            if format_var.get() == 'png':
+                transparent_check.config(state=tk.NORMAL)
+            else:
+                transparent_check.config(state=tk.DISABLED)
+
+        format_var.trace_add('write', update_transparent_option)
+        update_transparent_option()
+
+        def do_export() -> None:
+            """Execute the export operation."""
+            file_format = format_var.get()
+            transparent = transparent_var.get()
+
+            # Determine file extension and default name
+            ext_map = {'png': '.png', 'jpeg': '.jpg', 'svg': '.svg', 'pdf': '.pdf'}
+            ext = ext_map[file_format]
+            default_name = f'moldenviz_export{ext}'
+
+            # Define file types for dialog
+            file_types = {
+                'png': ('PNG Files', '*.png'),
+                'jpeg': ('JPEG Files', '*.jpg *.jpeg'),
+                'svg': ('SVG Files', '*.svg'),
+                'pdf': ('PDF Files', '*.pdf'),
+            }
+
+            # Show file save dialog
+            file_path = filedialog.asksaveasfilename(
+                parent=export_window,
+                title='Save Image Export',
+                defaultextension=ext,
+                initialfile=default_name,
+                filetypes=[file_types[file_format], ('All Files', '*.*')],
+            )
+
+            if not file_path:
+                return  # User cancelled
+
+            # Perform the export
+            try:
+                if file_format in {'svg', 'pdf'}:
+                    self.pv_plotter.save_graphic(file_path)
+                else:
+                    self.pv_plotter.screenshot(
+                        file_path,
+                        transparent_background=transparent if file_format == 'png' else False,
+                    )
+
+                messagebox.showinfo('Export Successful', f'Image exported successfully to:\n{file_path}')
+                export_window.destroy()
+                temp_root.destroy()
+            except (RuntimeError, OSError, ValueError) as e:
+                messagebox.showerror('Export Failed', f'Failed to export image:\n\n{e!s}')
+
+        # Buttons
+        button_frame = ttk.Frame(main_frame)
+        button_frame.grid(row=6, column=0, columnspan=2, pady=(20, 0))
+
+        ttk.Button(button_frame, text='Export', command=do_export).pack(side=tk.LEFT, padx=5)
+        ttk.Button(
+            button_frame,
+            text='Cancel',
+            command=lambda: (export_window.destroy(), temp_root.destroy()),
+        ).pack(side=tk.LEFT, padx=5)
+        export_window.protocol('WM_DELETE_WINDOW', lambda: (export_window.destroy(), temp_root.destroy()))
 
     def _connect_pv_plotter_close_signal(self) -> None:
         """Connect the PyVista plotter close signal to handle closing both windows."""
@@ -1045,7 +1197,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
     def reset_grid_settings(self) -> None:
         """Restore grid settings widgets back to configuration defaults."""
-        self.grid_type_radio_var.set(GridType.SPHERICAL.value)
+        self.grid_type_radio_var.set(config.grid.default_type)
 
         self.radius_entry.delete(0, tk.END)
         self.radius_entry.insert(
@@ -1250,19 +1402,14 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
         Only applies predefined color schemes, not custom colors.
         """
-        redraw_mo = False
+        self.on_mo_color_scheme_change(tk.Event())  # Ensure custom entries are shown
 
         # Check MO color scheme
         mo_color_scheme = self.mo_color_scheme_var.get().strip()
-        if mo_color_scheme != config.mo.color_scheme:
-            redraw_mo = True
-
-        # Check MO custom colors
         if mo_color_scheme == 'custom':
-            self.apply_custom_mo_color_settings()
             return
 
-        if redraw_mo:
+        if mo_color_scheme != config.mo.color_scheme:
             self.plotter.cmap = mo_color_scheme
             config.mo.color_scheme = mo_color_scheme
 
@@ -1479,6 +1626,152 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         ).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text='Cancel', command=on_close).pack(side=tk.LEFT, padx=5)
         export_window.protocol('WM_DELETE_WINDOW', on_close)
+
+    def export_image_dialog(self) -> None:
+        """Open a dialog to export the current visualization as an image."""
+        export_window = tk.Toplevel(self)
+        export_window.title('Export Image')
+        export_window.geometry('400x250')
+
+        main_frame = ttk.Frame(export_window, padding=20)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        # File format selection
+        ttk.Label(main_frame, text='Image Format:', font=('TkDefaultFont', 10, 'bold')).grid(
+            row=0,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            pady=(0, 10),
+        )
+
+        format_var = tk.StringVar(value='png')
+        ttk.Radiobutton(main_frame, text='PNG (.png) - Raster format', variable=format_var, value='png').grid(
+            row=1,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            padx=20,
+        )
+        ttk.Radiobutton(main_frame, text='JPEG (.jpg) - Raster format', variable=format_var, value='jpeg').grid(
+            row=2,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            padx=20,
+            pady=(5, 0),
+        )
+        ttk.Radiobutton(main_frame, text='SVG (.svg) - Vector format', variable=format_var, value='svg').grid(
+            row=3,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            padx=20,
+            pady=(5, 0),
+        )
+        ttk.Radiobutton(main_frame, text='PDF (.pdf) - Vector format', variable=format_var, value='pdf').grid(
+            row=4,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            padx=20,
+            pady=(5, 15),
+        )
+
+        # Transparent background option (only for PNG)
+        transparent_var = tk.BooleanVar(value=False)
+        transparent_check = ttk.Checkbutton(
+            main_frame,
+            text='Transparent background (PNG only)',
+            variable=transparent_var,
+        )
+        transparent_check.grid(row=5, column=0, columnspan=2, sticky=tk.W, padx=20, pady=(0, 15))
+
+        def update_transparent_option(*_args: object) -> None:
+            """Enable/disable transparent option based on format."""
+            if format_var.get() == 'png':
+                transparent_check.config(state=tk.NORMAL)
+            else:
+                transparent_check.config(state=tk.DISABLED)
+
+        format_var.trace_add('write', update_transparent_option)
+        update_transparent_option()
+
+        # Buttons
+        button_frame = ttk.Frame(main_frame)
+        button_frame.grid(row=6, column=0, columnspan=2, pady=(20, 0))
+
+        ttk.Button(
+            button_frame,
+            text='Export',
+            command=lambda: self._do_image_export(export_window, format_var, transparent_var),
+        ).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text='Cancel', command=export_window.destroy).pack(side=tk.LEFT, padx=5)
+        export_window.protocol('WM_DELETE_WINDOW', export_window.destroy)
+
+    def _do_image_export(
+        self,
+        export_window: tk.Toplevel,
+        format_var: tk.StringVar,
+        transparent_var: tk.BooleanVar,
+    ) -> None:
+        """Execute the image export operation.
+
+        Parameters
+        ----------
+        export_window : tk.Toplevel
+            The export dialog window to close on success.
+        format_var : tk.StringVar
+            Variable holding the selected export format ('png', 'jpeg', 'svg', or 'pdf').
+            Note: JPEG files are saved with .jpg extension (the standard).
+        transparent_var : tk.BooleanVar
+            Variable indicating whether to use a transparent background (PNG only).
+        """
+        file_format = format_var.get()
+        transparent = transparent_var.get()
+
+        # Determine file extension and default name
+        # Note: JPEG format uses .jpg as the standard extension
+        ext_map = {'png': '.png', 'jpeg': '.jpg', 'svg': '.svg', 'pdf': '.pdf'}
+        ext = ext_map[file_format]
+        default_name = f'moldenviz_export{ext}'
+
+        # Define file types for dialog
+        file_types = {
+            'png': ('PNG Files', '*.png'),
+            'jpeg': ('JPEG Files', '*.jpg *.jpeg'),
+            'svg': ('SVG Files', '*.svg'),
+            'pdf': ('PDF Files', '*.pdf'),
+        }
+
+        # Show file save dialog
+        file_path = filedialog.asksaveasfilename(
+            parent=export_window,
+            title='Save Image Export',
+            defaultextension=ext,
+            initialfile=default_name,
+            filetypes=[file_types[file_format], ('All Files', '*.*')],
+        )
+
+        if not file_path:
+            return  # User cancelled
+
+        # Perform the export
+        try:
+            if file_format in {'svg', 'pdf'}:
+                # Use save_graphic for vector formats
+                self.plotter.pv_plotter.save_graphic(file_path)
+            else:
+                # Use screenshot for raster formats
+                self.plotter.pv_plotter.screenshot(
+                    file_path,
+                    transparent_background=transparent if file_format == 'png' else False,
+                )
+
+            messagebox.showinfo('Export Successful', f'Image exported successfully to:\n{file_path}')
+            export_window.destroy()
+        except (RuntimeError, OSError, ValueError) as e:
+            messagebox.showerror('Export Failed', f'Failed to export image:\n\n{e!s}')
 
     def update_nav_button_states(self) -> None:
         """Synchronize navigation button state with the current orbital index."""
