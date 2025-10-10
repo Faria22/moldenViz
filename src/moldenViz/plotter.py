@@ -238,13 +238,21 @@ class Plotter:
         color_settings_action.triggered.connect(self.selection_screen.color_settings_screen)
         settings_menu.addAction(color_settings_action)
 
-        # Create Export action
-        export_action = QAction('Export', self.pv_plotter.app_window)
-        export_action.triggered.connect(self.selection_screen.export_orbitals_dialog)
+        # Create Export menu with dropdown
+        export_menu = QMenu('Export', self.pv_plotter.app_window)
+
+        # Add Export submenu items
+        export_data_action = QAction('Data', self.pv_plotter.app_window)
+        export_data_action.triggered.connect(self.selection_screen.export_orbitals_dialog)
+        export_menu.addAction(export_data_action)
+
+        export_image_action = QAction('Image', self.pv_plotter.app_window)
+        export_image_action.triggered.connect(self.selection_screen.export_image_dialog)
+        export_menu.addAction(export_image_action)
 
         # Add menus to main menu bar
         self.pv_plotter.main_menu.addMenu(settings_menu)
-        self.pv_plotter.main_menu.addAction(export_action)
+        self.pv_plotter.main_menu.addMenu(export_menu)
 
     def _connect_pv_plotter_close_signal(self) -> None:
         """Connect the PyVista plotter close signal to handle closing both windows."""
@@ -1463,6 +1471,149 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         ).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text='Cancel', command=on_close).pack(side=tk.LEFT, padx=5)
         export_window.protocol('WM_DELETE_WINDOW', on_close)
+
+    def export_image_dialog(self) -> None:
+        """Open a dialog to export the current visualization as an image."""
+        export_window = tk.Toplevel(self)
+        export_window.title('Export Image')
+        export_window.geometry('400x250')
+
+        main_frame = ttk.Frame(export_window, padding=20)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        # File format selection
+        ttk.Label(main_frame, text='Image Format:', font=('TkDefaultFont', 10, 'bold')).grid(
+            row=0,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            pady=(0, 10),
+        )
+
+        format_var = tk.StringVar(value='png')
+        ttk.Radiobutton(main_frame, text='PNG (.png) - Raster format', variable=format_var, value='png').grid(
+            row=1,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            padx=20,
+        )
+        ttk.Radiobutton(main_frame, text='JPEG (.jpeg) - Raster format', variable=format_var, value='jpeg').grid(
+            row=2,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            padx=20,
+            pady=(5, 0),
+        )
+        ttk.Radiobutton(main_frame, text='SVG (.svg) - Vector format', variable=format_var, value='svg').grid(
+            row=3,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            padx=20,
+            pady=(5, 0),
+        )
+        ttk.Radiobutton(main_frame, text='PDF (.pdf) - Vector format', variable=format_var, value='pdf').grid(
+            row=4,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            padx=20,
+            pady=(5, 15),
+        )
+
+        # Transparent background option (only for PNG)
+        transparent_var = tk.BooleanVar(value=False)
+        transparent_check = ttk.Checkbutton(
+            main_frame,
+            text='Transparent background (PNG only)',
+            variable=transparent_var,
+        )
+        transparent_check.grid(row=5, column=0, columnspan=2, sticky=tk.W, padx=20, pady=(0, 15))
+
+        def update_transparent_option(*_args: object) -> None:
+            """Enable/disable transparent option based on format."""
+            if format_var.get() == 'png':
+                transparent_check.config(state=tk.NORMAL)
+            else:
+                transparent_check.config(state=tk.DISABLED)
+
+        format_var.trace_add('write', update_transparent_option)
+        update_transparent_option()
+
+        # Buttons
+        button_frame = ttk.Frame(main_frame)
+        button_frame.grid(row=6, column=0, columnspan=2, pady=(20, 0))
+
+        ttk.Button(
+            button_frame,
+            text='Export',
+            command=lambda: self._do_image_export(export_window, format_var, transparent_var),
+        ).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text='Cancel', command=export_window.destroy).pack(side=tk.LEFT, padx=5)
+        export_window.protocol('WM_DELETE_WINDOW', export_window.destroy)
+
+    def _do_image_export(
+        self,
+        export_window: tk.Toplevel,
+        format_var: tk.StringVar,
+        transparent_var: tk.BooleanVar,
+    ) -> None:
+        """Execute the image export operation.
+
+        Parameters
+        ----------
+        export_window : tk.Toplevel
+            The export dialog window to close on success.
+        format_var : tk.StringVar
+            Variable holding the selected export format ('png', 'jpeg', 'svg', or 'pdf').
+        transparent_var : tk.BooleanVar
+            Variable indicating whether to use a transparent background (PNG only).
+        """
+        file_format = format_var.get()
+        transparent = transparent_var.get()
+
+        # Determine file extension and default name
+        ext = f'.{file_format}'
+        default_name = f'moldenviz_export{ext}'
+
+        # Define file types for dialog
+        file_types = {
+            'png': ('PNG Files', '*.png'),
+            'jpeg': ('JPEG Files', '*.jpeg *.jpg'),
+            'svg': ('SVG Files', '*.svg'),
+            'pdf': ('PDF Files', '*.pdf'),
+        }
+
+        # Show file save dialog
+        file_path = filedialog.asksaveasfilename(
+            parent=export_window,
+            title='Save Image Export',
+            defaultextension=ext,
+            initialfile=default_name,
+            filetypes=[file_types[file_format], ('All Files', '*.*')],
+        )
+
+        if not file_path:
+            return  # User cancelled
+
+        # Perform the export
+        try:
+            if file_format in {'svg', 'pdf'}:
+                # Use save_graphic for vector formats
+                self.plotter.pv_plotter.save_graphic(file_path)
+            else:
+                # Use screenshot for raster formats
+                self.plotter.pv_plotter.screenshot(
+                    file_path,
+                    transparent_background=transparent if file_format == 'png' else False,
+                )
+
+            messagebox.showinfo('Export Successful', f'Image exported successfully to:\n{file_path}')
+            export_window.destroy()
+        except (RuntimeError, OSError, ValueError) as e:
+            messagebox.showerror('Export Failed', f'Failed to export image:\n\n{e!s}')
 
     def update_nav_button_states(self) -> None:
         """Synchronize navigation button state with the current orbital index."""
