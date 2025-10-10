@@ -747,9 +747,6 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.mo_color_scheme_dropdown.bind('<<ComboboxSelected>>', self.on_mo_color_scheme_change)
 
         # Custom colors section (initially hidden if predefined scheme is selected)
-        self.custom_colors_row_start = 5
-        self.custom_colors_row_end = 6
-
         ttk.Label(settings_frame, text='Negative Color:').grid(row=5, column=0, padx=5, pady=5, sticky='w')
         self.mo_negative_color_entry = ttk.Entry(settings_frame, width=15)
         if config.mo.custom_colors and len(config.mo.custom_colors) > 0:
@@ -766,11 +763,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.mo_custom_color_widgets = []
         for widget in settings_frame.grid_slaves():
             info = widget.grid_info()
-            if (
-                info
-                and int(info['row']) >= self.custom_colors_row_start
-                and int(info['row']) <= self.custom_colors_row_end
-            ):
+            if info and int(info['row']) >= 5 and int(info['row']) <= 6:
                 self.mo_custom_color_widgets.append(widget)
 
         # Hide custom color entries if predefined scheme is selected
