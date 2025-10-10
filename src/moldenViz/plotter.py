@@ -1498,7 +1498,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
             sticky=tk.W,
             padx=20,
         )
-        ttk.Radiobutton(main_frame, text='JPEG (.jpeg) - Raster format', variable=format_var, value='jpeg').grid(
+        ttk.Radiobutton(main_frame, text='JPEG (.jpg) - Raster format', variable=format_var, value='jpeg').grid(
             row=2,
             column=0,
             columnspan=2,
@@ -1568,6 +1568,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
             The export dialog window to close on success.
         format_var : tk.StringVar
             Variable holding the selected export format ('png', 'jpeg', 'svg', or 'pdf').
+            Note: JPEG files are saved with .jpg extension (the standard).
         transparent_var : tk.BooleanVar
             Variable indicating whether to use a transparent background (PNG only).
         """
@@ -1575,13 +1576,15 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         transparent = transparent_var.get()
 
         # Determine file extension and default name
-        ext = f'.{file_format}'
+        # Note: JPEG format uses .jpg as the standard extension
+        ext_map = {'png': '.png', 'jpeg': '.jpg', 'svg': '.svg', 'pdf': '.pdf'}
+        ext = ext_map[file_format]
         default_name = f'moldenviz_export{ext}'
 
         # Define file types for dialog
         file_types = {
             'png': ('PNG Files', '*.png'),
-            'jpeg': ('JPEG Files', '*.jpeg *.jpg'),
+            'jpeg': ('JPEG Files', '*.jpg *.jpeg'),
             'svg': ('SVG Files', '*.svg'),
             'pdf': ('PDF Files', '*.pdf'),
         }

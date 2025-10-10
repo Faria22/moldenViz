@@ -85,7 +85,7 @@ The export uses the current grid configuration from the plotter, so adjust grid 
 2. Choose your image format:
 
    - **PNG (.png)**: Raster format with optional transparent background
-   - **JPEG (.jpeg)**: Raster format (no transparency support)
+   - **JPEG (.jpg)**: Raster format (no transparency support)
    - **SVG (.svg)**: Vector format for scalable graphics
    - **PDF (.pdf)**: Vector format for publication-quality output
 
