@@ -57,6 +57,7 @@ class GridConfig(BaseModel):
 
     min_radius: int = Field(5, gt=0, description='Minimum radius')
     max_radius_multiplier: int = Field(2, gt=0, description='Max radius multiplier')
+    default_type: Literal['spherical', 'cartesian'] = Field('spherical', description='Default grid type')
     spherical: SphericalGridConfig = Field(default_factory=SphericalGridConfig)
     cartesian: CartesianGridConfig = Field(default_factory=CartesianGridConfig)
 

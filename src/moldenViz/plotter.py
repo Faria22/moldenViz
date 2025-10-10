@@ -139,16 +139,24 @@ class Plotter:
         assert self.tk_root is not None  # To help type hinters
 
         if not tabulator:
-            # Default is a spherical grid
-            self.tabulator.spherical_grid(
-                np.linspace(
-                    0,
-                    max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius),
-                    config.grid.spherical.num_r_points,
-                ),
-                np.linspace(0, np.pi, config.grid.spherical.num_theta_points),
-                np.linspace(0, 2 * np.pi, config.grid.spherical.num_phi_points),
-            )
+            # Use configured default grid type
+            if config.grid.default_type == 'spherical':
+                self.tabulator.spherical_grid(
+                    np.linspace(
+                        0,
+                        max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius),
+                        config.grid.spherical.num_r_points,
+                    ),
+                    np.linspace(0, np.pi, config.grid.spherical.num_theta_points),
+                    np.linspace(0, 2 * np.pi, config.grid.spherical.num_phi_points),
+                )
+            else:  # cartesian
+                r = max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius)
+                self.tabulator.cartesian_grid(
+                    np.linspace(-r, r, config.grid.cartesian.num_x_points),
+                    np.linspace(-r, r, config.grid.cartesian.num_y_points),
+                    np.linspace(-r, r, config.grid.cartesian.num_z_points),
+                )
 
         self.orb_mesh = self._create_mo_mesh()
         self.orb_actor: pv.Actor | None = None
@@ -1037,7 +1045,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
     def reset_grid_settings(self) -> None:
         """Restore grid settings widgets back to configuration defaults."""
-        self.grid_type_radio_var.set(GridType.SPHERICAL.value)
+        self.grid_type_radio_var.set(config.grid.default_type)
 
         self.radius_entry.delete(0, tk.END)
         self.radius_entry.insert(
