@@ -133,6 +133,8 @@ class Plotter:
         # If we want to have the molecular orbitals, we need to initiate Tk before Qt
         # That is why we have this weird if statement separated this way
         if only_molecule:
+            # Add Export menu with Image option even when only molecule is shown
+            self._add_image_export_menu()
             self.pv_plotter.app.exec_()  # pyright: ignore[reportAttributeAccessIssue]
             return
 
@@ -253,6 +255,148 @@ class Plotter:
         # Add menus to main menu bar
         self.pv_plotter.main_menu.addMenu(settings_menu)
         self.pv_plotter.main_menu.addMenu(export_menu)
+
+    def _add_image_export_menu(self) -> None:
+        """Add Export menu with Image option when only molecule is shown."""
+        export_menu = QMenu('Export', self.pv_plotter.app_window)
+
+        export_image_action = QAction('Image', self.pv_plotter.app_window)
+        export_image_action.triggered.connect(self._show_image_export_dialog)
+        export_menu.addAction(export_image_action)
+
+        self.pv_plotter.main_menu.addMenu(export_menu)
+
+    def _show_image_export_dialog(self) -> None:
+        """Show image export dialog (standalone version for only_molecule mode)."""
+        # Create a temporary tk root if needed
+        temp_root = tk.Tk()
+        temp_root.withdraw()
+
+        export_window = tk.Toplevel(temp_root)
+        export_window.title('Export Image')
+        export_window.geometry('400x250')
+
+        main_frame = ttk.Frame(export_window, padding=20)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        # File format selection
+        ttk.Label(main_frame, text='Image Format:', font=('TkDefaultFont', 10, 'bold')).grid(
+            row=0,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            pady=(0, 10),
+        )
+
+        format_var = tk.StringVar(value='png')
+        ttk.Radiobutton(main_frame, text='PNG (.png) - Raster format', variable=format_var, value='png').grid(
+            row=1,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            padx=20,
+        )
+        ttk.Radiobutton(main_frame, text='JPEG (.jpg) - Raster format', variable=format_var, value='jpeg').grid(
+            row=2,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            padx=20,
+            pady=(5, 0),
+        )
+        ttk.Radiobutton(main_frame, text='SVG (.svg) - Vector format', variable=format_var, value='svg').grid(
+            row=3,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            padx=20,
+            pady=(5, 0),
+        )
+        ttk.Radiobutton(main_frame, text='PDF (.pdf) - Vector format', variable=format_var, value='pdf').grid(
+            row=4,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            padx=20,
+            pady=(5, 15),
+        )
+
+        # Transparent background option (only for PNG)
+        transparent_var = tk.BooleanVar(value=False)
+        transparent_check = ttk.Checkbutton(
+            main_frame,
+            text='Transparent background (PNG only)',
+            variable=transparent_var,
+        )
+        transparent_check.grid(row=5, column=0, columnspan=2, sticky=tk.W, padx=20, pady=(0, 15))
+
+        def update_transparent_option(*_args: object) -> None:
+            """Enable/disable transparent option based on format."""
+            if format_var.get() == 'png':
+                transparent_check.config(state=tk.NORMAL)
+            else:
+                transparent_check.config(state=tk.DISABLED)
+
+        format_var.trace_add('write', update_transparent_option)
+        update_transparent_option()
+
+        def do_export() -> None:
+            """Execute the export operation."""
+            file_format = format_var.get()
+            transparent = transparent_var.get()
+
+            # Determine file extension and default name
+            ext_map = {'png': '.png', 'jpeg': '.jpg', 'svg': '.svg', 'pdf': '.pdf'}
+            ext = ext_map[file_format]
+            default_name = f'moldenviz_export{ext}'
+
+            # Define file types for dialog
+            file_types = {
+                'png': ('PNG Files', '*.png'),
+                'jpeg': ('JPEG Files', '*.jpg *.jpeg'),
+                'svg': ('SVG Files', '*.svg'),
+                'pdf': ('PDF Files', '*.pdf'),
+            }
+
+            # Show file save dialog
+            file_path = filedialog.asksaveasfilename(
+                parent=export_window,
+                title='Save Image Export',
+                defaultextension=ext,
+                initialfile=default_name,
+                filetypes=[file_types[file_format], ('All Files', '*.*')],
+            )
+
+            if not file_path:
+                return  # User cancelled
+
+            # Perform the export
+            try:
+                if file_format in {'svg', 'pdf'}:
+                    self.pv_plotter.save_graphic(file_path)
+                else:
+                    self.pv_plotter.screenshot(
+                        file_path,
+                        transparent_background=transparent if file_format == 'png' else False,
+                    )
+
+                messagebox.showinfo('Export Successful', f'Image exported successfully to:\n{file_path}')
+                export_window.destroy()
+                temp_root.destroy()
+            except (RuntimeError, OSError, ValueError) as e:
+                messagebox.showerror('Export Failed', f'Failed to export image:\n\n{e!s}')
+
+        # Buttons
+        button_frame = ttk.Frame(main_frame)
+        button_frame.grid(row=6, column=0, columnspan=2, pady=(20, 0))
+
+        ttk.Button(button_frame, text='Export', command=do_export).pack(side=tk.LEFT, padx=5)
+        ttk.Button(
+            button_frame,
+            text='Cancel',
+            command=lambda: (export_window.destroy(), temp_root.destroy()),
+        ).pack(side=tk.LEFT, padx=5)
+        export_window.protocol('WM_DELETE_WINDOW', lambda: (export_window.destroy(), temp_root.destroy()))
 
     def _connect_pv_plotter_close_signal(self) -> None:
         """Connect the PyVista plotter close signal to handle closing both windows."""
