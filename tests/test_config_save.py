@@ -10,10 +10,11 @@ from tests._src_imports import config_module
 
 def test_save_current_config_creates_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that save_current_config creates the config file."""
-    # Temporarily change the custom_configs_dir to a temp directory
+    # Temporarily change the CUSTOM_CONFIG_PATH to a temp directory
     test_config_dir = tmp_path / '.config' / 'moldenViz'
     test_config_dir.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setattr(config_module, 'custom_configs_dir', test_config_dir)
+    test_config_path = test_config_dir / 'config.toml'
+    monkeypatch.setattr(config_module, 'CUSTOM_CONFIG_PATH', test_config_path)
 
     # Create a config instance
     config = config_module.Config()
@@ -22,16 +23,16 @@ def test_save_current_config_creates_file(tmp_path: Path, monkeypatch: pytest.Mo
     config.save_current_config()
 
     # Verify the file was created
-    config_file = test_config_dir / 'config.toml'
-    assert config_file.exists()
+    assert test_config_path.exists()
 
 
 def test_save_current_config_preserves_values(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that save_current_config correctly saves all configuration values."""
-    # Temporarily change the custom_configs_dir to a temp directory
+    # Temporarily change the CUSTOM_CONFIG_PATH to a temp directory
     test_config_dir = tmp_path / '.config' / 'moldenViz'
     test_config_dir.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setattr(config_module, 'custom_configs_dir', test_config_dir)
+    test_config_path = test_config_dir / 'config.toml'
+    monkeypatch.setattr(config_module, 'CUSTOM_CONFIG_PATH', test_config_path)
 
     # Create a config instance
     config = config_module.Config()
@@ -47,8 +48,7 @@ def test_save_current_config_preserves_values(tmp_path: Path, monkeypatch: pytes
     config.save_current_config()
 
     # Load and verify the saved config
-    config_file = test_config_dir / 'config.toml'
-    with config_file.open('r') as f:
+    with test_config_path.open('r') as f:
         saved_config = toml.load(f)
 
     assert saved_config['background_color'] == 'black'
@@ -60,10 +60,11 @@ def test_save_current_config_preserves_values(tmp_path: Path, monkeypatch: pytes
 
 def test_save_current_config_with_custom_colors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that save_current_config correctly saves custom MO colors."""
-    # Temporarily change the custom_configs_dir to a temp directory
+    # Temporarily change the CUSTOM_CONFIG_PATH to a temp directory
     test_config_dir = tmp_path / '.config' / 'moldenViz'
     test_config_dir.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setattr(config_module, 'custom_configs_dir', test_config_dir)
+    test_config_path = test_config_dir / 'config.toml'
+    monkeypatch.setattr(config_module, 'CUSTOM_CONFIG_PATH', test_config_path)
 
     # Create a config instance
     config = config_module.Config()
@@ -75,8 +76,7 @@ def test_save_current_config_with_custom_colors(tmp_path: Path, monkeypatch: pyt
     config.save_current_config()
 
     # Load and verify the saved config
-    config_file = test_config_dir / 'config.toml'
-    with config_file.open('r') as f:
+    with test_config_path.open('r') as f:
         saved_config = toml.load(f)
 
     assert saved_config['MO']['custom_colors'] == ['blue', 'red']
@@ -84,10 +84,11 @@ def test_save_current_config_with_custom_colors(tmp_path: Path, monkeypatch: pyt
 
 def test_save_current_config_without_custom_colors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that save_current_config doesn't include custom_colors when None."""
-    # Temporarily change the custom_configs_dir to a temp directory
+    # Temporarily change the CUSTOM_CONFIG_PATH to a temp directory
     test_config_dir = tmp_path / '.config' / 'moldenViz'
     test_config_dir.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setattr(config_module, 'custom_configs_dir', test_config_dir)
+    test_config_path = test_config_dir / 'config.toml'
+    monkeypatch.setattr(config_module, 'CUSTOM_CONFIG_PATH', test_config_path)
 
     # Create a config instance
     config = config_module.Config()
@@ -99,8 +100,7 @@ def test_save_current_config_without_custom_colors(tmp_path: Path, monkeypatch: 
     config.save_current_config()
 
     # Load and verify the saved config
-    config_file = test_config_dir / 'config.toml'
-    with config_file.open('r') as f:
+    with test_config_path.open('r') as f:
         saved_config = toml.load(f)
 
     assert 'custom_colors' not in saved_config['MO']

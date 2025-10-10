@@ -9,10 +9,15 @@ import matplotlib.pyplot as plt
 import toml
 from pydantic import BaseModel, Field, field_validator
 
-# Global config paths
+# Global config directory paths
 DEFAULT_CONFIGS_DIR = Path(__file__).parent / 'default_configs'
 CUSTOM_CONFIGS_DIR = Path().home() / '.config/moldenViz'
 CUSTOM_CONFIGS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Global config file paths
+DEFAULT_CONFIG_PATH = DEFAULT_CONFIGS_DIR / 'config.toml'
+CUSTOM_CONFIG_PATH = CUSTOM_CONFIGS_DIR / 'config.toml'
+ATOM_TYPES_PATH = DEFAULT_CONFIGS_DIR / 'atom_types.json'
 
 # Maintain backwards compatibility
 default_configs_dir = DEFAULT_CONFIGS_DIR
@@ -335,7 +340,7 @@ class Config:
         dict[int, AtomType]
             A dictionary mapping atomic numbers to AtomType objects.
         """
-        with (default_configs_dir / 'atom_types.json').open('r') as f:
+        with ATOM_TYPES_PATH.open('r') as f:
             atom_types_data = json.load(f)
 
         # Validate and create AtomType objects using pydantic
@@ -390,11 +395,10 @@ class Config:
         FileNotFoundError
             If the default configuration file is not found.
         """
-        default_config_path = default_configs_dir / 'config.toml'
-        if not default_config_path.exists():
-            raise FileNotFoundError(f'Default configuration file not found at {default_config_path}. ')
+        if not DEFAULT_CONFIG_PATH.exists():
+            raise FileNotFoundError(f'Default configuration file not found at {DEFAULT_CONFIG_PATH}. ')
 
-        with default_config_path.open('r') as f:
+        with DEFAULT_CONFIG_PATH.open('r') as f:
             return toml.load(f)
 
     @staticmethod
@@ -406,11 +410,10 @@ class Config:
         dict
             The custom configuration dictionary. Empty dict if file doesn't exist.
         """
-        custom_config_path = custom_configs_dir / 'config.toml'
-        if not custom_config_path.exists():
+        if not CUSTOM_CONFIG_PATH.exists():
             return {}
 
-        with custom_config_path.open('r') as f:
+        with CUSTOM_CONFIG_PATH.open('r') as f:
             return toml.load(f)
 
     def save_current_config(self) -> None:
@@ -419,8 +422,6 @@ class Config:
         This method writes the current configuration values to ~/.config/moldenViz/config.toml,
         preserving the TOML structure.
         """
-        custom_config_path = custom_configs_dir / 'config.toml'
-
         # Build the configuration dict from the current values
         config_dict = {
             'smooth_shading': self.config.smooth_shading,
@@ -464,5 +465,5 @@ class Config:
             config_dict['MO']['custom_colors'] = self.config.mo.custom_colors
 
         # Write to file
-        with custom_config_path.open('w') as f:
+        with CUSTOM_CONFIG_PATH.open('w') as f:
             toml.dump(config_dict, f)
