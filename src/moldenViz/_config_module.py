@@ -39,24 +39,24 @@ class AtomType(BaseModel):
 class SphericalGridConfig(BaseModel):
     """Configuration for spherical grid parameters."""
 
-    num_r_points: int = Field(100, gt=0, description='Number of radial points (1-1000)')
-    num_theta_points: int = Field(60, gt=0, description='Number of theta points (1-1000)')
-    num_phi_points: int = Field(120, gt=0, description='Number of phi points (1-1000)')
+    num_r_points: int = Field(100, gt=0, description='Number of radial points')
+    num_theta_points: int = Field(60, gt=0, description='Number of theta points')
+    num_phi_points: int = Field(120, gt=0, description='Number of phi points')
 
 
 class CartesianGridConfig(BaseModel):
     """Configuration for cartesian grid parameters."""
 
-    num_x_points: int = Field(100, gt=0, description='Number of x points (1-1000)')
-    num_y_points: int = Field(100, gt=0, description='Number of y points (1-1000)')
-    num_z_points: int = Field(100, gt=0, description='Number of z points (1-1000)')
+    num_x_points: int = Field(100, gt=0, description='Number of x points')
+    num_y_points: int = Field(100, gt=0, description='Number of y points')
+    num_z_points: int = Field(100, gt=0, description='Number of z points')
 
 
 class GridConfig(BaseModel):
     """Configuration for grid generation."""
 
-    min_radius: int = Field(5, gt=0, description='Minimum radius (1-100)')
-    max_radius_multiplier: int = Field(2, gt=0, description='Max radius multiplier (1-10)')
+    min_radius: int = Field(5, gt=0, description='Minimum radius')
+    max_radius_multiplier: int = Field(2, gt=0, description='Max radius multiplier')
     spherical: SphericalGridConfig = Field(default_factory=SphericalGridConfig)
     cartesian: CartesianGridConfig = Field(default_factory=CartesianGridConfig)
 
