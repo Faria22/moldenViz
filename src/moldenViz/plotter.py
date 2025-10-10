@@ -765,7 +765,8 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
     def molecule_settings_screen(self) -> None:
         """Open the molecule settings window."""
-        self.molecule_settings_window = tk.Toplevel(self)
+        # Use self.master (tk_root) as parent to ensure window is shown even when selection_screen is hidden
+        self.molecule_settings_window = tk.Toplevel(self.master)
         self.molecule_settings_window.title('Molecule Settings')
 
         settings_frame = ttk.Frame(self.molecule_settings_window)
@@ -892,7 +893,8 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
     def color_settings_screen(self) -> None:
         """Open the color settings window."""
-        self.color_settings_window = tk.Toplevel(self)
+        # Use self.master (tk_root) as parent to ensure window is shown even when selection_screen is hidden
+        self.color_settings_window = tk.Toplevel(self.master)
         self.color_settings_window.title('Color Settings')
 
         settings_frame = ttk.Frame(self.color_settings_window)
