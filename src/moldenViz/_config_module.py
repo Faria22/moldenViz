@@ -408,3 +408,57 @@ class Config:
 
         with custom_config_path.open('r') as f:
             return toml.load(f)
+
+    def save_current_config(self) -> None:
+        """Save the current configuration to the custom config file.
+
+        This method writes the current configuration values to ~/.config/moldenViz/config.toml,
+        preserving the TOML structure.
+        """
+        custom_config_path = custom_configs_dir / 'config.toml'
+
+        # Build the configuration dict from the current values
+        config_dict = {
+            'smooth_shading': self.config.smooth_shading,
+            'background_color': self.config.background_color,
+            'grid': {
+                'min_radius': self.config.grid.min_radius,
+                'max_radius_multiplier': self.config.grid.max_radius_multiplier,
+                'spherical': {
+                    'num_r_points': self.config.grid.spherical.num_r_points,
+                    'num_theta_points': self.config.grid.spherical.num_theta_points,
+                    'num_phi_points': self.config.grid.spherical.num_phi_points,
+                },
+                'cartesian': {
+                    'num_x_points': self.config.grid.cartesian.num_x_points,
+                    'num_y_points': self.config.grid.cartesian.num_y_points,
+                    'num_z_points': self.config.grid.cartesian.num_z_points,
+                },
+            },
+            'MO': {
+                'contour': self.config.mo.contour,
+                'opacity': self.config.mo.opacity,
+                'color_scheme': self.config.mo.color_scheme,
+            },
+            'molecule': {
+                'opacity': self.config.molecule.opacity,
+                'atom': {
+                    'show': self.config.molecule.atom.show,
+                },
+                'bond': {
+                    'show': self.config.molecule.bond.show,
+                    'max_length': self.config.molecule.bond.max_length,
+                    'color_type': self.config.molecule.bond.color_type,
+                    'color': self.config.molecule.bond.color,
+                    'radius': self.config.molecule.bond.radius,
+                },
+            },
+        }
+
+        # Add custom_colors if set
+        if self.config.mo.custom_colors is not None:
+            config_dict['MO']['custom_colors'] = self.config.mo.custom_colors
+
+        # Write to file
+        with custom_config_path.open('w') as f:
+            toml.dump(config_dict, f)

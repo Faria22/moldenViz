@@ -501,6 +501,10 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         apply_button = ttk.Button(settings_frame, text='Apply', command=self.apply_grid_settings)
         apply_button.grid(row=9, column=0, padx=5, pady=5, columnspan=5)
 
+        # Save settings button
+        save_button = ttk.Button(settings_frame, text='Save Settings', command=self.save_settings)
+        save_button.grid(row=10, column=0, padx=5, pady=5, columnspan=5)
+
     def mo_settings_screen(self) -> None:
         """Open the molecular orbital settings window."""
         self.mo_settings_window = tk.Toplevel(self)
@@ -539,6 +543,10 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         # Reset button
         reset_button = ttk.Button(settings_frame, text='Reset', command=self.reset_mo_settings)
         reset_button.grid(row=4, column=0, padx=5, pady=5, sticky='ew')
+
+        # Save settings button
+        save_button = ttk.Button(settings_frame, text='Save Settings', command=self.save_settings)
+        save_button.grid(row=5, column=0, padx=5, pady=5, sticky='ew')
 
     def on_opacity_change(self, val: str) -> None:
         """Handle opacity slider changes and apply immediately."""
@@ -651,6 +659,10 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         # Apply settings button
         apply_button = ttk.Button(settings_frame, text='Apply', command=self.apply_molecule_settings)
         apply_button.grid(row=14, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
+
+        # Save settings button
+        save_button = ttk.Button(settings_frame, text='Save Settings', command=self.save_settings)
+        save_button.grid(row=15, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
 
     def on_molecule_opacity_change(self, val: str) -> None:
         """Handle molecule opacity slider changes and apply immediately."""
@@ -850,6 +862,10 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         # Apply settings button
         apply_button = ttk.Button(settings_frame, text='Apply', command=self.apply_color_settings)
         apply_button.grid(row=13, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
+
+        # Save settings button
+        save_button = ttk.Button(settings_frame, text='Save Settings', command=self.save_settings)
+        save_button.grid(row=14, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
 
     def place_grid_params_frame(self) -> None:
         """Render the parameter frame that matches the selected grid type."""
@@ -1299,6 +1315,14 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
         if redraw_molecule:
             self.plotter.load_molecule(config)
+
+    def save_settings(self) -> None:  # noqa: PLR6301
+        """Save current configuration to the user's custom config file."""
+        try:
+            config.save_current_config()
+            messagebox.showinfo('Settings Saved', 'Configuration saved successfully to ~/.config/moldenViz/config.toml')
+        except (OSError, ValueError) as e:
+            messagebox.showerror('Save Error', f'Failed to save configuration: {e!s}')
 
     def next_plot(self) -> None:
         """Advance to the next molecular orbital."""
