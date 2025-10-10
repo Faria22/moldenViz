@@ -117,12 +117,12 @@ class Plotter:
         # Store the only_molecule flag
         self._only_molecule = only_molecule
 
-        if not only_molecule:
-            self.tk_root = tk_root
-            self._no_prev_tk_root = self.tk_root is None
-            if self._no_prev_tk_root:
-                self.tk_root = tk.Tk()
-                self.tk_root.withdraw()  # Hides window
+        # Create tk_root for settings windows (needed even in only_molecule mode)
+        self.tk_root = tk_root
+        self._no_prev_tk_root = self.tk_root is None
+        if self._no_prev_tk_root:
+            self.tk_root = tk.Tk()
+            self.tk_root.withdraw()  # Hides window
 
         self.pv_plotter = BackgroundPlotter(editor=False)
         self.pv_plotter.set_background(config.background_color)
@@ -133,11 +133,17 @@ class Plotter:
         self.molecule_opacity = config.molecule.opacity
         self.load_molecule(config)
 
+        # Create selection screen for settings dialogs
+        self.selection_screen = _OrbitalSelectionScreen(self, self.tk_root)
+
         # If we want to have the molecular orbitals, we need to initiate Tk before Qt
         # That is why we have this weird if statement separated this way
         if only_molecule:
-            # Add Export menu with Image option even when only molecule is shown
+            # Add Settings menu with Molecule and Color Settings
+            self._add_molecule_only_menus()
+            # Add Export menu with Image option
             self._add_image_export_menu()
+            self._connect_pv_plotter_close_signal()
             self.pv_plotter.app.exec_()  # pyright: ignore[reportAttributeAccessIssue]
             return
 
@@ -267,6 +273,22 @@ class Plotter:
         # Add menus to main menu bar
         self.pv_plotter.main_menu.addMenu(settings_menu)
         self.pv_plotter.main_menu.addMenu(export_menu)
+
+    def _add_molecule_only_menus(self) -> None:
+        """Add Settings menu with Molecule and Color Settings when only molecule is shown."""
+        # Create Settings menu with only molecule-relevant options
+        settings_menu = QMenu('Settings', self.pv_plotter.app_window)
+
+        molecule_settings_action = QAction('Molecule Settings', self.pv_plotter.app_window)
+        molecule_settings_action.triggered.connect(self.selection_screen.molecule_settings_screen)
+        settings_menu.addAction(molecule_settings_action)
+
+        color_settings_action = QAction('Color Settings', self.pv_plotter.app_window)
+        color_settings_action.triggered.connect(self.selection_screen.color_settings_screen)
+        settings_menu.addAction(color_settings_action)
+
+        # Add menu to main menu bar
+        self.pv_plotter.main_menu.addMenu(settings_menu)
 
     def _add_image_export_menu(self) -> None:
         """Add Export menu with Image option when only molecule is shown."""
@@ -587,20 +609,25 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self._export_current_orb_radio = None
         self._export_all_orb_radio = None
 
-        nav_frame = ttk.Frame(self)
-        nav_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        # Only create orbital navigation UI if not in only_molecule mode
+        if not plotter._only_molecule:  # noqa: SLF001
+            nav_frame = ttk.Frame(self)
+            nav_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        self.prev_button = ttk.Button(nav_frame, text='<< Previous', command=self.prev_plot)
-        self.prev_button.pack(side=tk.LEFT, padx=5, pady=10)
+            self.prev_button = ttk.Button(nav_frame, text='<< Previous', command=self.prev_plot)
+            self.prev_button.pack(side=tk.LEFT, padx=5, pady=10)
 
-        self.next_button = ttk.Button(nav_frame, text='Next >>', command=self.next_plot)
-        self.next_button.pack(side=tk.RIGHT, padx=5, pady=10)
+            self.next_button = ttk.Button(nav_frame, text='Next >>', command=self.next_plot)
+            self.next_button.pack(side=tk.RIGHT, padx=5, pady=10)
 
-        self.update_nav_button_states()  # Update buttons for initial state
+            self.update_nav_button_states()  # Update buttons for initial state
 
-        self.orb_tv = _OrbitalsTreeview(self)
-        self.orb_tv.populate_tree(self.plotter.tabulator._parser.mos)  # noqa: SLF001
-        self.orb_tv.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+            self.orb_tv = _OrbitalsTreeview(self)
+            self.orb_tv.populate_tree(self.plotter.tabulator._parser.mos)  # noqa: SLF001
+            self.orb_tv.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        else:
+            # Hide the window in only_molecule mode (used only for hosting settings dialogs)
+            self.withdraw()
 
     def on_close(self) -> None:
         """Close the selection dialog and release GUI resources."""
