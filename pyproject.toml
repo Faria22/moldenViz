@@ -7,7 +7,7 @@ name = "moldenViz"
 dynamic = ["version"]
 description = ''
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.10,<=3.13"
 license = "MIT"
 keywords = []
 authors = [{ name = "Faria22", email = "fariafelipe22@hotmail.com" }]
