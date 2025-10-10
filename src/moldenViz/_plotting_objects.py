@@ -92,7 +92,7 @@ class Bond:
         UNIFORM = 'uniform'
         SPLIT = 'split'
 
-    def __init__(self, atom_a: Atom, atom_b: Atom) -> None:
+    def __init__(self, atom_a: Atom, atom_b: Atom, config: Config = config) -> None:
         """Initialize a bond between two atoms for visualization.
 
         Parameters
@@ -180,7 +180,8 @@ class Bond:
         warning = False
         if isinstance(self.mesh, list):
             self.mesh = [
-                self._trim_atom_from_bond(mesh, atom.mesh) for mesh, atom in zip(self.mesh, (self.atom_a, self.atom_b))
+                self._trim_atom_from_bond(mesh, atom.mesh)
+                for mesh, atom in zip(self.mesh, (self.atom_a, self.atom_b), strict=True)
             ]
             if any(mesh.n_points == 0 for mesh in self.mesh):
                 warning = True
@@ -202,7 +203,7 @@ class Bond:
 class Molecule:
     """Composite object storing rendered atoms and inferred bonds."""
 
-    def __init__(self, atoms: list[_Atom]) -> None:
+    def __init__(self, atoms: list[_Atom], config: Config = config) -> None:
         """Initialize a molecule from parsed atom data.
 
         Parameters
@@ -210,6 +211,8 @@ class Molecule:
         atoms : list[_Atom]
             Parsed atoms emitted by :class:`moldenViz.parser.Parser`.
         """
+        self.config = config
+
         # Max radius is used later for plotting
         self.max_radius = 0
 
@@ -230,17 +233,17 @@ class Molecule:
 
         distances = squareform(pdist(atom_centers))  # Compute pairwise distances
         mask = np.triu(np.ones_like(distances, dtype=bool), k=1)  # Ensure boolean mask
-        indices = np.where((distances < config.molecule.bond.max_length) & mask)  # Apply mask
+        indices = np.where((distances < self.config.molecule.bond.max_length) & mask)  # Apply mask
 
-        for atom_a_ind, atom_b_ind in zip(indices[0], indices[1]):
-            bond = Bond(self.atoms[atom_a_ind], self.atoms[atom_b_ind])
+        for atom_a_ind, atom_b_ind in zip(indices[0], indices[1], strict=False):
+            bond = Bond(self.atoms[atom_a_ind], self.atoms[atom_b_ind], self.config)
             self.atoms[atom_a_ind].bonds.append(bond)
             self.atoms[atom_b_ind].bonds.append(bond)
 
         for atom in self.atoms:
             atom.remove_extra_bonds()
 
-    def add_meshes(self, plotter: pv.Plotter, opacity: float = config.molecule.opacity) -> list[pv.Actor]:
+    def add_meshes(self, plotter: pv.Plotter, opacity: float = config.molecule.opacity) -> tuple[list[pv.Actor], ...]:
         """Add all molecule meshes (atoms and bonds) to the PyVista plotter.
 
         Parameters
@@ -252,22 +255,23 @@ class Molecule:
 
         Returns
         -------
-        list[pv.Actor]
-            List of PyVista actors that were added to the plotter.
+        tuple[list[pv.Actor], ...]
+            A list containing all added actors, a list for the atom actors, and one for the bond actors.
         """
-        actors = []
+        atom_actors = []
+        bond_actors = []
         for atom in self.atoms:
-            if config.molecule.atom.show:
-                actors.append(
+            if self.config.molecule.atom.show:
+                atom_actors.append(
                     plotter.add_mesh(
                         atom.mesh,
                         color=atom.atom_type.color,
-                        smooth_shading=config.smooth_shading,
+                        smooth_shading=self.config.smooth_shading,
                         opacity=opacity,
                     ),
                 )
             for bond in atom.bonds:
-                if bond.plotted or bond.mesh is None or not config.molecule.bond.show:
+                if bond.plotted or bond.mesh is None or not self.config.molecule.bond.show:
                     continue
 
                 bond.trim_ends()
@@ -275,12 +279,12 @@ class Molecule:
                     continue
 
                 if isinstance(bond.mesh, list):
-                    for mesh, color in zip(bond.mesh, bond.color):
-                        actors.append(plotter.add_mesh(mesh, color=color, opacity=opacity))
+                    for mesh, color in zip(bond.mesh, bond.color, strict=False):
+                        bond_actors.append(plotter.add_mesh(mesh, color=color, opacity=opacity))
                 else:
                     if not isinstance(bond.color, str):
                         raise TypeError('Bond color should be a string for uniform color type.')
-                    actors.append(plotter.add_mesh(bond.mesh, color=bond.color, opacity=opacity))
+                    bond_actors.append(plotter.add_mesh(bond.mesh, color=bond.color, opacity=opacity))
                 bond.plotted = True
 
-        return actors
+        return atom_actors + bond_actors, atom_actors, bond_actors
