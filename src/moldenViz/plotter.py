@@ -659,6 +659,28 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         except (ValueError, RuntimeError) as e:
             messagebox.showerror('Error', f'Failed to set background color: {e!s}')
 
+    def on_mo_color_scheme_change(self, _event: tk.Event) -> None:
+        """Handle MO color scheme dropdown change to show/hide custom color entries."""
+        if self.mo_color_scheme_var.get() == 'custom':
+            # Show custom color entries
+            for widget in self.mo_custom_color_widgets:
+                widget.grid()
+        else:
+            # Hide custom color entries
+            for widget in self.mo_custom_color_widgets:
+                widget.grid_remove()
+
+    def on_bond_color_type_change(self) -> None:
+        """Handle bond color type change to show/hide bond color entry."""
+        if self.bond_color_type_var.get() == 'uniform':
+            # Show bond color entry
+            self.bond_color_label.grid()
+            self.bond_color_entry.grid()
+        else:
+            # Hide bond color entry
+            self.bond_color_label.grid_remove()
+            self.bond_color_entry.grid_remove()
+
     def color_settings_screen(self) -> None:
         """Open the color settings window."""
         self.color_settings_window = tk.Toplevel(self)
@@ -705,26 +727,52 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         row += 1
 
         ttk.Label(settings_frame, text='Color Scheme:').grid(row=row, column=0, padx=5, pady=5, sticky='w')
-        self.mo_color_scheme_entry = ttk.Entry(settings_frame, width=15)
-        self.mo_color_scheme_entry.insert(0, str(config.mo.color_scheme))
-        self.mo_color_scheme_entry.grid(row=row, column=1, padx=5, pady=5, sticky='w')
-        row += 1
-
-        ttk.Label(settings_frame, text='Custom Colors:').grid(row=row, column=0, padx=5, pady=5, sticky='w')
-        self.mo_custom_colors_entry = ttk.Entry(settings_frame, width=15)
-        if config.mo.custom_colors:
-            self.mo_custom_colors_entry.insert(0, ', '.join(config.mo.custom_colors))
-        self.mo_custom_colors_entry.grid(row=row, column=1, padx=5, pady=5, sticky='w')
-        row += 1
-
-        # Helper text for custom colors
-        helper_label = ttk.Label(
-            settings_frame,
-            text='(comma-separated, e.g., "blue, red")',
-            font=('TkDefaultFont', 8, 'italic'),
-            foreground='gray',
+        # Create dropdown with predefined color schemes
+        color_schemes = ['bwr', 'RdBu', 'seismic', 'coolwarm', 'PiYG', 'custom']
+        default_scheme = (
+            config.mo.color_scheme if config.mo.color_scheme in color_schemes[:-1] else 'custom'
         )
-        helper_label.grid(row=row, column=1, padx=5, pady=(0, 5), sticky='w')
+        self.mo_color_scheme_var = tk.StringVar(value=default_scheme)
+        self.mo_color_scheme_dropdown = ttk.Combobox(
+            settings_frame,
+            textvariable=self.mo_color_scheme_var,
+            values=color_schemes,
+            state='readonly',
+            width=13,
+        )
+        self.mo_color_scheme_dropdown.grid(row=row, column=1, padx=5, pady=5, sticky='w')
+        self.mo_color_scheme_dropdown.bind('<<ComboboxSelected>>', self.on_mo_color_scheme_change)
+        row += 1
+
+        # Custom colors section (initially hidden if predefined scheme is selected)
+        self.custom_colors_row_start = row
+
+        ttk.Label(settings_frame, text='Negative Color:').grid(row=row, column=0, padx=5, pady=5, sticky='w')
+        self.mo_negative_color_entry = ttk.Entry(settings_frame, width=15)
+        if config.mo.custom_colors and len(config.mo.custom_colors) > 0:
+            self.mo_negative_color_entry.insert(0, config.mo.custom_colors[0])
+        self.mo_negative_color_entry.grid(row=row, column=1, padx=5, pady=5, sticky='w')
+        row += 1
+
+        ttk.Label(settings_frame, text='Positive Color:').grid(row=row, column=0, padx=5, pady=5, sticky='w')
+        self.mo_positive_color_entry = ttk.Entry(settings_frame, width=15)
+        if config.mo.custom_colors and len(config.mo.custom_colors) > 1:
+            self.mo_positive_color_entry.insert(0, config.mo.custom_colors[1])
+        self.mo_positive_color_entry.grid(row=row, column=1, padx=5, pady=5, sticky='w')
+        row += 1
+
+        # Store references to custom color widgets for show/hide
+        self.mo_custom_color_widgets = []
+        for widget in settings_frame.grid_slaves():
+            info = widget.grid_info()
+            if info and int(info['row']) >= self.custom_colors_row_start and int(info['row']) < row:
+                self.mo_custom_color_widgets.append(widget)
+
+        # Hide custom color entries if predefined scheme is selected
+        if self.mo_color_scheme_var.get() != 'custom':
+            for widget in self.mo_custom_color_widgets:
+                widget.grid_remove()
+
         row += 1
 
         # Separator
@@ -747,19 +795,34 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.bond_color_type_var = tk.StringVar(value=config.molecule.bond.color_type)
         bond_color_frame = ttk.Frame(settings_frame)
         bond_color_frame.grid(row=row, column=1, padx=5, pady=5, sticky='w')
-        ttk.Radiobutton(bond_color_frame, text='Uniform', variable=self.bond_color_type_var, value='uniform').pack(
-            side=tk.LEFT,
-        )
-        ttk.Radiobutton(bond_color_frame, text='Split', variable=self.bond_color_type_var, value='split').pack(
-            side=tk.LEFT,
-        )
+        ttk.Radiobutton(
+            bond_color_frame,
+            text='Uniform',
+            variable=self.bond_color_type_var,
+            value='uniform',
+            command=self.on_bond_color_type_change,
+        ).pack(side=tk.LEFT)
+        ttk.Radiobutton(
+            bond_color_frame,
+            text='Split',
+            variable=self.bond_color_type_var,
+            value='split',
+            command=self.on_bond_color_type_change,
+        ).pack(side=tk.LEFT)
         row += 1
 
-        # Bond color (for uniform type)
-        ttk.Label(settings_frame, text='Bond Color:').grid(row=row, column=0, padx=5, pady=5, sticky='w')
+        # Bond color (for uniform type only)
+        self.bond_color_label = ttk.Label(settings_frame, text='Bond Color:')
+        self.bond_color_label.grid(row=row, column=0, padx=5, pady=5, sticky='w')
         self.bond_color_entry = ttk.Entry(settings_frame, width=15)
         self.bond_color_entry.insert(0, str(config.molecule.bond.color))
         self.bond_color_entry.grid(row=row, column=1, padx=5, pady=5, sticky='w')
+
+        # Hide bond color entry if split is selected
+        if self.bond_color_type_var.get() == 'split':
+            self.bond_color_label.grid_remove()
+            self.bond_color_entry.grid_remove()
+
         row += 1
 
         # Configure grid column weights for proper resizing
@@ -1015,17 +1078,44 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.background_color_entry.delete(0, tk.END)
         self.background_color_entry.insert(0, str(config.background_color))
 
-        self.mo_color_scheme_entry.delete(0, tk.END)
-        self.mo_color_scheme_entry.insert(0, str(config.mo.color_scheme))
+        # Reset MO color scheme dropdown
+        color_schemes = ['bwr', 'RdBu', 'seismic', 'coolwarm', 'PiYG', 'custom']
+        if config.mo.color_scheme in color_schemes[:-1]:
+            self.mo_color_scheme_var.set(config.mo.color_scheme)
+        else:
+            self.mo_color_scheme_var.set('custom')
 
-        self.mo_custom_colors_entry.delete(0, tk.END)
+        # Reset custom color entries
+        self.mo_negative_color_entry.delete(0, tk.END)
+        self.mo_positive_color_entry.delete(0, tk.END)
         if config.mo.custom_colors:
-            self.mo_custom_colors_entry.insert(0, ', '.join(config.mo.custom_colors))
+            if len(config.mo.custom_colors) > 0:
+                self.mo_negative_color_entry.insert(0, config.mo.custom_colors[0])
+            if len(config.mo.custom_colors) > 1:
+                self.mo_positive_color_entry.insert(0, config.mo.custom_colors[1])
 
+        # Show/hide custom color entries based on selection
+        if self.mo_color_scheme_var.get() == 'custom':
+            for widget in self.mo_custom_color_widgets:
+                widget.grid()
+        else:
+            for widget in self.mo_custom_color_widgets:
+                widget.grid_remove()
+
+        # Reset bond color type
         self.bond_color_type_var.set(config.molecule.bond.color_type)
 
+        # Reset bond color entry
         self.bond_color_entry.delete(0, tk.END)
         self.bond_color_entry.insert(0, str(config.molecule.bond.color))
+
+        # Show/hide bond color entry based on type
+        if self.bond_color_type_var.get() == 'uniform':
+            self.bond_color_label.grid()
+            self.bond_color_entry.grid()
+        else:
+            self.bond_color_label.grid_remove()
+            self.bond_color_entry.grid_remove()
 
     def apply_grid_settings(self) -> None:
         """Validate UI inputs and apply the chosen grid parameters."""
@@ -1148,20 +1238,75 @@ class _OrbitalSelectionScreen(tk.Toplevel):
             self.plot_orbital(self.current_orb_ind)
 
     def apply_bond_color_settings(self) -> None:
-        """Validate UI inputs and apply the chosen color settings.
+        """Validate UI inputs and apply the chosen color settings."""
+        # Background color is already applied immediately via the entry field binding
+        # This method handles MO and bond colors that require reload
 
-        This method handles bond colors that require reload
-        """
+        changed_settings = []
+
+        # Check MO color scheme
+        selected_scheme = self.mo_color_scheme_var.get()
+        if selected_scheme == 'custom':
+            # Check custom colors
+            negative_color = self.mo_negative_color_entry.get().strip()
+            positive_color = self.mo_positive_color_entry.get().strip()
+            custom_colors = [negative_color, positive_color] if negative_color and positive_color else None
+
+            if custom_colors != config.mo.custom_colors:
+                changed_settings.append('MO Custom Colors')
+        # Check if predefined scheme changed
+        elif selected_scheme != config.mo.color_scheme:
+            changed_settings.append('MO Color Scheme')
+
         # Check bond color type
         if self.bond_color_type_var.get() != config.molecule.bond.color_type:
-            redrawn_molecule = True
+            changed_settings.append('Bond Color Type')
 
-        # Check bond color
-        if self.bond_color_entry.get() != config.molecule.bond.color:
-            redrawn_molecule = True
+        # Check bond color (only if uniform is selected)
+        if self.bond_color_type_var.get() == 'uniform' and self.bond_color_entry.get() != config.molecule.bond.color:
+            changed_settings.append('Bond Color')
 
-        if redrawn_molecule:
-            self.plotter.load_molecule(config)
+        if changed_settings and self._show_persistent_changes_popup:
+            # Create a custom dialog with "don't show again" checkbox
+            dialog = tk.Toplevel(self)
+            dialog.title('Settings Updated')
+            dialog.geometry('450x250')
+            dialog.transient(self)
+            dialog.grab_set()
+
+            # Message
+            message = (
+                'The following color settings have been noted but require reloading '
+                'to take effect:\n\n' + '\n'.join(f'• {s}' for s in changed_settings) + '\n\n'
+                'To make these changes persistent, update your config file at:\n'
+                '~/.config/moldenViz/config.toml'
+            )
+            msg_label = ttk.Label(dialog, text=message, wraplength=400, justify='left')
+            msg_label.pack(padx=20, pady=20)
+
+            # Don't show again checkbox
+            dont_show_var = tk.BooleanVar(value=False)
+            dont_show_check = ttk.Checkbutton(
+                dialog,
+                text="Don't show this message again",
+                variable=dont_show_var,
+            )
+            dont_show_check.pack(padx=20, pady=5)
+
+            # OK button
+            def on_ok() -> None:
+                if dont_show_var.get():
+                    self._show_persistent_changes_popup = False
+                dialog.destroy()
+
+            ok_button = ttk.Button(dialog, text='OK', command=on_ok)
+            ok_button.pack(pady=10)
+
+            # Center the dialog
+            dialog.update_idletasks()
+            x = (dialog.winfo_screenwidth() // 2) - (dialog.winfo_width() // 2)
+            y = (dialog.winfo_screenheight() // 2) - (dialog.winfo_height() // 2)
+            dialog.geometry(f'+{x}+{y}')
 
     def next_plot(self) -> None:
         """Advance to the next molecular orbital."""
