@@ -96,3 +96,28 @@ def test_invalid_background_color_raises_error() -> None:
     message = 'Background color must be a valid matplotlib color'
     with pytest.raises(ValidationError, match=message):
         config_module.MainConfig(background_color='not_a_valid_color')
+
+
+def test_default_grid_type() -> None:
+    """Test that default grid type is 'spherical'."""
+    grid_config = config_module.GridConfig()
+    assert grid_config.default_type == 'spherical'
+
+
+def test_valid_grid_type_spherical() -> None:
+    """Test that 'spherical' is accepted as a valid grid type."""
+    grid_config = config_module.GridConfig(default_type='spherical')
+    assert grid_config.default_type == 'spherical'
+
+
+def test_valid_grid_type_cartesian() -> None:
+    """Test that 'cartesian' is accepted as a valid grid type."""
+    grid_config = config_module.GridConfig(default_type='cartesian')
+    assert grid_config.default_type == 'cartesian'
+
+
+def test_invalid_grid_type_raises_error() -> None:
+    """Test that invalid grid type raises ValidationError."""
+    with pytest.raises(ValidationError, match='Input should be'):
+        config_module.GridConfig(default_type='invalid_type')  # type: ignore[arg-type]
+

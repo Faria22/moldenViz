@@ -81,6 +81,7 @@ Control the grid used when tabulating molecular orbitals:
    [grid]
    min_radius = 5
    max_radius_multiplier = 2
+   default_type = 'spherical'  # 'spherical' or 'cartesian'
 
    [grid.spherical]
    num_r_points = 100
@@ -91,6 +92,20 @@ Control the grid used when tabulating molecular orbitals:
    num_x_points = 100
    num_y_points = 100
    num_z_points = 100
+
+The ``default_type`` option determines which grid type is used when the plotter is first loaded:
+
+- ``'spherical'`` (default): Uses spherical coordinates (r, theta, phi)
+- ``'cartesian'``: Uses Cartesian coordinates (x, y, z)
+
+Users can switch between grid types within the plotter interface, but this setting controls the initial grid type.
+
+Set cartesian as the default grid type:
+
+.. code-block:: toml
+
+   [grid]
+   default_type = 'cartesian'
 
 Increase the resolution in the cartesian grid only:
 
@@ -249,6 +264,7 @@ Combine several tweaks in one file:
    [grid]
    min_radius = 3
    max_radius_multiplier = 2.5
+   default_type = 'spherical'
 
    [grid.spherical]
    num_r_points = 120
