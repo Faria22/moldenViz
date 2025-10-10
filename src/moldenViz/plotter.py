@@ -111,8 +111,13 @@ class Plotter:
                 Tabulator._axis_spacing(tabulator.original_axes[2], 'z')  # noqa: SLF001
 
             self.tabulator = tabulator
+            # Use the tabulator's only_molecule flag if a tabulator was provided
+            only_molecule = tabulator._only_molecule  # noqa: SLF001
         else:
             self.tabulator = Tabulator(source, only_molecule=only_molecule)
+
+        # Store the effective only_molecule flag
+        self._only_molecule = only_molecule
 
         if not only_molecule:
             self.tk_root = tk_root
@@ -221,14 +226,15 @@ class Plotter:
         # Create Settings menu with dropdown
         settings_menu = QMenu('Settings', self.pv_plotter.app_window)
 
-        # Add Settings submenu items
-        grid_settings_action = QAction('Grid Settings', self.pv_plotter.app_window)
-        grid_settings_action.triggered.connect(self.selection_screen.grid_settings_screen)
-        settings_menu.addAction(grid_settings_action)
+        # Add Settings submenu items (skip Grid and MO settings if only_molecule is True)
+        if not self._only_molecule:
+            grid_settings_action = QAction('Grid Settings', self.pv_plotter.app_window)
+            grid_settings_action.triggered.connect(self.selection_screen.grid_settings_screen)
+            settings_menu.addAction(grid_settings_action)
 
-        mo_settings_action = QAction('MO Settings', self.pv_plotter.app_window)
-        mo_settings_action.triggered.connect(self.selection_screen.mo_settings_screen)
-        settings_menu.addAction(mo_settings_action)
+            mo_settings_action = QAction('MO Settings', self.pv_plotter.app_window)
+            mo_settings_action.triggered.connect(self.selection_screen.mo_settings_screen)
+            settings_menu.addAction(mo_settings_action)
 
         molecule_settings_action = QAction('Molecule Settings', self.pv_plotter.app_window)
         molecule_settings_action.triggered.connect(self.selection_screen.molecule_settings_screen)
@@ -238,13 +244,14 @@ class Plotter:
         color_settings_action.triggered.connect(self.selection_screen.color_settings_screen)
         settings_menu.addAction(color_settings_action)
 
-        # Create Export action
-        export_action = QAction('Export', self.pv_plotter.app_window)
-        export_action.triggered.connect(self.selection_screen.export_orbitals_dialog)
+        # Create Export action (skip if only_molecule is True)
+        if not self._only_molecule:
+            export_action = QAction('Export', self.pv_plotter.app_window)
+            export_action.triggered.connect(self.selection_screen.export_orbitals_dialog)
+            self.pv_plotter.main_menu.addAction(export_action)
 
         # Add menus to main menu bar
         self.pv_plotter.main_menu.addMenu(settings_menu)
-        self.pv_plotter.main_menu.addAction(export_action)
 
     def _connect_pv_plotter_close_signal(self) -> None:
         """Connect the PyVista plotter close signal to handle closing both windows."""
@@ -707,110 +714,122 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         settings_frame = ttk.Frame(self.color_settings_window)
         settings_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
+        current_row = 0
+
         # Background Color section
         ttk.Label(settings_frame, text='Background Color', font=('TkDefaultFont', 10, 'bold')).grid(
-            row=0,
+            row=current_row,
             column=0,
             columnspan=2,
             padx=5,
             pady=5,
             sticky='w',
         )
+        current_row += 1
 
-        ttk.Label(settings_frame, text='Background Color:').grid(row=1, column=0, padx=5, pady=5, sticky='w')
+        ttk.Label(settings_frame, text='Background Color:').grid(row=current_row, column=0, padx=5, pady=5, sticky='w')
         self.background_color_entry = ttk.Entry(settings_frame, width=15)
         self.background_color_entry.insert(0, str(config.background_color))
-        self.background_color_entry.grid(row=1, column=1, padx=5, pady=5, sticky='w')
+        self.background_color_entry.grid(row=current_row, column=1, padx=5, pady=5, sticky='w')
         # Bind to apply changes on Enter key or focus out
         self.background_color_entry.bind('<Return>', lambda _e: self.apply_background_color())
         self.background_color_entry.bind('<FocusOut>', lambda _e: self.apply_background_color())
+        current_row += 1
 
         # Separator
-        ttk.Separator(settings_frame, orient='horizontal').grid(row=2, column=0, columnspan=2, sticky='ew', pady=10)
+        ttk.Separator(settings_frame, orient='horizontal').grid(row=current_row, column=0, columnspan=2, sticky='ew', pady=10)
+        current_row += 1
 
-        # MO Color section
-        ttk.Label(settings_frame, text='Molecular Orbital Colors', font=('TkDefaultFont', 10, 'bold')).grid(
-            row=3,
-            column=0,
-            columnspan=2,
-            padx=5,
-            pady=5,
-            sticky='w',
-        )
+        # MO Color section (only show if not only_molecule)
+        if not self.plotter._only_molecule:  # noqa: SLF001
+            ttk.Label(settings_frame, text='Molecular Orbital Colors', font=('TkDefaultFont', 10, 'bold')).grid(
+                row=current_row,
+                column=0,
+                columnspan=2,
+                padx=5,
+                pady=5,
+                sticky='w',
+            )
+            current_row += 1
 
-        ttk.Label(settings_frame, text='Color Scheme:').grid(row=4, column=0, padx=5, pady=5, sticky='w')
-        # Create dropdown with predefined color schemes
-        predefined_schemes = ['bwr', 'RdBu', 'seismic', 'coolwarm', 'PiYG']
+            ttk.Label(settings_frame, text='Color Scheme:').grid(row=current_row, column=0, padx=5, pady=5, sticky='w')
+            # Create dropdown with predefined color schemes
+            predefined_schemes = ['bwr', 'RdBu', 'seismic', 'coolwarm', 'PiYG']
 
-        # Check if user has a custom scheme in config that's not in predefined list
-        if config.mo.color_scheme not in predefined_schemes and config.mo.color_scheme != 'custom':
-            # Add the user's scheme as the first item
-            color_schemes = [config.mo.color_scheme, *predefined_schemes, 'custom']
-            default_scheme = config.mo.color_scheme
-        else:
-            color_schemes = [*predefined_schemes, 'custom']
-            default_scheme = config.mo.color_scheme if config.mo.color_scheme in predefined_schemes else 'custom'
+            # Check if user has a custom scheme in config that's not in predefined list
+            if config.mo.color_scheme not in predefined_schemes and config.mo.color_scheme != 'custom':
+                # Add the user's scheme as the first item
+                color_schemes = [config.mo.color_scheme, *predefined_schemes, 'custom']
+                default_scheme = config.mo.color_scheme
+            else:
+                color_schemes = [*predefined_schemes, 'custom']
+                default_scheme = config.mo.color_scheme if config.mo.color_scheme in predefined_schemes else 'custom'
 
-        self.mo_color_scheme_var = tk.StringVar(value=default_scheme)
-        self.mo_color_scheme_dropdown = ttk.Combobox(
-            settings_frame,
-            textvariable=self.mo_color_scheme_var,
-            values=color_schemes,
-            state='readonly',
-            width=13,
-        )
-        self.mo_color_scheme_dropdown.grid(row=4, column=1, padx=5, pady=5, sticky='w')
-        self.mo_color_scheme_dropdown.bind('<<ComboboxSelected>>', self.on_mo_color_scheme_change)
-        self.mo_color_scheme_dropdown.bind('<<ComboboxSelected>>', lambda _e: self.apply_mo_color_settings())
+            self.mo_color_scheme_var = tk.StringVar(value=default_scheme)
+            self.mo_color_scheme_dropdown = ttk.Combobox(
+                settings_frame,
+                textvariable=self.mo_color_scheme_var,
+                values=color_schemes,
+                state='readonly',
+                width=13,
+            )
+            self.mo_color_scheme_dropdown.grid(row=current_row, column=1, padx=5, pady=5, sticky='w')
+            self.mo_color_scheme_dropdown.bind('<<ComboboxSelected>>', self.on_mo_color_scheme_change)
+            self.mo_color_scheme_dropdown.bind('<<ComboboxSelected>>', lambda _e: self.apply_mo_color_settings())
+            current_row += 1
 
-        # Custom colors section (initially hidden if predefined scheme is selected)
-        negative_color_label = ttk.Label(settings_frame, text='Negative Color:')
-        negative_color_label.grid(row=5, column=0, padx=5, pady=5, sticky='w')
+            # Custom colors section (initially hidden if predefined scheme is selected)
+            negative_color_label = ttk.Label(settings_frame, text='Negative Color:')
+            negative_color_label.grid(row=current_row, column=0, padx=5, pady=5, sticky='w')
 
-        self.mo_negative_color_entry = ttk.Entry(settings_frame, width=15)
-        if config.mo.custom_colors and len(config.mo.custom_colors) > 0:
-            self.mo_negative_color_entry.insert(0, config.mo.custom_colors[0])
-        self.mo_negative_color_entry.grid(row=5, column=1, padx=5, pady=5, sticky='w')
+            self.mo_negative_color_entry = ttk.Entry(settings_frame, width=15)
+            if config.mo.custom_colors and len(config.mo.custom_colors) > 0:
+                self.mo_negative_color_entry.insert(0, config.mo.custom_colors[0])
+            self.mo_negative_color_entry.grid(row=current_row, column=1, padx=5, pady=5, sticky='w')
+            current_row += 1
 
-        positive_color_label = ttk.Label(settings_frame, text='Positive Color:')
-        positive_color_label.grid(row=6, column=0, padx=5, pady=5, sticky='w')
+            positive_color_label = ttk.Label(settings_frame, text='Positive Color:')
+            positive_color_label.grid(row=current_row, column=0, padx=5, pady=5, sticky='w')
 
-        self.mo_positive_color_entry = ttk.Entry(settings_frame, width=15)
-        if config.mo.custom_colors and len(config.mo.custom_colors) > 1:
-            self.mo_positive_color_entry.insert(0, config.mo.custom_colors[1])
-        self.mo_positive_color_entry.grid(row=6, column=1, padx=5, pady=5, sticky='w')
+            self.mo_positive_color_entry = ttk.Entry(settings_frame, width=15)
+            if config.mo.custom_colors and len(config.mo.custom_colors) > 1:
+                self.mo_positive_color_entry.insert(0, config.mo.custom_colors[1])
+            self.mo_positive_color_entry.grid(row=current_row, column=1, padx=5, pady=5, sticky='w')
+            current_row += 1
 
-        # Store references to custom color widgets for show/hide
-        self.mo_custom_color_widgets = [
-            self.mo_negative_color_entry,
-            self.mo_positive_color_entry,
-            negative_color_label,
-            positive_color_label,
-        ]
+            # Store references to custom color widgets for show/hide
+            self.mo_custom_color_widgets = [
+                self.mo_negative_color_entry,
+                self.mo_positive_color_entry,
+                negative_color_label,
+                positive_color_label,
+            ]
 
-        # Hide custom color entries if predefined scheme is selected
-        if self.mo_color_scheme_var.get() != 'custom':
-            for widget in self.mo_custom_color_widgets:
-                widget.grid_remove()
+            # Hide custom color entries if predefined scheme is selected
+            if self.mo_color_scheme_var.get() != 'custom':
+                for widget in self.mo_custom_color_widgets:
+                    widget.grid_remove()
 
-        # Separator
-        ttk.Separator(settings_frame, orient='horizontal').grid(row=7, column=0, columnspan=2, sticky='ew', pady=10)
+            # Separator
+            ttk.Separator(settings_frame, orient='horizontal').grid(row=current_row, column=0, columnspan=2, sticky='ew', pady=10)
+            current_row += 1
 
         # Bond Color section
         ttk.Label(settings_frame, text='Bond Colors', font=('TkDefaultFont', 10, 'bold')).grid(
-            row=8,
+            row=current_row,
             column=0,
             columnspan=2,
             padx=5,
             pady=5,
             sticky='w',
         )
+        current_row += 1
 
         # Bond color type
-        ttk.Label(settings_frame, text='Bond Color Type:').grid(row=9, column=0, padx=5, pady=5, sticky='w')
+        ttk.Label(settings_frame, text='Bond Color Type:').grid(row=current_row, column=0, padx=5, pady=5, sticky='w')
         self.bond_color_type_var = tk.StringVar(value=config.molecule.bond.color_type)
         bond_color_frame = ttk.Frame(settings_frame)
-        bond_color_frame.grid(row=9, column=1, padx=5, pady=5, sticky='w')
+        bond_color_frame.grid(row=current_row, column=1, padx=5, pady=5, sticky='w')
         ttk.Radiobutton(
             bond_color_frame,
             text='Uniform',
@@ -825,13 +844,14 @@ class _OrbitalSelectionScreen(tk.Toplevel):
             value='split',
             command=self.on_bond_color_type_change,
         ).pack(side=tk.LEFT)
+        current_row += 1
 
         # Bond color (for uniform type only)
         self.bond_color_label = ttk.Label(settings_frame, text='Bond Color:')
-        self.bond_color_label.grid(row=10, column=0, padx=5, pady=5, sticky='w')
+        self.bond_color_label.grid(row=current_row, column=0, padx=5, pady=5, sticky='w')
         self.bond_color_entry = ttk.Entry(settings_frame, width=15)
         self.bond_color_entry.insert(0, str(config.molecule.bond.color))
-        self.bond_color_entry.grid(row=10, column=1, padx=5, pady=5, sticky='w')
+        self.bond_color_entry.grid(row=current_row, column=1, padx=5, pady=5, sticky='w')
         self.bond_color_entry.bind('<Return>', lambda _e: self.apply_bond_color_settings())
 
         # Hide bond color entry if split is selected
