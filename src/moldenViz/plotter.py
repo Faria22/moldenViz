@@ -133,9 +133,6 @@ class Plotter:
         self.molecule_opacity = config.molecule.opacity
         self.load_molecule(config)
 
-        # Create selection screen for settings dialogs
-        self.selection_screen = _OrbitalSelectionScreen(self, self.tk_root)
-
         # If we want to have the molecular orbitals, we need to initiate Tk before Qt
         # That is why we have this weird if statement separated this way
         if only_molecule:
@@ -144,10 +141,13 @@ class Plotter:
             # Add Export menu with Image option
             self._add_image_export_menu()
             self._connect_pv_plotter_close_signal()
-            self.pv_plotter.app.exec_()  # pyright: ignore[reportAttributeAccessIssue]
+            self.pv_plotter.app.exec_()
             return
 
         assert self.tk_root is not None  # To help type hinters
+
+        # Create selection screen for settings dialogs
+        self.selection_screen = _OrbitalSelectionScreen(self, self.tk_root)
 
         if not tabulator:
             # Use configured default grid type
@@ -922,7 +922,11 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
         # Separator
         ttk.Separator(settings_frame, orient='horizontal').grid(
-            row=current_row, column=0, columnspan=2, sticky='ew', pady=10,
+            row=current_row,
+            column=0,
+            columnspan=2,
+            sticky='ew',
+            pady=10,
         )
         current_row += 1
 
@@ -998,7 +1002,11 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
             # Separator
             ttk.Separator(settings_frame, orient='horizontal').grid(
-                row=current_row, column=0, columnspan=2, sticky='ew', pady=10,
+                row=current_row,
+                column=0,
+                columnspan=2,
+                sticky='ew',
+                pady=10,
             )
             current_row += 1
 
