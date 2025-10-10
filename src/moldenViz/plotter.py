@@ -1455,6 +1455,14 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         if redraw_molecule:
             self.plotter.load_molecule(config)
 
+    def save_settings(self) -> None:  # noqa: PLR6301
+        """Save current configuration to the user's custom config file."""
+        try:
+            config.save_current_config()
+            messagebox.showinfo('Settings Saved', 'Configuration saved successfully to ~/.config/moldenViz/config.toml')
+        except (OSError, ValueError) as e:
+            messagebox.showerror('Save Error', f'Failed to save configuration: {e!s}')
+
     def next_plot(self) -> None:
         """Advance to the next molecular orbital."""
         self.current_orb_ind += 1
