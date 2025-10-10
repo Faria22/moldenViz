@@ -697,6 +697,8 @@ class _OrbitalSelectionScreen(tk.Toplevel):
             self.bond_color_label.grid_remove()
             self.bond_color_entry.grid_remove()
 
+        self.apply_bond_color_settings()
+
     def color_settings_screen(self) -> None:
         """Open the color settings window."""
         self.color_settings_window = tk.Toplevel(self)
@@ -759,6 +761,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         )
         self.mo_color_scheme_dropdown.grid(row=4, column=1, padx=5, pady=5, sticky='w')
         self.mo_color_scheme_dropdown.bind('<<ComboboxSelected>>', self.on_mo_color_scheme_change)
+        self.mo_color_scheme_dropdown.bind('<<ComboboxSelected>>', lambda _e: self.apply_mo_color_settings())
 
         # Custom colors section (initially hidden if predefined scheme is selected)
         negative_color_label = ttk.Label(settings_frame, text='Negative Color:')
@@ -829,6 +832,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.bond_color_entry = ttk.Entry(settings_frame, width=15)
         self.bond_color_entry.insert(0, str(config.molecule.bond.color))
         self.bond_color_entry.grid(row=10, column=1, padx=5, pady=5, sticky='w')
+        self.bond_color_entry.bind('<Return>', lambda _e: self.apply_bond_color_settings())
 
         # Hide bond color entry if split is selected
         if self.bond_color_type_var.get() == 'split':
@@ -844,7 +848,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         reset_button.grid(row=11, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
 
         # Apply settings button
-        apply_button = ttk.Button(settings_frame, text='Apply', command=self.apply_bond_color_settings)
+        apply_button = ttk.Button(settings_frame, text='Apply', command=self.apply_color_settings)
         apply_button.grid(row=13, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
 
     def place_grid_params_frame(self) -> None:
@@ -1074,6 +1078,8 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
     def reset_color_settings(self) -> None:
         """Restore color settings widgets back to configuration defaults."""
+        config = Config()  # Reload config to discard unsaved changes
+
         self.background_color_entry.delete(0, tk.END)
         self.background_color_entry.insert(0, str(config.background_color))
 
@@ -1226,8 +1232,16 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         if redraw_molecule:
             self.plotter.load_molecule(config)
 
+    def apply_color_settings(self) -> None:
+        """Apply both MO and bond color settings."""
+        self.apply_custom_mo_color_settings()
+        self.apply_bond_color_settings()
+
     def apply_mo_color_settings(self) -> None:
-        """Validate UI inputs and apply the chosen MO color settings."""
+        """Validate UI inputs and apply the chosen MO color settings.
+
+        Only applies predefined color schemes, not custom colors.
+        """
         redraw_mo = False
 
         # Check MO color scheme
@@ -1237,22 +1251,34 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
         # Check MO custom colors
         if mo_color_scheme == 'custom':
-            custom_colors = [self.mo_negative_color_entry.get().strip(), self.mo_positive_color_entry.get().strip()]
-            # if any(not mcolors.is_color_like(c) for c in custom_colors):
-            #     messagebox.showerror('Invalid Input', 'One or more custom colors are not valid.')
-            #     return
-
-            if custom_colors != config.mo.custom_colors:
-                # Validate colors
-                config.mo.custom_colors = custom_colors
-                # create cmap from custom colors
-                self.plotter.cmap = self.plotter.custom_cmap_from_colors(custom_colors)
-
-                redraw_mo = True
-        else:
-            self.plotter.cmap = self.mo_color_scheme_var.get()
+            self.apply_custom_mo_color_settings()
+            return
 
         if redraw_mo:
+            self.plotter.cmap = mo_color_scheme
+            config.mo.color_scheme = mo_color_scheme
+
+            self.plot_orbital(self.current_orb_ind)
+
+    def apply_custom_mo_color_settings(self) -> None:
+        """Validate UI inputs and apply the chosen MO color settings.
+
+        Only applies custom colors, not predefined color schemes.
+        """
+        if self.mo_color_scheme_var.get().strip() != 'custom':
+            return
+
+        # Check MO custom colors
+        custom_colors = [self.mo_negative_color_entry.get().strip(), self.mo_positive_color_entry.get().strip()]
+
+        if any(not mcolors.is_color_like(c) for c in custom_colors):
+            messagebox.showerror('Invalid Input', 'One or more custom colors are not valid.')
+            return
+
+        if custom_colors != config.mo.custom_colors:
+            config.mo.custom_colors = custom_colors
+            self.plotter.cmap = self.plotter.custom_cmap_from_colors(custom_colors)
+
             self.plot_orbital(self.current_orb_ind)
 
     def apply_bond_color_settings(self) -> None:
@@ -1260,11 +1286,15 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         redraw_molecule = False
 
         # Check bond color type
-        if self.bond_color_type_var.get() != config.molecule.bond.color_type:
+        bond_color_type = self.bond_color_type_var.get().strip()
+        if bond_color_type != config.molecule.bond.color_type:
+            config.molecule.bond.color_type = bond_color_type
             redraw_molecule = True
 
         # Check bond color (only if uniform is selected)
-        if self.bond_color_type_var.get() == 'uniform' and self.bond_color_entry.get() != config.molecule.bond.color:
+        bond_color = self.bond_color_entry.get().strip()
+        if self.bond_color_type_var.get() == 'uniform' and bond_color != config.molecule.bond.color:
+            config.molecule.bond.color = bond_color
             redraw_molecule = True
 
         if redraw_molecule:
