@@ -4,6 +4,7 @@ background_color = 'white'
 [grid]
 min_radius = 5
 max_radius_multiplier = 2
+default_type = 'spherical'
 
 [grid.spherical]
 num_r_points = 100
