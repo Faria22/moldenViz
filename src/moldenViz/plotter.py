@@ -160,7 +160,7 @@ class Plotter:
         # Set colormap based on configuration
         if config.mo.custom_colors is not None:
             # Create custom colormap from two colors
-            self.cmap = LinearSegmentedColormap.from_list('custom_mo', config.mo.custom_colors)
+            self.cmap = self.custom_cmap_from_colors(config.mo.custom_colors)
         else:
             self.cmap = config.mo.color_scheme
 
@@ -169,6 +169,22 @@ class Plotter:
         self._connect_pv_plotter_close_signal()
 
         self.tk_root.mainloop()
+
+    @staticmethod
+    def custom_cmap_from_colors(colors: list[str]) -> LinearSegmentedColormap:
+        """Create a custom colormap from a list of colors.
+
+        Parameters
+        ----------
+        colors : list[str]
+            List of color names or hex codes. Must contain exactly two colors.
+
+        Returns
+        -------
+        LinearSegmentedColormap
+            The resulting custom colormap.
+        """
+        return LinearSegmentedColormap.from_list('custom_mo', colors)
 
     def load_molecule(self, config: Config) -> None:
         """Reload the molecule from the parser data."""
@@ -731,9 +747,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
             default_scheme = config.mo.color_scheme
         else:
             color_schemes = [*predefined_schemes, 'custom']
-            default_scheme = (
-                config.mo.color_scheme if config.mo.color_scheme in predefined_schemes else 'custom'
-            )
+            default_scheme = config.mo.color_scheme if config.mo.color_scheme in predefined_schemes else 'custom'
 
         self.mo_color_scheme_var = tk.StringVar(value=default_scheme)
         self.mo_color_scheme_dropdown = ttk.Combobox(
@@ -747,24 +761,29 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.mo_color_scheme_dropdown.bind('<<ComboboxSelected>>', self.on_mo_color_scheme_change)
 
         # Custom colors section (initially hidden if predefined scheme is selected)
-        ttk.Label(settings_frame, text='Negative Color:').grid(row=5, column=0, padx=5, pady=5, sticky='w')
+        negative_color_label = ttk.Label(settings_frame, text='Negative Color:')
+        negative_color_label.grid(row=5, column=0, padx=5, pady=5, sticky='w')
+
         self.mo_negative_color_entry = ttk.Entry(settings_frame, width=15)
         if config.mo.custom_colors and len(config.mo.custom_colors) > 0:
             self.mo_negative_color_entry.insert(0, config.mo.custom_colors[0])
         self.mo_negative_color_entry.grid(row=5, column=1, padx=5, pady=5, sticky='w')
 
-        ttk.Label(settings_frame, text='Positive Color:').grid(row=6, column=0, padx=5, pady=5, sticky='w')
+        positive_color_label = ttk.Label(settings_frame, text='Positive Color:')
+        positive_color_label.grid(row=6, column=0, padx=5, pady=5, sticky='w')
+
         self.mo_positive_color_entry = ttk.Entry(settings_frame, width=15)
         if config.mo.custom_colors and len(config.mo.custom_colors) > 1:
             self.mo_positive_color_entry.insert(0, config.mo.custom_colors[1])
         self.mo_positive_color_entry.grid(row=6, column=1, padx=5, pady=5, sticky='w')
 
         # Store references to custom color widgets for show/hide
-        self.mo_custom_color_widgets = []
-        for widget in settings_frame.grid_slaves():
-            info = widget.grid_info()
-            if info and int(info['row']) >= 5 and int(info['row']) <= 6:
-                self.mo_custom_color_widgets.append(widget)
+        self.mo_custom_color_widgets = [
+            self.mo_negative_color_entry,
+            self.mo_positive_color_entry,
+            negative_color_label,
+            positive_color_label,
+        ]
 
         # Hide custom color entries if predefined scheme is selected
         if self.mo_color_scheme_var.get() != 'custom':
@@ -823,15 +842,6 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         # Reset button
         reset_button = ttk.Button(settings_frame, text='Reset', command=self.reset_color_settings)
         reset_button.grid(row=11, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
-
-        # Note label about settings requiring reload
-        note_label = ttk.Label(
-            settings_frame,
-            text='Note: MO and bond color changes require reloading to take effect',
-            font=('TkDefaultFont', 8, 'italic'),
-            foreground='gray',
-        )
-        note_label.grid(row=12, column=0, columnspan=2, padx=5, pady=(5, 0), sticky='ew')
 
         # Apply settings button
         apply_button = ttk.Button(settings_frame, text='Apply', command=self.apply_bond_color_settings)
@@ -1218,94 +1228,47 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
     def apply_mo_color_settings(self) -> None:
         """Validate UI inputs and apply the chosen MO color settings."""
-        raise NotImplementedError
-        changed_settings = []  # Track which settings have changed
+        redraw_mo = False
+
         # Check MO color scheme
-        if self.mo_color_scheme_entry.get().strip() != config.mo.color_scheme:
-            changed_settings.append('MO Color Scheme')
+        mo_color_scheme = self.mo_color_scheme_var.get().strip()
+        if mo_color_scheme != config.mo.color_scheme:
+            redraw_mo = True
 
         # Check MO custom colors
-        custom_colors_input = self.mo_custom_colors_entry.get().strip()
-        if custom_colors_input:
-            custom_colors = [c.strip() for c in custom_colors_input.split(',')]
-            if custom_colors != config.mo.custom_colors:
-                changed_settings.append('MO Custom Colors')
-        elif config.mo.custom_colors:
-            changed_settings.append('MO Custom Colors')
+        if mo_color_scheme == 'custom':
+            custom_colors = [self.mo_negative_color_entry.get().strip(), self.mo_positive_color_entry.get().strip()]
+            # if any(not mcolors.is_color_like(c) for c in custom_colors):
+            #     messagebox.showerror('Invalid Input', 'One or more custom colors are not valid.')
+            #     return
 
-        if changed_settings and self.current_orb_ind >= 0:
+            if custom_colors != config.mo.custom_colors:
+                # Validate colors
+                config.mo.custom_colors = custom_colors
+                # create cmap from custom colors
+                self.plotter.cmap = self.plotter.custom_cmap_from_colors(custom_colors)
+
+                redraw_mo = True
+        else:
+            self.plotter.cmap = self.mo_color_scheme_var.get()
+
+        if redraw_mo:
             self.plot_orbital(self.current_orb_ind)
 
     def apply_bond_color_settings(self) -> None:
         """Validate UI inputs and apply the chosen color settings."""
-        # Background color is already applied immediately via the entry field binding
-        # This method handles MO and bond colors that require reload
-
-        changed_settings = []
-
-        # Check MO color scheme
-        selected_scheme = self.mo_color_scheme_var.get()
-        if selected_scheme == 'custom':
-            # Check custom colors
-            negative_color = self.mo_negative_color_entry.get().strip()
-            positive_color = self.mo_positive_color_entry.get().strip()
-            custom_colors = [negative_color, positive_color] if negative_color and positive_color else None
-
-            if custom_colors != config.mo.custom_colors:
-                changed_settings.append('MO Custom Colors')
-        # Check if predefined scheme changed
-        elif selected_scheme != config.mo.color_scheme:
-            changed_settings.append('MO Color Scheme')
+        redraw_molecule = False
 
         # Check bond color type
         if self.bond_color_type_var.get() != config.molecule.bond.color_type:
-            changed_settings.append('Bond Color Type')
+            redraw_molecule = True
 
         # Check bond color (only if uniform is selected)
         if self.bond_color_type_var.get() == 'uniform' and self.bond_color_entry.get() != config.molecule.bond.color:
-            changed_settings.append('Bond Color')
+            redraw_molecule = True
 
-        if changed_settings and self._show_persistent_changes_popup:
-            # Create a custom dialog with "don't show again" checkbox
-            dialog = tk.Toplevel(self)
-            dialog.title('Settings Updated')
-            dialog.geometry('450x250')
-            dialog.transient(self)
-            dialog.grab_set()
-
-            # Message
-            message = (
-                'The following color settings have been noted but require reloading '
-                'to take effect:\n\n' + '\n'.join(f'• {s}' for s in changed_settings) + '\n\n'
-                'To make these changes persistent, update your config file at:\n'
-                '~/.config/moldenViz/config.toml'
-            )
-            msg_label = ttk.Label(dialog, text=message, wraplength=400, justify='left')
-            msg_label.pack(padx=20, pady=20)
-
-            # Don't show again checkbox
-            dont_show_var = tk.BooleanVar(value=False)
-            dont_show_check = ttk.Checkbutton(
-                dialog,
-                text="Don't show this message again",
-                variable=dont_show_var,
-            )
-            dont_show_check.pack(padx=20, pady=5)
-
-            # OK button
-            def on_ok() -> None:
-                if dont_show_var.get():
-                    self._show_persistent_changes_popup = False
-                dialog.destroy()
-
-            ok_button = ttk.Button(dialog, text='OK', command=on_ok)
-            ok_button.pack(pady=10)
-
-            # Center the dialog
-            dialog.update_idletasks()
-            x = (dialog.winfo_screenwidth() // 2) - (dialog.winfo_width() // 2)
-            y = (dialog.winfo_screenheight() // 2) - (dialog.winfo_height() // 2)
-            dialog.geometry(f'+{x}+{y}')
+        if redraw_molecule:
+            self.plotter.load_molecule(config)
 
     def next_plot(self) -> None:
         """Advance to the next molecular orbital."""
