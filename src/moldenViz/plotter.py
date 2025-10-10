@@ -737,7 +737,9 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         current_row += 1
 
         # Separator
-        ttk.Separator(settings_frame, orient='horizontal').grid(row=current_row, column=0, columnspan=2, sticky='ew', pady=10)
+        ttk.Separator(settings_frame, orient='horizontal').grid(
+            row=current_row, column=0, columnspan=2, sticky='ew', pady=10,
+        )
         current_row += 1
 
         # MO Color section (only show if not only_molecule)
@@ -811,7 +813,9 @@ class _OrbitalSelectionScreen(tk.Toplevel):
                     widget.grid_remove()
 
             # Separator
-            ttk.Separator(settings_frame, orient='horizontal').grid(row=current_row, column=0, columnspan=2, sticky='ew', pady=10)
+            ttk.Separator(settings_frame, orient='horizontal').grid(
+                row=current_row, column=0, columnspan=2, sticky='ew', pady=10,
+            )
             current_row += 1
 
         # Bond Color section
