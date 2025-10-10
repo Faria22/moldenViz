@@ -53,24 +53,46 @@ The ``Plotter`` class renders atoms, bonds, and (optionally) orbital isosurfaces
 Exporting from the GUI
 ~~~~~~~~~~~~~~~~~~~~~~
 
-When using the ``Plotter`` GUI, you can export molecular orbitals directly from the PyVista plotter window:
+When using the ``Plotter`` GUI, you can export data or images from the PyVista plotter window:
 
 1. Open the plotter (the Orbitals window appears automatically when plotting with orbitals enabled)
 2. Click the **Export** menu in the PyVista plotter menubar (next to File, View, and Tools)
-3. The export dialog will open
-4. Choose your export format:
+3. Choose the export type:
+
+   - **Data**: Export molecular orbital data
+   - **Image**: Export the current visualization as an image
+
+**Exporting Data (Molecular Orbitals)**
+
+1. Select **Data** from the Export menu
+2. Choose your export format:
 
    - **VTK (.vtk)**: Exports single orbital or all orbitals in a multi-block VTK file
    - **Gaussian Cube (.cube)**: Exports a single orbital (cube format does not support multiple orbitals)
 
-5. Select orbital scope:
+3. Select orbital scope:
 
    - **Current orbital**: Exports the currently displayed orbital
    - **All orbitals**: Exports all molecular orbitals (VTK format only)
 
-6. Click **Export** and choose the save location
+4. Click **Export** and choose the save location
 
 The export uses the current grid configuration from the plotter, so adjust grid settings before exporting if needed.
+
+**Exporting Images**
+
+1. Select **Image** from the Export menu
+2. Choose your image format:
+
+   - **PNG (.png)**: Raster format with optional transparent background
+   - **JPEG (.jpeg)**: Raster format (no transparency support)
+   - **SVG (.svg)**: Vector format for scalable graphics
+   - **PDF (.pdf)**: Vector format for publication-quality output
+
+3. For PNG format, optionally enable **Transparent background** to remove the background color
+4. Click **Export** and choose the save location
+
+Image exports capture the current view exactly as displayed in the PyVista window, including all visible actors (molecule, orbitals, etc.).
 
 Tabulating Orbitals
 -------------------
