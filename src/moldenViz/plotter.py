@@ -106,10 +106,7 @@ class Plotter:
         self.pv_plotter.set_background(config.background_color)
         self.pv_plotter.show_axes()
 
-        if self.only_molecule:
-            self._add_image_export_menu()
-        else:
-            self._add_orbital_menus_to_pv_plotter()
+        self._add_orbital_menus_to_pv_plotter()
         self._connect_pv_plotter_close_signal()
         self._override_clear_all_button()
 
@@ -236,13 +233,14 @@ class Plotter:
         settings_menu = QMenu('Settings', self.pv_plotter.app_window)
 
         # Add Settings submenu items
-        grid_settings_action = QAction('Grid Settings', self.pv_plotter.app_window)
-        grid_settings_action.triggered.connect(self._open_grid_settings_dialog)
-        settings_menu.addAction(grid_settings_action)
+        if not self.only_molecule:
+            grid_settings_action = QAction('Grid Settings', self.pv_plotter.app_window)
+            grid_settings_action.triggered.connect(self._open_grid_settings_dialog)
+            settings_menu.addAction(grid_settings_action)
 
-        mo_settings_action = QAction('MO Settings', self.pv_plotter.app_window)
-        mo_settings_action.triggered.connect(self._open_mo_settings_dialog)
-        settings_menu.addAction(mo_settings_action)
+            mo_settings_action = QAction('MO Settings', self.pv_plotter.app_window)
+            mo_settings_action.triggered.connect(self._open_mo_settings_dialog)
+            settings_menu.addAction(mo_settings_action)
 
         molecule_settings_action = QAction('Molecule Settings', self.pv_plotter.app_window)
         molecule_settings_action.triggered.connect(self._open_molecule_settings_dialog)
@@ -256,9 +254,10 @@ class Plotter:
         export_menu = QMenu('Export', self.pv_plotter.app_window)
 
         # Add Export submenu items
-        export_data_action = QAction('Data', self.pv_plotter.app_window)
-        export_data_action.triggered.connect(self._open_orbital_export_dialog)
-        export_menu.addAction(export_data_action)
+        if not self.only_molecule:
+            export_data_action = QAction('Data', self.pv_plotter.app_window)
+            export_data_action.triggered.connect(self._open_orbital_export_dialog)
+            export_menu.addAction(export_data_action)
 
         export_image_action = QAction('Image', self.pv_plotter.app_window)
         export_image_action.triggered.connect(self._open_image_export_dialog)
