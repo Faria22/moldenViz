@@ -85,6 +85,9 @@ class Plotter:
         (e.g., missing grid or GTO data when `only_molecule` is `False`, or has an UNKNOWN grid type).
     """
 
+    SPHERICAL_GRID_SETTINGS_WINDOW_SIZE = '400x350'
+    CARTESIAN_GRID_SETTINGS_WINDOW_SIZE = '650x400'
+
     def __init__(
         self,
         source: str | list[str],
@@ -95,6 +98,7 @@ class Plotter:
         self.on_screen = True
         self.only_molecule = only_molecule
         self.selection_screen: _OrbitalSelectionScreen | None = None
+        self.current_orbital_index = -1
 
         self.tk_root = tk_root
         self._no_prev_tk_root = self.tk_root is None
@@ -279,38 +283,24 @@ class Plotter:
 
     def _open_grid_settings_dialog(self) -> None:
         """Open the grid settings window from the menubar."""
-        if not self.selection_screen:
-            logger.debug('Selection screen not ready; ignoring grid settings request.')
-            return
-        self.selection_screen.grid_settings_screen()
+        self.grid_settings_screen()
 
     def _open_mo_settings_dialog(self) -> None:
         """Open the molecular orbital settings window from the menubar."""
-        if not self.selection_screen:
-            logger.debug('Selection screen not ready; ignoring MO settings request.')
-            return
-        self.selection_screen.mo_settings_screen()
+        self.mo_settings_screen()
 
     def _open_molecule_settings_dialog(self) -> None:
         """Open the molecule settings window from the menubar."""
-        if not self.selection_screen:
-            logger.debug('Selection screen not ready; ignoring molecule settings request.')
-            return
-        self.selection_screen.molecule_settings_screen()
+        self.molecule_settings_screen()
 
     def _open_color_settings_dialog(self) -> None:
         """Open the color settings window from the menubar."""
-        if not self.selection_screen:
-            logger.debug('Selection screen not ready; ignoring color settings request.')
-            return
-        self.selection_screen.color_settings_screen()
+        self.color_settings_screen()
 
     def _open_orbital_export_dialog(self) -> None:
         """Open the orbital export dialog from the menubar."""
-        if not self.selection_screen:
-            logger.debug('Selection screen not ready; ignoring orbital export request.')
-            return
-        self.selection_screen.export_orbitals_dialog()
+        if self.selection_screen:
+            self.selection_screen.export_orbitals_dialog()
 
     def _open_image_export_dialog(self) -> None:
         """Open the image export dialog from the menubar."""
@@ -318,6 +308,743 @@ class Plotter:
             self.selection_screen.export_image_dialog()
         else:
             self._show_image_export_dialog()
+
+    def _settings_parent(self) -> tk.Misc:
+        """Return the appropriate parent widget for settings dialogs."""
+        parent = self.selection_screen if self.selection_screen is not None else self.tk_root
+        if parent is None:
+            raise RuntimeError('No Tk root available to host settings dialogs.')
+        return parent
+
+    def grid_settings_screen(self) -> None:
+        """Open the grid settings window."""
+        parent = self._settings_parent()
+        self.grid_settings_window = tk.Toplevel(parent)
+        self.grid_settings_window.title('Grid Settings')
+
+        settings_frame = ttk.Frame(self.grid_settings_window)
+        settings_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Grid parameters
+        ttk.Label(settings_frame, text='MO Grid parameters').grid(row=0, column=0, padx=5, pady=5, columnspan=5)
+
+        self.grid_type_radio_var = tk.StringVar()
+        self.grid_type_radio_var.set(self.tabulator._grid_type.value)  # noqa: SLF001
+
+        ttk.Label(settings_frame, text='Spherical grid:').grid(row=1, column=0, padx=5, pady=5)
+        sph_grid_type_button = ttk.Radiobutton(
+            settings_frame,
+            variable=self.grid_type_radio_var,
+            value=GridType.SPHERICAL.value,
+            command=self.place_grid_params_frame,
+        )
+
+        ttk.Label(settings_frame, text='Cartesian grid:').grid(row=1, column=2, padx=5, pady=5)
+        cart_grid_type_button = ttk.Radiobutton(
+            settings_frame,
+            variable=self.grid_type_radio_var,
+            value=GridType.CARTESIAN.value,
+            command=self.place_grid_params_frame,
+        )
+
+        sph_grid_type_button.grid(row=1, column=1, padx=5, pady=5)
+        cart_grid_type_button.grid(row=1, column=3, padx=5, pady=5)
+
+        self.sph_grid_params_frame = self.sph_grid_params_frame_widgets(settings_frame)
+        self.cart_grid_params_frame = self.cart_grid_params_frame_widgets(settings_frame)
+
+        self.place_grid_params_frame()
+
+        # Reset button
+        reset_button = ttk.Button(settings_frame, text='Reset', command=self.reset_grid_settings)
+        reset_button.grid(row=8, column=0, padx=5, pady=5, columnspan=5)
+
+        # Apply settings button
+        apply_button = ttk.Button(settings_frame, text='Apply', command=self.apply_grid_settings)
+        apply_button.grid(row=9, column=0, padx=5, pady=5, columnspan=5)
+
+    def mo_settings_screen(self) -> None:
+        """Open the molecular orbital settings window."""
+        parent = self._settings_parent()
+        self.mo_settings_window = tk.Toplevel(parent)
+        self.mo_settings_window.title('MO Settings')
+
+        settings_frame = ttk.Frame(self.mo_settings_window)
+        settings_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Contour level
+        contour_label = ttk.Label(settings_frame, text='Molecular Orbital Contour:')
+        contour_label.grid(row=0, column=0, padx=5, pady=5, sticky='w')
+        self.contour_entry = ttk.Entry(settings_frame)
+        self.contour_entry.insert(0, str(self.contour))
+        self.contour_entry.grid(row=1, column=0, padx=5, pady=5, sticky='ew')
+
+        # Bind to apply changes on Enter key or focus out
+        self.contour_entry.bind('<Return>', lambda _e: self.apply_mo_contour())
+        self.contour_entry.bind('<FocusOut>', lambda _e: self.apply_mo_contour())
+
+        # Opacity
+        opacity_label = ttk.Label(settings_frame)
+        opacity_label.grid(row=2, column=0, padx=5, pady=5, sticky='w')
+        self.opacity_scale = ttk.Scale(
+            settings_frame,
+            length=200,
+            command=self.on_opacity_change,
+        )
+        self.opacity_scale.set(self.opacity)
+        self.opacity_scale.grid(row=3, column=0, padx=5, pady=5, sticky='ew')
+        # Initialize label
+        opacity_label.config(text=f'Molecular Orbital Opacity: {self.opacity:.2f}')
+
+        # Configure grid column weight for proper resizing
+        settings_frame.columnconfigure(0, weight=1)
+
+        # Reset button
+        reset_button = ttk.Button(settings_frame, text='Reset', command=self.reset_mo_settings)
+        reset_button.grid(row=4, column=0, padx=5, pady=5, sticky='ew')
+
+    def on_opacity_change(self, val: str) -> None:
+        """Handle opacity slider changes and apply immediately."""
+        opacity = round(float(val), 2)
+        self.opacity = opacity
+        if self.orb_actor:
+            self.orb_actor.GetProperty().SetOpacity(opacity)
+
+        # Update label
+        for widget in self.mo_settings_window.winfo_children():
+            for child in widget.winfo_children():
+                if isinstance(child, ttk.Label) and 'Molecular Orbital Opacity:' in child.cget('text'):
+                    child.config(text=f'Molecular Orbital Opacity: {opacity:.2f}')
+
+    def apply_mo_contour(self) -> None:
+        """Apply contour changes immediately."""
+        try:
+            new_contour = float(self.contour_entry.get().strip())
+            self.contour = new_contour
+            # Replot the current orbital with the new contour
+            if self.current_orbital_index >= 0:
+                self.plot_orbital(self.current_orbital_index)
+        except ValueError:
+            pass  # Ignore invalid input
+
+    def update_settings_button_states(self) -> None:
+        """Update the state of the settings buttons based on current plotter state."""
+        if hasattr(self, 'show_atoms_var'):
+            self.show_atoms_var.set(self.are_atoms_visible())
+        if hasattr(self, 'show_bonds_var'):
+            self.show_bonds_var.set(self.are_bonds_visible())
+
+        config.molecule.atom.show = self.are_atoms_visible()
+        config.molecule.bond.show = self.are_bonds_visible()
+
+    def molecule_settings_screen(self) -> None:
+        """Open the molecule settings window."""
+        parent = self._settings_parent()
+        self.molecule_settings_window = tk.Toplevel(parent)
+        self.molecule_settings_window.title('Molecule Settings')
+
+        settings_frame = ttk.Frame(self.molecule_settings_window)
+        settings_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Molecule Opacity
+        molecule_opacity_label = ttk.Label(settings_frame)
+        molecule_opacity_label.grid(row=0, column=0, columnspan=2, padx=5, pady=5, sticky='w')
+        self.molecule_opacity_scale = ttk.Scale(
+            settings_frame,
+            length=100,
+            command=self.on_molecule_opacity_change,
+        )
+        self.molecule_opacity_scale.set(self.molecule_opacity)
+        self.molecule_opacity_scale.grid(row=1, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
+        # Initialize label
+        molecule_opacity_label.config(text=f'Molecule Opacity: {self.molecule_opacity:.2f}')
+
+        # Toggle molecule visibility
+        toggle_mol_button = ttk.Button(
+            settings_frame,
+            text='Toggle Molecule',
+            command=self.toggle_molecule,
+            width=20,
+        )
+        toggle_mol_button.grid(row=2, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
+
+        # Separator
+        ttk.Separator(settings_frame, orient='horizontal').grid(row=3, column=0, columnspan=2, sticky='ew', pady=10)
+
+        # Show atoms checkbox
+        self.show_atoms_var = tk.BooleanVar(value=config.molecule.atom.show)
+        show_atoms_check = ttk.Checkbutton(
+            settings_frame,
+            text='Show Atoms',
+            variable=self.show_atoms_var,
+            command=self.toggle_atoms,
+        )
+        show_atoms_check.grid(row=5, column=0, columnspan=2, padx=5, pady=5, sticky='w')
+
+        # Show bonds checkbox
+        self.show_bonds_var = tk.BooleanVar(value=config.molecule.bond.show)
+        show_bonds_check = ttk.Checkbutton(
+            settings_frame,
+            text='Show Bonds',
+            variable=self.show_bonds_var,
+            command=self.toggle_bonds,
+        )
+        show_bonds_check.grid(row=8, column=0, columnspan=2, padx=5, pady=5, sticky='w')
+
+        # Separator
+        ttk.Separator(settings_frame, orient='horizontal').grid(row=9, column=0, columnspan=2, sticky='ew', pady=10)
+
+        # Bond max length
+        ttk.Label(settings_frame, text='Max Bond Length:').grid(row=10, column=0, padx=5, pady=5, sticky='w')
+        self.bond_max_length_entry = ttk.Entry(settings_frame, width=15)
+        self.bond_max_length_entry.insert(0, str(config.molecule.bond.max_length))
+        self.bond_max_length_entry.grid(row=10, column=1, padx=5, pady=5, sticky='w')
+
+        # Bond radius
+        ttk.Label(settings_frame, text='Bond Radius:').grid(row=12, column=0, padx=5, pady=5, sticky='w')
+        self.bond_radius_entry = ttk.Entry(settings_frame, width=15)
+        self.bond_radius_entry.insert(0, str(config.molecule.bond.radius))
+        self.bond_radius_entry.grid(row=12, column=1, padx=5, pady=5, sticky='w')
+
+        # Configure grid column weights for proper resizing
+        settings_frame.columnconfigure(0, weight=1)
+        settings_frame.columnconfigure(1, weight=1)
+
+        # Reset button
+        reset_button = ttk.Button(settings_frame, text='Reset', command=self.reset_molecule_settings)
+        reset_button.grid(row=13, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
+
+        # Apply settings button
+        apply_button = ttk.Button(settings_frame, text='Apply', command=self.apply_molecule_settings)
+        apply_button.grid(row=14, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
+
+    def on_molecule_opacity_change(self, val: str) -> None:
+        """Handle molecule opacity slider changes and apply immediately."""
+        opacity = round(float(val), 2)
+        self.molecule_opacity = opacity
+        for actor in self.molecule_actors:
+            actor.GetProperty().SetOpacity(opacity)
+        # Update label
+        for widget in self.molecule_settings_window.winfo_children():
+            for child in widget.winfo_children():
+                if isinstance(child, ttk.Label) and 'Molecule Opacity:' in child.cget('text'):
+                    child.config(text=f'Molecule Opacity: {opacity:.2f}')
+
+    def apply_background_color(self) -> None:
+        """Apply background color changes immediately."""
+        try:
+            color = self.background_color_entry.get().strip()
+            if mcolors.is_color_like(color):
+                self.pv_plotter.set_background(color)
+            else:
+                messagebox.showerror('Invalid Input', f'"{color}" is not a valid color.')
+        except (ValueError, RuntimeError) as e:
+            messagebox.showerror('Error', f'Failed to set background color: {e!s}')
+
+    def on_mo_color_scheme_change(self, _event: tk.Event) -> None:
+        """Handle MO color scheme dropdown change to show/hide custom color entries."""
+        self.plotter.on_mo_color_scheme_change(_event)
+
+    def on_bond_color_type_change(self) -> None:
+        """Handle bond color type change to show/hide bond color entry."""
+        self.plotter.on_bond_color_type_change()
+
+    def color_settings_screen(self) -> None:
+        """Open the color settings window."""
+        parent = self._settings_parent()
+        self.color_settings_window = tk.Toplevel(parent)
+        self.color_settings_window.title('Color Settings')
+
+        settings_frame = ttk.Frame(self.color_settings_window)
+        settings_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Background Color section
+        ttk.Label(settings_frame, text='Background Color', font=('TkDefaultFont', 10, 'bold')).grid(
+            row=0,
+            column=0,
+            columnspan=2,
+            padx=5,
+            pady=5,
+            sticky='w',
+        )
+
+        ttk.Label(settings_frame, text='Background Color:').grid(row=1, column=0, padx=5, pady=5, sticky='w')
+        self.background_color_entry = ttk.Entry(settings_frame, width=15)
+        self.background_color_entry.insert(0, str(config.background_color))
+        self.background_color_entry.grid(row=1, column=1, padx=5, pady=5, sticky='w')
+        # Bind to apply changes on Enter key or focus out
+        self.background_color_entry.bind('<Return>', lambda _e: self.apply_background_color())
+        self.background_color_entry.bind('<FocusOut>', lambda _e: self.apply_background_color())
+
+        # Separator
+        ttk.Separator(settings_frame, orient='horizontal').grid(row=2, column=0, columnspan=2, sticky='ew', pady=10)
+
+        # MO Color section
+        ttk.Label(settings_frame, text='Molecular Orbital Colors', font=('TkDefaultFont', 10, 'bold')).grid(
+            row=3,
+            column=0,
+            columnspan=2,
+            padx=5,
+            pady=5,
+            sticky='w',
+        )
+
+        ttk.Label(settings_frame, text='Color Scheme:').grid(row=4, column=0, padx=5, pady=5, sticky='w')
+        # Create dropdown with predefined color schemes
+        predefined_schemes = ['bwr', 'RdBu', 'seismic', 'coolwarm', 'PiYG']
+
+        # Check if user has a custom scheme in config that's not in predefined list
+        if config.mo.color_scheme not in predefined_schemes and config.mo.color_scheme != 'custom':
+            # Add the user's scheme as the first item
+            color_schemes = [config.mo.color_scheme, *predefined_schemes, 'custom']
+            default_scheme = config.mo.color_scheme
+        else:
+            color_schemes = [*predefined_schemes, 'custom']
+            default_scheme = config.mo.color_scheme if config.mo.color_scheme in predefined_schemes else 'custom'
+
+        self.mo_color_scheme_var = tk.StringVar(value=default_scheme)
+        self.mo_color_scheme_dropdown = ttk.Combobox(
+            settings_frame,
+            state='readonly',
+            textvariable=self.mo_color_scheme_var,
+            values=color_schemes,
+        )
+        self.mo_color_scheme_dropdown.grid(row=4, column=1, padx=5, pady=5, sticky='w')
+        self.mo_color_scheme_dropdown.bind('<<ComboboxSelected>>', self.on_mo_color_scheme_change)
+        self.mo_color_scheme_dropdown.bind('<<ComboboxSelected>>', lambda _e: self.apply_mo_color_settings())
+
+        # Custom color entries (initially hidden unless 'custom' is selected)
+        negative_color_label = ttk.Label(settings_frame, text='Negative Color:')
+        negative_color_label.grid(row=5, column=0, padx=5, pady=5, sticky='w')
+        self.mo_negative_color_entry = ttk.Entry(settings_frame, width=15)
+        if config.mo.custom_colors and len(config.mo.custom_colors) > 0:
+            self.mo_negative_color_entry.insert(0, config.mo.custom_colors[0])
+        self.mo_negative_color_entry.grid(row=5, column=1, padx=5, pady=5, sticky='w')
+
+        positive_color_label = ttk.Label(settings_frame, text='Positive Color:')
+        positive_color_label.grid(row=6, column=0, padx=5, pady=5, sticky='w')
+        self.mo_positive_color_entry = ttk.Entry(settings_frame, width=15)
+        if config.mo.custom_colors and len(config.mo.custom_colors) > 1:
+            self.mo_positive_color_entry.insert(0, config.mo.custom_colors[1])
+        self.mo_positive_color_entry.grid(row=6, column=1, padx=5, pady=5, sticky='w')
+
+        # Store references to custom color widgets for show/hide
+        self.mo_custom_color_widgets = [
+            self.mo_negative_color_entry,
+            self.mo_positive_color_entry,
+            negative_color_label,
+            positive_color_label,
+        ]
+
+        # Hide custom color entries if predefined scheme is selected
+        if self.mo_color_scheme_var.get() != 'custom':
+            for widget in self.mo_custom_color_widgets:
+                widget.grid_remove()
+
+        # Separator
+        ttk.Separator(settings_frame, orient='horizontal').grid(row=7, column=0, columnspan=2, sticky='ew', pady=10)
+
+        # Bond Color section
+        ttk.Label(settings_frame, text='Bond Colors', font=('TkDefaultFont', 10, 'bold')).grid(
+            row=8,
+            column=0,
+            columnspan=2,
+            padx=5,
+            pady=5,
+            sticky='w',
+        )
+
+        # Bond color type
+        ttk.Label(settings_frame, text='Bond Color Type:').grid(row=9, column=0, padx=5, pady=5, sticky='w')
+        self.bond_color_type_var = tk.StringVar(value=config.molecule.bond.color_type)
+        bond_color_frame = ttk.Frame(settings_frame)
+        bond_color_frame.grid(row=9, column=1, padx=5, pady=5, sticky='w')
+        ttk.Radiobutton(
+            bond_color_frame,
+            text='Uniform',
+            variable=self.bond_color_type_var,
+            value='uniform',
+            command=self.on_bond_color_type_change,
+        ).pack(side=tk.LEFT)
+        ttk.Radiobutton(
+            bond_color_frame,
+            text='Split',
+            variable=self.bond_color_type_var,
+            value='split',
+            command=self.on_bond_color_type_change,
+        ).pack(side=tk.LEFT)
+
+        # Bond color (for uniform type only)
+        self.bond_color_label = ttk.Label(settings_frame, text='Bond Color:')
+        self.bond_color_label.grid(row=10, column=0, padx=5, pady=5, sticky='w')
+        self.bond_color_entry = ttk.Entry(settings_frame, width=15)
+        self.bond_color_entry.insert(0, str(config.molecule.bond.color))
+        self.bond_color_entry.grid(row=10, column=1, padx=5, pady=5, sticky='w')
+        self.bond_color_entry.bind('<Return>', lambda _e: self.apply_bond_color_settings())
+
+        # Hide bond color entry if split is selected
+        if self.bond_color_type_var.get() == 'split':
+            self.bond_color_label.grid_remove()
+            self.bond_color_entry.grid_remove()
+
+        # Configure grid column weights for proper resizing
+        settings_frame.columnconfigure(0, weight=1)
+        settings_frame.columnconfigure(1, weight=1)
+
+        # Reset button
+        reset_button = ttk.Button(settings_frame, text='Reset', command=self.reset_color_settings)
+        reset_button.grid(row=11, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
+
+        # Apply settings button
+        apply_button = ttk.Button(settings_frame, text='Apply', command=self.apply_color_settings)
+        apply_button.grid(row=13, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
+
+    def place_grid_params_frame(self) -> None:
+        """Render the parameter frame that matches the selected grid type."""
+        if self.grid_type_radio_var.get() == GridType.SPHERICAL.value:
+            self.grid_settings_window.geometry(self.SPHERICAL_GRID_SETTINGS_WINDOW_SIZE)
+            self.cart_grid_params_frame.grid_forget()
+            self.sph_grid_params_frame.grid(row=2, column=0, padx=5, pady=5, rowspan=6, columnspan=4)
+            self.sph_grid_params_frame_setup()
+        else:
+            self.grid_settings_window.geometry(self.CARTESIAN_GRID_SETTINGS_WINDOW_SIZE)
+            self.sph_grid_params_frame.grid_forget()
+            self.cart_grid_params_frame.grid(row=2, column=0, padx=5, pady=5, rowspan=6, columnspan=4)
+            self.cart_grid_params_frame_setup()
+
+    def sph_grid_params_frame_widgets(self, master: ttk.Frame) -> ttk.Frame:
+        """Build widgets that capture spherical grid parameters."""
+        grid_params_frame = ttk.Frame(master)
+
+        # Radius
+        ttk.Label(grid_params_frame, text='Radius:').grid(row=0, column=0, padx=5, pady=5)
+        self.radius_entry = ttk.Entry(grid_params_frame)
+        self.radius_entry.grid(row=0, column=1, padx=5, pady=5)
+
+        # Radius points
+        radius_points_label = ttk.Label(grid_params_frame, text='Number of Radius Points:')
+        radius_points_label.grid(row=1, column=0, padx=5, pady=5)
+        self.radius_points_entry = ttk.Entry(grid_params_frame)
+        self.radius_points_entry.grid(row=1, column=1, padx=5, pady=5)
+
+        # Theta points
+        ttk.Label(grid_params_frame, text='Number of Theta Points:').grid(row=2, column=0, padx=5, pady=5)
+        self.theta_points_entry = ttk.Entry(grid_params_frame)
+        self.theta_points_entry.grid(row=2, column=1, padx=5, pady=5)
+
+        # Phi points
+        ttk.Label(grid_params_frame, text='Number of Phi Points:').grid(row=3, column=0, padx=5, pady=5)
+        self.phi_points_entry = ttk.Entry(grid_params_frame)
+        self.phi_points_entry.grid(row=3, column=1, padx=5, pady=5)
+
+        return grid_params_frame
+
+    def cart_grid_params_frame_widgets(self, master: ttk.Frame) -> ttk.Frame:
+        """Build widgets that capture cartesian grid parameters."""
+        grid_params_frame = ttk.Frame(master)
+
+        # X
+        ttk.Label(grid_params_frame, text='Min x:').grid(row=0, column=0, padx=5, pady=5)
+        ttk.Label(grid_params_frame, text='Max x:').grid(row=0, column=1, padx=5, pady=5)
+        ttk.Label(grid_params_frame, text='Num x points:').grid(row=0, column=2, padx=5, pady=5)
+
+        self.x_min_entry = ttk.Entry(grid_params_frame)
+        self.x_max_entry = ttk.Entry(grid_params_frame)
+        self.x_num_points_entry = ttk.Entry(grid_params_frame)
+
+        self.x_min_entry.grid(row=1, column=0, padx=5, pady=5)
+        self.x_max_entry.grid(row=1, column=1, padx=5, pady=5)
+        self.x_num_points_entry.grid(row=1, column=2, padx=5, pady=5)
+
+        # Y
+        ttk.Label(grid_params_frame, text='Min y:').grid(row=2, column=0, padx=5, pady=5)
+        ttk.Label(grid_params_frame, text='Max y:').grid(row=2, column=1, padx=5, pady=5)
+        ttk.Label(grid_params_frame, text='Num y points:').grid(row=2, column=2, padx=5, pady=5)
+
+        self.y_min_entry = ttk.Entry(grid_params_frame)
+        self.y_max_entry = ttk.Entry(grid_params_frame)
+        self.y_num_points_entry = ttk.Entry(grid_params_frame)
+
+        self.y_min_entry.grid(row=3, column=0, padx=5, pady=5)
+        self.y_max_entry.grid(row=3, column=1, padx=5, pady=5)
+        self.y_num_points_entry.grid(row=3, column=2, padx=5, pady=5)
+
+        # Z
+        ttk.Label(grid_params_frame, text='Min z:').grid(row=4, column=0, padx=5, pady=5)
+        ttk.Label(grid_params_frame, text='Max z:').grid(row=4, column=1, padx=5, pady=5)
+        ttk.Label(grid_params_frame, text='Num z points:').grid(row=4, column=2, padx=5, pady=5)
+
+        self.z_min_entry = ttk.Entry(grid_params_frame)
+        self.z_max_entry = ttk.Entry(grid_params_frame)
+        self.z_num_points_entry = ttk.Entry(grid_params_frame)
+
+        self.z_min_entry.grid(row=5, column=0, padx=5, pady=5)
+        self.z_max_entry.grid(row=5, column=1, padx=5, pady=5)
+        self.z_num_points_entry.grid(row=5, column=2, padx=5, pady=5)
+
+        return grid_params_frame
+
+    def sph_grid_params_frame_setup(self) -> None:
+        """Populate the spherical grid widgets with defaults or existing values."""
+        self.plotter.sph_grid_params_frame_setup()
+
+    def cart_grid_params_frame_setup(self) -> None:
+        """Populate the Cartesian grid widgets with defaults or existing values."""
+        self.plotter.cart_grid_params_frame_setup()
+
+    def reset_grid_settings(self) -> None:
+        """Restore grid settings widgets back to configuration defaults."""
+        self.grid_type_radio_var.set(config.grid.default_type)
+
+        self.radius_entry.delete(0, tk.END)
+        self.radius_entry.insert(
+            0,
+            str(max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius)),
+        )
+
+        self.radius_points_entry.delete(0, tk.END)
+        self.radius_points_entry.insert(0, str(config.grid.spherical.num_r_points))
+
+        self.theta_points_entry.delete(0, tk.END)
+        self.theta_points_entry.insert(0, str(config.grid.spherical.num_theta_points))
+
+        self.phi_points_entry.delete(0, tk.END)
+        self.phi_points_entry.insert(0, str(config.grid.spherical.num_phi_points))
+
+        self.place_grid_params_frame()
+
+    def reset_mo_settings(self) -> None:
+        """Restore MO settings widgets back to configuration defaults."""
+        self.plotter.reset_mo_settings()
+
+    def reset_molecule_settings(self) -> None:
+        """Restore molecule settings widgets back to configuration defaults."""
+        self.plotter.reset_molecule_settings()
+
+    def reset_color_settings(self) -> None:
+        """Restore color settings widgets back to configuration defaults."""
+        new_config = Config()  # Reload config to discard unsaved changes
+
+        self.background_color_entry.delete(0, tk.END)
+        self.background_color_entry.insert(0, str(new_config.background_color))
+
+        # Reset MO color scheme dropdown
+        predefined_schemes = ['bwr', 'RdBu', 'seismic', 'coolwarm', 'PiYG']
+
+        if new_config.mo.color_scheme not in predefined_schemes and new_config.mo.color_scheme != 'custom':
+            color_schemes = [new_config.mo.color_scheme, *predefined_schemes, 'custom']
+            self.mo_color_scheme_dropdown['values'] = color_schemes
+            self.mo_color_scheme_var.set(new_config.mo.color_scheme)
+        else:
+            color_schemes = [*predefined_schemes, 'custom']
+            self.mo_color_scheme_dropdown['values'] = color_schemes
+            if new_config.mo.color_scheme in predefined_schemes:
+                self.mo_color_scheme_var.set(new_config.mo.color_scheme)
+            else:
+                self.mo_color_scheme_var.set('custom')
+
+        # Reset custom color entries
+        self.mo_negative_color_entry.delete(0, tk.END)
+        self.mo_positive_color_entry.delete(0, tk.END)
+        if new_config.mo.custom_colors:
+            if len(new_config.mo.custom_colors) > 0:
+                self.mo_negative_color_entry.insert(0, new_config.mo.custom_colors[0])
+            if len(new_config.mo.custom_colors) > 1:
+                self.mo_positive_color_entry.insert(0, new_config.mo.custom_colors[1])
+
+        if self.mo_color_scheme_var.get() == 'custom':
+            for widget in self.mo_custom_color_widgets:
+                widget.grid()
+        else:
+            for widget in self.mo_custom_color_widgets:
+                widget.grid_remove()
+
+        # Reset bond color type
+        self.bond_color_type_var.set(new_config.molecule.bond.color_type)
+
+        # Reset bond color entry
+        self.bond_color_entry.delete(0, tk.END)
+        self.bond_color_entry.insert(0, str(new_config.molecule.bond.color))
+
+        # Show/hide bond color entry based on type
+        if self.bond_color_type_var.get() == 'uniform':
+            self.bond_color_label.grid()
+            self.bond_color_entry.grid()
+        else:
+            self.bond_color_label.grid_remove()
+            self.bond_color_entry.grid_remove()
+
+    def apply_grid_settings(self) -> None:
+        """Validate UI inputs and apply the chosen grid parameters."""
+        if self.grid_type_radio_var.get() == GridType.SPHERICAL.value:
+            radius = float(self.radius_entry.get())
+            if radius <= 0:
+                messagebox.showerror('Invalid input', 'Radius must be greater than zero.')
+                return
+
+            num_r_points = int(self.radius_points_entry.get())
+            num_theta_points = int(self.theta_points_entry.get())
+            num_phi_points = int(self.phi_points_entry.get())
+
+            if num_r_points <= 0 or num_theta_points <= 0 or num_phi_points <= 0:
+                messagebox.showerror('Invalid input', 'Number of points must be greater than zero.')
+                return
+
+            r = np.linspace(0, radius, num_r_points)
+            theta = np.linspace(0, np.pi, num_theta_points)
+            phi = np.linspace(0, 2 * np.pi, num_phi_points)
+
+            rr, tt, pp = np.meshgrid(r, theta, phi, indexing='ij')
+            xx, yy, zz = _spherical_to_cartesian(rr, tt, pp)
+
+            new_grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
+            if not np.array_equal(new_grid, self.tabulator.grid):
+                self.update_mesh(r, theta, phi, GridType.SPHERICAL)
+
+        else:
+            x_min = float(self.x_min_entry.get())
+            x_max = float(self.x_max_entry.get())
+            x_num = int(self.x_num_points_entry.get())
+
+            y_min = float(self.y_min_entry.get())
+            y_max = float(self.y_max_entry.get())
+            y_num = int(self.y_num_points_entry.get())
+
+            z_min = float(self.z_min_entry.get())
+            z_max = float(self.z_max_entry.get())
+            z_num = int(self.z_num_points_entry.get())
+
+            if x_num <= 0 or y_num <= 0 or z_num <= 0:
+                messagebox.showerror('Invalid input', 'Number of points must be greater than zero.')
+                return
+
+            x = np.linspace(x_min, x_max, x_num)
+            y = np.linspace(y_min, y_max, y_num)
+            z = np.linspace(z_min, z_max, z_num)
+
+            xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
+
+            new_grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
+            if not np.array_equal(new_grid, self.tabulator.grid):
+                self.update_mesh(x, y, z, GridType.CARTESIAN)
+
+        # Replot the current orbital with the new grid
+        self.plot_orbital(self.current_orbital_index)
+
+    def apply_mo_settings(self) -> None:
+        """Validate UI inputs and apply the chosen MO rendering parameters."""
+        self.contour = float(self.contour_entry.get().strip())
+        self.opacity = round(self.opacity_scale.get(), 2)
+
+        self.plot_orbital(self.current_orbital_index)
+
+        if self.orb_actor:
+            self.orb_actor.GetProperty().SetOpacity(self.opacity)
+
+    def apply_molecule_settings(self) -> None:
+        """Validate UI inputs and apply the chosen molecule rendering parameters."""
+        redraw_molecule = False
+
+        try:
+            bond_max_length = float(self.bond_max_length_entry.get())
+            if bond_max_length != config.molecule.bond.max_length:
+                config.molecule.bond.max_length = bond_max_length
+                redraw_molecule = True
+        except ValueError:
+            messagebox.showerror('Invalid Input', 'Bond Max Length must be a valid number.')
+            return
+
+        try:
+            bond_radius = float(self.bond_radius_entry.get())
+            if bond_radius != config.molecule.bond.radius:
+                config.molecule.bond.radius = bond_radius
+                redraw_molecule = True
+        except ValueError:
+            messagebox.showerror('Invalid Input', 'Bond Radius must be a valid number.')
+            return
+
+        if redraw_molecule:
+            self.load_molecule(config)
+
+    def apply_color_settings(self) -> None:
+        """Apply both MO and bond color settings."""
+        self.plotter.apply_color_settings()
+
+    def apply_mo_color_settings(self) -> None:
+        """Validate UI inputs and apply the chosen MO color settings."""
+        self.on_mo_color_scheme_change(tk.Event())  # Ensure custom entries are shown
+
+        mo_color_scheme = self.mo_color_scheme_var.get().strip()
+        if mo_color_scheme == 'custom':
+            return
+
+        if mo_color_scheme != config.mo.color_scheme:
+            self.cmap = mo_color_scheme
+            config.mo.color_scheme = mo_color_scheme
+
+            self.plot_orbital(self.current_orbital_index)
+
+    def apply_custom_mo_color_settings(self) -> None:
+        """Validate UI inputs and apply the chosen MO color settings."""
+        if self.mo_color_scheme_var.get().strip() != 'custom':
+            return
+
+        custom_colors = [self.mo_negative_color_entry.get().strip(), self.mo_positive_color_entry.get().strip()]
+
+        if any(not mcolors.is_color_like(c) for c in custom_colors):
+            messagebox.showerror('Invalid Input', 'One or more custom colors are not valid.')
+            return
+
+        if custom_colors != config.mo.custom_colors:
+            config.mo.custom_colors = custom_colors
+            self.cmap = self.custom_cmap_from_colors(custom_colors)
+
+            self.plot_orbital(self.current_orbital_index)
+
+    def apply_bond_color_settings(self) -> None:
+        """Validate UI inputs and apply the chosen color settings."""
+        redraw_molecule = False
+
+        bond_color_type = self.bond_color_type_var.get().strip()
+        if bond_color_type != config.molecule.bond.color_type:
+            config.molecule.bond.color_type = bond_color_type
+            redraw_molecule = True
+
+        bond_color = self.bond_color_entry.get().strip()
+        if self.bond_color_type_var.get() == 'uniform' and bond_color != config.molecule.bond.color:
+            config.molecule.bond.color = bond_color
+            redraw_molecule = True
+
+        if redraw_molecule:
+            self.load_molecule(config)
+
+    def save_settings(self) -> None:  # noqa: PLR6301
+        """Save current configuration to the user's custom config file."""
+        self.plotter.save_settings()
+
+    def plot_orbital(self, orb_ind: int) -> None:
+        """Render the selected orbital isosurface in the PyVista plotter."""
+        if self.orb_actor:
+            self.pv_plotter.remove_actor(self.orb_actor)
+            self.orb_actor = None
+
+        self.current_orbital_index = orb_ind
+
+        if orb_ind == -1:
+            return
+
+        self.orb_mesh['orbital'] = self.tabulator.tabulate_mos(orb_ind)
+
+        contour_mesh = self.orb_mesh.contour([-self.contour, self.contour])
+
+        self.orb_actor = self.pv_plotter.add_mesh(
+            contour_mesh,
+            clim=[-self.contour, self.contour],
+            opacity=self.opacity,
+            show_scalar_bar=False,
+            cmap=self.cmap,
+            smooth_shading=True,
+        )
 
     def _show_image_export_dialog(self) -> None:
         """Show image export dialog (standalone version for only_molecule mode)."""
@@ -474,8 +1201,8 @@ class Plotter:
         if self.orb_actor:
             self.pv_plotter.remove_actor(self.orb_actor)
             self.orb_actor = None
+            self.current_orbital_index = -1
             if self.selection_screen:
-                self.selection_screen.current_orb_ind = -1
                 self.selection_screen.update_nav_button_states()
 
     def toggle_molecule(self) -> None:
@@ -493,8 +1220,7 @@ class Plotter:
                 actor.SetVisibility(not actor.GetVisibility())
             self.pv_plotter.update()
 
-        if self.selection_screen:
-            self.selection_screen.update_settings_button_states()
+        self.update_settings_button_states()
 
     def toggle_atoms(self) -> None:
         """Toggle the visibility of the molecule."""
@@ -623,7 +1349,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.protocols()
 
         self.plotter = plotter
-        self.current_orb_ind = -1  # Start with no orbital shown
+        self.current_orb_ind = plotter.current_orbital_index  # Start synced with plotter
 
         # Initialize export window attributes
         self._export_window = None
@@ -664,865 +1390,130 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
     def grid_settings_screen(self) -> None:
         """Open the grid settings window."""
-        self.grid_settings_window = tk.Toplevel(self)
-        self.grid_settings_window.title('Grid Settings')
-
-        settings_frame = ttk.Frame(self.grid_settings_window)
-        settings_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-        # Grid parameters
-        ttk.Label(settings_frame, text='MO Grid parameters').grid(row=0, column=0, padx=5, pady=5, columnspan=5)
-
-        self.grid_type_radio_var = tk.StringVar()
-        self.grid_type_radio_var.set(self.plotter.tabulator._grid_type.value)  # noqa: SLF001
-
-        ttk.Label(settings_frame, text='Spherical grid:').grid(row=1, column=0, padx=5, pady=5)
-        sph_grid_type_button = ttk.Radiobutton(
-            settings_frame,
-            variable=self.grid_type_radio_var,
-            value=GridType.SPHERICAL.value,
-            command=self.place_grid_params_frame,
-        )
-
-        ttk.Label(settings_frame, text='Cartesian grid:').grid(row=1, column=2, padx=5, pady=5)
-        cart_grid_type_button = ttk.Radiobutton(
-            settings_frame,
-            variable=self.grid_type_radio_var,
-            value=GridType.CARTESIAN.value,
-            command=self.place_grid_params_frame,
-        )
-
-        sph_grid_type_button.grid(row=1, column=1, padx=5, pady=5)
-        cart_grid_type_button.grid(row=1, column=3, padx=5, pady=5)
-
-        self.sph_grid_params_frame = self.sph_grid_params_frame_widgets(settings_frame)
-        self.cart_grid_params_frame = self.cart_grid_params_frame_widgets(settings_frame)
-
-        self.place_grid_params_frame()
-
-        # Reset button
-        reset_button = ttk.Button(settings_frame, text='Reset', command=self.reset_grid_settings)
-        reset_button.grid(row=8, column=0, padx=5, pady=5, columnspan=5)
-
-        # Apply settings button
-        apply_button = ttk.Button(settings_frame, text='Apply', command=self.apply_grid_settings)
-        apply_button.grid(row=9, column=0, padx=5, pady=5, columnspan=5)
+        self.plotter.grid_settings_screen()
 
     def mo_settings_screen(self) -> None:
         """Open the molecular orbital settings window."""
-        self.mo_settings_window = tk.Toplevel(self)
-        self.mo_settings_window.title('MO Settings')
-
-        settings_frame = ttk.Frame(self.mo_settings_window)
-        settings_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-        # Contour level
-        contour_label = ttk.Label(settings_frame, text='Molecular Orbital Contour:')
-        contour_label.grid(row=0, column=0, padx=5, pady=5, sticky='w')
-        self.contour_entry = ttk.Entry(settings_frame)
-        self.contour_entry.insert(0, str(self.plotter.contour))
-        self.contour_entry.grid(row=1, column=0, padx=5, pady=5, sticky='ew')
-
-        # Bind to apply changes on Enter key or focus out
-        self.contour_entry.bind('<Return>', lambda _e: self.apply_mo_contour())
-        self.contour_entry.bind('<FocusOut>', lambda _e: self.apply_mo_contour())
-
-        # Opacity
-        opacity_label = ttk.Label(settings_frame)
-        opacity_label.grid(row=2, column=0, padx=5, pady=5, sticky='w')
-        self.opacity_scale = ttk.Scale(
-            settings_frame,
-            length=200,
-            command=self.on_opacity_change,
-        )
-        self.opacity_scale.set(self.plotter.opacity)
-        self.opacity_scale.grid(row=3, column=0, padx=5, pady=5, sticky='ew')
-        # Initialize label
-        opacity_label.config(text=f'Molecular Orbital Opacity: {self.plotter.opacity:.2f}')
-
-        # Configure grid column weight for proper resizing
-        settings_frame.columnconfigure(0, weight=1)
-
-        # Reset button
-        reset_button = ttk.Button(settings_frame, text='Reset', command=self.reset_mo_settings)
-        reset_button.grid(row=4, column=0, padx=5, pady=5, sticky='ew')
+        self.plotter.mo_settings_screen()
 
     def on_opacity_change(self, val: str) -> None:
         """Handle opacity slider changes and apply immediately."""
-        opacity = round(float(val), 2)
-        self.plotter.opacity = opacity
-        if self.plotter.orb_actor:
-            self.plotter.orb_actor.GetProperty().SetOpacity(opacity)
-
-        # Update label
-        for widget in self.mo_settings_window.winfo_children():
-            for child in widget.winfo_children():
-                if isinstance(child, ttk.Label) and 'Molecular Orbital Opacity:' in child.cget('text'):
-                    child.config(text=f'Molecular Orbital Opacity: {opacity:.2f}')
+        self.plotter.on_opacity_change(val)
 
     def apply_mo_contour(self) -> None:
         """Apply contour changes immediately."""
-        try:
-            new_contour = float(self.contour_entry.get().strip())
-            self.plotter.contour = new_contour
-            # Replot the current orbital with the new contour
-            if self.current_orb_ind >= 0:
-                self.plot_orbital(self.current_orb_ind)
-        except ValueError:
-            pass  # Ignore invalid input
+        self.plotter.apply_mo_contour()
 
     def update_settings_button_states(self) -> None:
         """Update the state of the settings buttons based on current plotter state."""
-        self.show_atoms_var.set(self.plotter.are_atoms_visible())
-        self.show_bonds_var.set(self.plotter.are_bonds_visible())
-
-        config.molecule.atom.show = self.plotter.are_atoms_visible()
-        config.molecule.bond.show = self.plotter.are_bonds_visible()
+        self.plotter.update_settings_button_states()
 
     def molecule_settings_screen(self) -> None:
         """Open the molecule settings window."""
-        self.molecule_settings_window = tk.Toplevel(self)
-        self.molecule_settings_window.title('Molecule Settings')
-
-        settings_frame = ttk.Frame(self.molecule_settings_window)
-        settings_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-        # Molecule Opacity
-        molecule_opacity_label = ttk.Label(settings_frame)
-        molecule_opacity_label.grid(row=0, column=0, columnspan=2, padx=5, pady=5, sticky='w')
-        self.molecule_opacity_scale = ttk.Scale(
-            settings_frame,
-            length=100,
-            command=self.on_molecule_opacity_change,
-        )
-        self.molecule_opacity_scale.set(self.plotter.molecule_opacity)
-        self.molecule_opacity_scale.grid(row=1, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
-        # Initialize label
-        molecule_opacity_label.config(text=f'Molecule Opacity: {self.plotter.molecule_opacity:.2f}')
-
-        # Toggle molecule visibility
-        toggle_mol_button = ttk.Button(
-            settings_frame,
-            text='Toggle Molecule',
-            command=self.plotter.toggle_molecule,
-            width=20,
-        )
-        toggle_mol_button.grid(row=2, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
-
-        # Separator
-        ttk.Separator(settings_frame, orient='horizontal').grid(row=3, column=0, columnspan=2, sticky='ew', pady=10)
-
-        # Show atoms checkbox
-        self.show_atoms_var = tk.BooleanVar(value=config.molecule.atom.show)
-        show_atoms_check = ttk.Checkbutton(
-            settings_frame,
-            text='Show Atoms',
-            variable=self.show_atoms_var,
-            command=self.plotter.toggle_atoms,
-        )
-        show_atoms_check.grid(row=5, column=0, columnspan=2, padx=5, pady=5, sticky='w')
-
-        # Show bonds checkbox
-        self.show_bonds_var = tk.BooleanVar(value=config.molecule.bond.show)
-        show_bonds_check = ttk.Checkbutton(
-            settings_frame,
-            text='Show Bonds',
-            variable=self.show_bonds_var,
-            command=self.plotter.toggle_bonds,
-        )
-        show_bonds_check.grid(row=8, column=0, columnspan=2, padx=5, pady=5, sticky='w')
-
-        # Separator
-        ttk.Separator(settings_frame, orient='horizontal').grid(row=9, column=0, columnspan=2, sticky='ew', pady=10)
-
-        # Bond max length
-        ttk.Label(settings_frame, text='Max Bond Length:').grid(row=10, column=0, padx=5, pady=5, sticky='w')
-        self.bond_max_length_entry = ttk.Entry(settings_frame, width=15)
-        self.bond_max_length_entry.insert(0, str(config.molecule.bond.max_length))
-        self.bond_max_length_entry.grid(row=10, column=1, padx=5, pady=5, sticky='w')
-
-        # Bond radius
-        ttk.Label(settings_frame, text='Bond Radius:').grid(row=12, column=0, padx=5, pady=5, sticky='w')
-        self.bond_radius_entry = ttk.Entry(settings_frame, width=15)
-        self.bond_radius_entry.insert(0, str(config.molecule.bond.radius))
-        self.bond_radius_entry.grid(row=12, column=1, padx=5, pady=5, sticky='w')
-
-        # Configure grid column weights for proper resizing
-        settings_frame.columnconfigure(0, weight=1)
-        settings_frame.columnconfigure(1, weight=1)
-
-        # Reset button
-        reset_button = ttk.Button(settings_frame, text='Reset', command=self.reset_molecule_settings)
-        reset_button.grid(row=13, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
-
-        # Apply settings button
-        apply_button = ttk.Button(settings_frame, text='Apply', command=self.apply_molecule_settings)
-        apply_button.grid(row=14, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
+        self.plotter.molecule_settings_screen()
 
     def on_molecule_opacity_change(self, val: str) -> None:
         """Handle molecule opacity slider changes and apply immediately."""
-        opacity = round(float(val), 2)
-        self.plotter.molecule_opacity = opacity
-        for actor in self.plotter.molecule_actors:
-            actor.GetProperty().SetOpacity(opacity)
-        # Update label
-        for widget in self.molecule_settings_window.winfo_children():
-            for child in widget.winfo_children():
-                if isinstance(child, ttk.Label) and 'Molecule Opacity:' in child.cget('text'):
-                    child.config(text=f'Molecule Opacity: {opacity:.2f}')
+        self.plotter.on_molecule_opacity_change(val)
 
     def apply_background_color(self) -> None:
         """Apply background color changes immediately."""
-        try:
-            color = self.background_color_entry.get().strip()
-            if mcolors.is_color_like(color):
-                self.plotter.pv_plotter.set_background(color)
-            else:
-                messagebox.showerror('Invalid Input', f'"{color}" is not a valid color.')
-        except (ValueError, RuntimeError) as e:
-            messagebox.showerror('Error', f'Failed to set background color: {e!s}')
+        self.plotter.apply_background_color()
 
     def on_mo_color_scheme_change(self, _event: tk.Event) -> None:
         """Handle MO color scheme dropdown change to show/hide custom color entries."""
-        if self.mo_color_scheme_var.get() == 'custom':
-            # Show custom color entries
-            for widget in self.mo_custom_color_widgets:
-                widget.grid()
-        else:
-            # Hide custom color entries
-            for widget in self.mo_custom_color_widgets:
-                widget.grid_remove()
+        self.plotter.on_mo_color_scheme_change(_event)
 
     def on_bond_color_type_change(self) -> None:
         """Handle bond color type change to show/hide bond color entry."""
-        if self.bond_color_type_var.get() == 'uniform':
-            # Show bond color entry
-            self.bond_color_label.grid()
-            self.bond_color_entry.grid()
-        else:
-            # Hide bond color entry
-            self.bond_color_label.grid_remove()
-            self.bond_color_entry.grid_remove()
-
-        self.apply_bond_color_settings()
+        self.plotter.on_bond_color_type_change()
 
     def color_settings_screen(self) -> None:
         """Open the color settings window."""
-        self.color_settings_window = tk.Toplevel(self)
-        self.color_settings_window.title('Color Settings')
+        self.plotter.color_settings_screen()
 
-        settings_frame = ttk.Frame(self.color_settings_window)
-        settings_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-        # Background Color section
-        ttk.Label(settings_frame, text='Background Color', font=('TkDefaultFont', 10, 'bold')).grid(
-            row=0,
-            column=0,
-            columnspan=2,
-            padx=5,
-            pady=5,
-            sticky='w',
-        )
-
-        ttk.Label(settings_frame, text='Background Color:').grid(row=1, column=0, padx=5, pady=5, sticky='w')
-        self.background_color_entry = ttk.Entry(settings_frame, width=15)
-        self.background_color_entry.insert(0, str(config.background_color))
-        self.background_color_entry.grid(row=1, column=1, padx=5, pady=5, sticky='w')
-        # Bind to apply changes on Enter key or focus out
-        self.background_color_entry.bind('<Return>', lambda _e: self.apply_background_color())
-        self.background_color_entry.bind('<FocusOut>', lambda _e: self.apply_background_color())
-
-        # Separator
-        ttk.Separator(settings_frame, orient='horizontal').grid(row=2, column=0, columnspan=2, sticky='ew', pady=10)
-
-        # MO Color section
-        ttk.Label(settings_frame, text='Molecular Orbital Colors', font=('TkDefaultFont', 10, 'bold')).grid(
-            row=3,
-            column=0,
-            columnspan=2,
-            padx=5,
-            pady=5,
-            sticky='w',
-        )
-
-        ttk.Label(settings_frame, text='Color Scheme:').grid(row=4, column=0, padx=5, pady=5, sticky='w')
-        # Create dropdown with predefined color schemes
-        predefined_schemes = ['bwr', 'RdBu', 'seismic', 'coolwarm', 'PiYG']
-
-        # Check if user has a custom scheme in config that's not in predefined list
-        if config.mo.color_scheme not in predefined_schemes and config.mo.color_scheme != 'custom':
-            # Add the user's scheme as the first item
-            color_schemes = [config.mo.color_scheme, *predefined_schemes, 'custom']
-            default_scheme = config.mo.color_scheme
-        else:
-            color_schemes = [*predefined_schemes, 'custom']
-            default_scheme = config.mo.color_scheme if config.mo.color_scheme in predefined_schemes else 'custom'
-
-        self.mo_color_scheme_var = tk.StringVar(value=default_scheme)
-        self.mo_color_scheme_dropdown = ttk.Combobox(
-            settings_frame,
-            textvariable=self.mo_color_scheme_var,
-            values=color_schemes,
-            state='readonly',
-            width=13,
-        )
-        self.mo_color_scheme_dropdown.grid(row=4, column=1, padx=5, pady=5, sticky='w')
-        self.mo_color_scheme_dropdown.bind('<<ComboboxSelected>>', self.on_mo_color_scheme_change)
-        self.mo_color_scheme_dropdown.bind('<<ComboboxSelected>>', lambda _e: self.apply_mo_color_settings())
-
-        # Custom colors section (initially hidden if predefined scheme is selected)
-        negative_color_label = ttk.Label(settings_frame, text='Negative Color:')
-        negative_color_label.grid(row=5, column=0, padx=5, pady=5, sticky='w')
-
-        self.mo_negative_color_entry = ttk.Entry(settings_frame, width=15)
-        if config.mo.custom_colors and len(config.mo.custom_colors) > 0:
-            self.mo_negative_color_entry.insert(0, config.mo.custom_colors[0])
-        self.mo_negative_color_entry.grid(row=5, column=1, padx=5, pady=5, sticky='w')
-
-        positive_color_label = ttk.Label(settings_frame, text='Positive Color:')
-        positive_color_label.grid(row=6, column=0, padx=5, pady=5, sticky='w')
-
-        self.mo_positive_color_entry = ttk.Entry(settings_frame, width=15)
-        if config.mo.custom_colors and len(config.mo.custom_colors) > 1:
-            self.mo_positive_color_entry.insert(0, config.mo.custom_colors[1])
-        self.mo_positive_color_entry.grid(row=6, column=1, padx=5, pady=5, sticky='w')
-
-        # Store references to custom color widgets for show/hide
-        self.mo_custom_color_widgets = [
-            self.mo_negative_color_entry,
-            self.mo_positive_color_entry,
-            negative_color_label,
-            positive_color_label,
-        ]
-
-        # Hide custom color entries if predefined scheme is selected
-        if self.mo_color_scheme_var.get() != 'custom':
-            for widget in self.mo_custom_color_widgets:
-                widget.grid_remove()
-
-        # Separator
-        ttk.Separator(settings_frame, orient='horizontal').grid(row=7, column=0, columnspan=2, sticky='ew', pady=10)
-
-        # Bond Color section
-        ttk.Label(settings_frame, text='Bond Colors', font=('TkDefaultFont', 10, 'bold')).grid(
-            row=8,
-            column=0,
-            columnspan=2,
-            padx=5,
-            pady=5,
-            sticky='w',
-        )
-
-        # Bond color type
-        ttk.Label(settings_frame, text='Bond Color Type:').grid(row=9, column=0, padx=5, pady=5, sticky='w')
-        self.bond_color_type_var = tk.StringVar(value=config.molecule.bond.color_type)
-        bond_color_frame = ttk.Frame(settings_frame)
-        bond_color_frame.grid(row=9, column=1, padx=5, pady=5, sticky='w')
-        ttk.Radiobutton(
-            bond_color_frame,
-            text='Uniform',
-            variable=self.bond_color_type_var,
-            value='uniform',
-            command=self.on_bond_color_type_change,
-        ).pack(side=tk.LEFT)
-        ttk.Radiobutton(
-            bond_color_frame,
-            text='Split',
-            variable=self.bond_color_type_var,
-            value='split',
-            command=self.on_bond_color_type_change,
-        ).pack(side=tk.LEFT)
-
-        # Bond color (for uniform type only)
-        self.bond_color_label = ttk.Label(settings_frame, text='Bond Color:')
-        self.bond_color_label.grid(row=10, column=0, padx=5, pady=5, sticky='w')
-        self.bond_color_entry = ttk.Entry(settings_frame, width=15)
-        self.bond_color_entry.insert(0, str(config.molecule.bond.color))
-        self.bond_color_entry.grid(row=10, column=1, padx=5, pady=5, sticky='w')
-        self.bond_color_entry.bind('<Return>', lambda _e: self.apply_bond_color_settings())
-
-        # Hide bond color entry if split is selected
-        if self.bond_color_type_var.get() == 'split':
-            self.bond_color_label.grid_remove()
-            self.bond_color_entry.grid_remove()
-
-        # Configure grid column weights for proper resizing
-        settings_frame.columnconfigure(0, weight=1)
-        settings_frame.columnconfigure(1, weight=1)
-
-        # Reset button
-        reset_button = ttk.Button(settings_frame, text='Reset', command=self.reset_color_settings)
-        reset_button.grid(row=11, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
-
-        # Apply settings button
-        apply_button = ttk.Button(settings_frame, text='Apply', command=self.apply_color_settings)
-        apply_button.grid(row=13, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
-
-    def place_grid_params_frame(self) -> None:
-        """Render the parameter frame that matches the selected grid type."""
-        if self.grid_type_radio_var.get() == GridType.SPHERICAL.value:
-            self.grid_settings_window.geometry(self.SPHERICAL_GRID_SETTINGS_WINDOW_SIZE)
-            self.cart_grid_params_frame.grid_forget()
-            self.sph_grid_params_frame.grid(row=2, column=0, padx=5, pady=5, rowspan=6, columnspan=4)
-            self.sph_grid_params_frame_setup()
-        else:
-            self.grid_settings_window.geometry(self.CARTESIAN_GRID_SETTINGS_WINDOW_SIZE)
-            self.sph_grid_params_frame.grid_forget()
-            self.cart_grid_params_frame.grid(row=2, column=0, padx=5, pady=5, rowspan=6, columnspan=4)
-            self.cart_grid_params_frame_setup()
-
-    def sph_grid_params_frame_widgets(self, master: ttk.Frame) -> ttk.Frame:
-        """Build widgets that capture spherical grid parameters.
-
-        Parameters
-        ----------
-        master : ttk.Frame
-            Parent frame that will host the generated widgets.
-
-        Returns
-        -------
-        ttk.Frame
-            Frame containing the spherical grid controls.
-        """
-        grid_params_frame = ttk.Frame(master)
-
-        # Radius
-        ttk.Label(grid_params_frame, text='Radius:').grid(row=0, column=0, padx=5, pady=5)
-        self.radius_entry = ttk.Entry(grid_params_frame)
-        self.radius_entry.grid(row=0, column=1, padx=5, pady=5)
-
-        # Radius points
-        radius_points_label = ttk.Label(grid_params_frame, text='Number of Radius Points:')
-        radius_points_label.grid(row=1, column=0, padx=5, pady=5)
-        self.radius_points_entry = ttk.Entry(grid_params_frame)
-        self.radius_points_entry.grid(row=1, column=1, padx=5, pady=5)
-
-        # Theta points
-        theta_points_label = ttk.Label(grid_params_frame, text='Number of Theta Points:')
-        theta_points_label.grid(row=2, column=0, padx=5, pady=5)
-        self.theta_points_entry = ttk.Entry(grid_params_frame)
-        self.theta_points_entry.grid(row=2, column=1, padx=5, pady=5)
-
-        # Phi points
-        phi_points_label = ttk.Label(grid_params_frame, text='Number of Phi Points:')
-        phi_points_label.grid(row=3, column=0, padx=5, pady=5)
-        self.phi_points_entry = ttk.Entry(grid_params_frame)
-        self.phi_points_entry.grid(row=3, column=1, padx=5, pady=5)
-
-        return grid_params_frame
-
-    def cart_grid_params_frame_widgets(self, master: ttk.Frame) -> ttk.Frame:
-        """Build widgets that capture Cartesian grid parameters.
-
-        Parameters
-        ----------
-        master : ttk.Frame
-            Parent frame that will host the generated widgets.
-
-        Returns
-        -------
-        ttk.Frame
-            Frame containing the Cartesian grid controls.
-        """
-        grid_params_frame = ttk.Frame(master)
-
-        # X
-        ttk.Label(grid_params_frame, text='Min x:').grid(row=0, column=0, padx=5, pady=5)
-        ttk.Label(grid_params_frame, text='Max x:').grid(row=0, column=1, padx=5, pady=5)
-        ttk.Label(grid_params_frame, text='Num x points:').grid(row=0, column=2, padx=5, pady=5)
-
-        self.x_min_entry = ttk.Entry(grid_params_frame)
-        self.x_max_entry = ttk.Entry(grid_params_frame)
-        self.x_num_points_entry = ttk.Entry(grid_params_frame)
-
-        self.x_min_entry.grid(row=1, column=0, padx=5, pady=5)
-        self.x_max_entry.grid(row=1, column=1, padx=5, pady=5)
-        self.x_num_points_entry.grid(row=1, column=2, padx=5, pady=5)
-
-        # Y
-        ttk.Label(grid_params_frame, text='Min y:').grid(row=2, column=0, padx=5, pady=5)
-        ttk.Label(grid_params_frame, text='Max y:').grid(row=2, column=1, padx=5, pady=5)
-        ttk.Label(grid_params_frame, text='Num y points:').grid(row=2, column=2, padx=5, pady=5)
-
-        self.y_min_entry = ttk.Entry(grid_params_frame)
-        self.y_max_entry = ttk.Entry(grid_params_frame)
-        self.y_num_points_entry = ttk.Entry(grid_params_frame)
-
-        self.y_min_entry.grid(row=3, column=0, padx=5, pady=5)
-        self.y_max_entry.grid(row=3, column=1, padx=5, pady=5)
-        self.y_num_points_entry.grid(row=3, column=2, padx=5, pady=5)
-
-        # Z
-        ttk.Label(grid_params_frame, text='Min z:').grid(row=4, column=0, padx=5, pady=5)
-        ttk.Label(grid_params_frame, text='Max z:').grid(row=4, column=1, padx=5, pady=5)
-        ttk.Label(grid_params_frame, text='Num z points:').grid(row=4, column=2, padx=5, pady=5)
-
-        self.z_min_entry = ttk.Entry(grid_params_frame)
-        self.z_max_entry = ttk.Entry(grid_params_frame)
-        self.z_num_points_entry = ttk.Entry(grid_params_frame)
-
-        self.z_min_entry.grid(row=5, column=0, padx=5, pady=5)
-        self.z_max_entry.grid(row=5, column=1, padx=5, pady=5)
-        self.z_num_points_entry.grid(row=5, column=2, padx=5, pady=5)
-
-        return grid_params_frame
 
     def sph_grid_params_frame_setup(self) -> None:
         """Populate the spherical grid widgets with defaults or existing values."""
-        self.radius_entry.delete(0, tk.END)
-        self.radius_points_entry.delete(0, tk.END)
-        self.theta_points_entry.delete(0, tk.END)
-        self.phi_points_entry.delete(0, tk.END)
-
-        # Previous grid was cartesian, so use default values
-        if self.plotter.tabulator._grid_type == GridType.CARTESIAN:  # noqa: SLF001
-            self.radius_entry.insert(
-                0,
-                str(max(config.grid.max_radius_multiplier * self.plotter.molecule.max_radius, config.grid.min_radius)),
-            )
-            self.radius_points_entry.insert(0, str(config.grid.spherical.num_r_points))
-            self.theta_points_entry.insert(0, str(config.grid.spherical.num_theta_points))
-            self.phi_points_entry.insert(0, str(config.grid.spherical.num_phi_points))
-            return
-
-        num_r, num_theta, num_phi = self.plotter.tabulator._grid_dimensions  # noqa: SLF001
-
-        # The last point of the grid for sure has the largest r
-        r, _, _ = _cartesian_to_spherical(*self.plotter.tabulator.grid[-1, :])  # pyright: ignore[reportArgumentType]
-
-        self.radius_entry.insert(0, str(r))
-        self.radius_points_entry.insert(0, str(num_r))
-        self.theta_points_entry.insert(0, str(num_theta))
-        self.phi_points_entry.insert(0, str(num_phi))
+        self.plotter.sph_grid_params_frame_setup()
 
     def cart_grid_params_frame_setup(self) -> None:
         """Populate the Cartesian grid widgets with defaults or existing values."""
-        self.x_min_entry.delete(0, tk.END)
-        self.x_max_entry.delete(0, tk.END)
-        self.x_num_points_entry.delete(0, tk.END)
-
-        self.y_min_entry.delete(0, tk.END)
-        self.y_max_entry.delete(0, tk.END)
-        self.y_num_points_entry.delete(0, tk.END)
-
-        self.z_min_entry.delete(0, tk.END)
-        self.z_max_entry.delete(0, tk.END)
-        self.z_num_points_entry.delete(0, tk.END)
-
-        # Previous grid was sphesical, so use adapted default values
-        if self.plotter.tabulator._grid_type == GridType.SPHERICAL:  # noqa: SLF001
-            r = max(config.grid.max_radius_multiplier * self.plotter.molecule.max_radius, config.grid.min_radius)
-
-            self.x_min_entry.insert(0, str(-r))
-            self.y_min_entry.insert(0, str(-r))
-            self.z_min_entry.insert(0, str(-r))
-
-            self.x_max_entry.insert(0, str(r))
-            self.y_max_entry.insert(0, str(r))
-            self.z_max_entry.insert(0, str(r))
-
-            self.x_num_points_entry.insert(0, str(config.grid.cartesian.num_x_points))
-            self.y_num_points_entry.insert(0, str(config.grid.cartesian.num_y_points))
-            self.z_num_points_entry.insert(0, str(config.grid.cartesian.num_z_points))
-            return
-
-        x_num, y_num, z_num = self.plotter.tabulator._grid_dimensions  # noqa: SLF001
-        x_min, y_min, z_min = self.plotter.tabulator.grid[0, :]
-        x_max, y_max, z_max = self.plotter.tabulator.grid[-1, :]
-
-        self.x_min_entry.insert(0, str(x_min))
-        self.x_max_entry.insert(0, str(x_max))
-        self.x_num_points_entry.insert(0, str(x_num))
-
-        self.y_min_entry.insert(0, str(y_min))
-        self.y_max_entry.insert(0, str(y_max))
-        self.y_num_points_entry.insert(0, str(y_num))
-
-        self.z_min_entry.insert(0, str(z_min))
-        self.z_max_entry.insert(0, str(z_max))
-        self.z_num_points_entry.insert(0, str(z_num))
+        self.plotter.cart_grid_params_frame_setup()
 
     def reset_grid_settings(self) -> None:
         """Restore grid settings widgets back to configuration defaults."""
-        self.grid_type_radio_var.set(config.grid.default_type)
-
-        self.radius_entry.delete(0, tk.END)
-        self.radius_entry.insert(
-            0,
-            str(max(config.grid.max_radius_multiplier * self.plotter.molecule.max_radius, config.grid.min_radius)),
-        )
-
-        self.radius_points_entry.delete(0, tk.END)
-        self.radius_points_entry.insert(0, str(config.grid.spherical.num_r_points))
-
-        self.theta_points_entry.delete(0, tk.END)
-        self.theta_points_entry.insert(0, str(config.grid.spherical.num_theta_points))
-
-        self.phi_points_entry.delete(0, tk.END)
-        self.phi_points_entry.insert(0, str(config.grid.spherical.num_phi_points))
-
-        self.place_grid_params_frame()
+        self.plotter.reset_grid_settings()
 
     def reset_mo_settings(self) -> None:
         """Restore MO settings widgets back to configuration defaults."""
-        self.contour_entry.delete(0, tk.END)
-        self.contour_entry.insert(0, str(config.mo.contour))
-
-        self.opacity_scale.set(config.mo.opacity)
+        self.plotter.reset_mo_settings()
 
     def reset_molecule_settings(self) -> None:
         """Restore molecule settings widgets back to configuration defaults."""
-        self.molecule_opacity_scale.set(config.molecule.opacity)
-
-        self.show_atoms_var.set(config.molecule.atom.show)
-        self.show_bonds_var.set(config.molecule.bond.show)
-
-        self.bond_max_length_entry.delete(0, tk.END)
-        self.bond_max_length_entry.insert(0, str(config.molecule.bond.max_length))
-
-        self.bond_radius_entry.delete(0, tk.END)
-        self.bond_radius_entry.insert(0, str(config.molecule.bond.radius))
+        self.plotter.reset_molecule_settings()
 
     def reset_color_settings(self) -> None:
         """Restore color settings widgets back to configuration defaults."""
-        config = Config()  # Reload config to discard unsaved changes
-
-        self.background_color_entry.delete(0, tk.END)
-        self.background_color_entry.insert(0, str(config.background_color))
-
-        # Reset MO color scheme dropdown
-        predefined_schemes = ['bwr', 'RdBu', 'seismic', 'coolwarm', 'PiYG']
-
-        # Update dropdown values and selection based on config
-        if config.mo.color_scheme not in predefined_schemes and config.mo.color_scheme != 'custom':
-            # Add the user's scheme as the first item
-            color_schemes = [config.mo.color_scheme, *predefined_schemes, 'custom']
-            self.mo_color_scheme_dropdown['values'] = color_schemes
-            self.mo_color_scheme_var.set(config.mo.color_scheme)
-        else:
-            color_schemes = [*predefined_schemes, 'custom']
-            self.mo_color_scheme_dropdown['values'] = color_schemes
-            if config.mo.color_scheme in predefined_schemes:
-                self.mo_color_scheme_var.set(config.mo.color_scheme)
-            else:
-                self.mo_color_scheme_var.set('custom')
-
-        # Reset custom color entries
-        self.mo_negative_color_entry.delete(0, tk.END)
-        self.mo_positive_color_entry.delete(0, tk.END)
-        if config.mo.custom_colors:
-            if len(config.mo.custom_colors) > 0:
-                self.mo_negative_color_entry.insert(0, config.mo.custom_colors[0])
-            if len(config.mo.custom_colors) > 1:
-                self.mo_positive_color_entry.insert(0, config.mo.custom_colors[1])
-
-        # Show/hide custom color entries based on selection
-        if self.mo_color_scheme_var.get() == 'custom':
-            for widget in self.mo_custom_color_widgets:
-                widget.grid()
-        else:
-            for widget in self.mo_custom_color_widgets:
-                widget.grid_remove()
-
-        # Reset bond color type
-        self.bond_color_type_var.set(config.molecule.bond.color_type)
-
-        # Reset bond color entry
-        self.bond_color_entry.delete(0, tk.END)
-        self.bond_color_entry.insert(0, str(config.molecule.bond.color))
-
-        # Show/hide bond color entry based on type
-        if self.bond_color_type_var.get() == 'uniform':
-            self.bond_color_label.grid()
-            self.bond_color_entry.grid()
-        else:
-            self.bond_color_label.grid_remove()
-            self.bond_color_entry.grid_remove()
+        self.plotter.reset_color_settings()
 
     def apply_grid_settings(self) -> None:
         """Validate UI inputs and apply the chosen grid parameters."""
-        if self.grid_type_radio_var.get() == GridType.SPHERICAL.value:
-            radius = float(self.radius_entry.get())
-            if radius <= 0:
-                messagebox.showerror('Invalid input', 'Radius must be greater than zero.')
-                return
-
-            num_r_points = int(self.radius_points_entry.get())
-            num_theta_points = int(self.theta_points_entry.get())
-            num_phi_points = int(self.phi_points_entry.get())
-
-            if num_r_points <= 0 or num_theta_points <= 0 or num_phi_points <= 0:
-                messagebox.showerror('Invalid input', 'Number of points must be greater than zero.')
-                return
-
-            r = np.linspace(0, radius, num_r_points)
-            theta = np.linspace(0, np.pi, num_theta_points)
-            phi = np.linspace(0, 2 * np.pi, num_phi_points)
-
-            rr, tt, pp = np.meshgrid(r, theta, phi, indexing='ij')
-            xx, yy, zz = _spherical_to_cartesian(rr, tt, pp)
-
-            # Update the mesh with new points if needed
-            new_grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
-            if not np.array_equal(new_grid, self.plotter.tabulator.grid):
-                self.plotter.update_mesh(r, theta, phi, GridType.SPHERICAL)
-
-        else:
-            x_min = float(self.x_min_entry.get())
-            x_max = float(self.x_max_entry.get())
-            x_num = int(self.x_num_points_entry.get())
-
-            y_min = float(self.y_min_entry.get())
-            y_max = float(self.y_max_entry.get())
-            y_num = int(self.y_num_points_entry.get())
-
-            z_min = float(self.z_min_entry.get())
-            z_max = float(self.z_max_entry.get())
-            z_num = int(self.z_num_points_entry.get())
-
-            if x_num <= 0 or y_num <= 0 or z_num <= 0:
-                messagebox.showerror('Invalid input', 'Number of points must be greater than zero.')
-                return
-
-            x = np.linspace(x_min, x_max, x_num)
-            y = np.linspace(y_min, y_max, y_num)
-            z = np.linspace(z_min, z_max, z_num)
-
-            xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
-
-            # Update the mesh with new points if needed
-            new_grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
-            if not np.array_equal(new_grid, self.plotter.tabulator.grid):
-                self.plotter.update_mesh(x, y, z, GridType.CARTESIAN)
-
-        # Replot the current orbital with the new grid
-        self.plot_orbital(self.current_orb_ind)
+        self.plotter.apply_grid_settings()
 
     def apply_mo_settings(self) -> None:
         """Validate UI inputs and apply the chosen MO rendering parameters."""
-        self.plotter.contour = float(self.contour_entry.get().strip())
-        self.plotter.opacity = round(self.opacity_scale.get(), 2)
-
-        # Replot the current orbital with the new settings
-        self.plot_orbital(self.current_orb_ind)
-
-        # Update opacity if actor exists
-        if self.plotter.orb_actor:
-            self.plotter.orb_actor.GetProperty().SetOpacity(self.plotter.opacity)
+        self.plotter.apply_mo_settings()
 
     def apply_molecule_settings(self) -> None:
         """Validate UI inputs and apply the chosen molecule rendering parameters.
 
         This method only handles bond settings that require reload.
         """
-        redraw_molecule = False  # Track if we need to redraw the molecule
-
-        # Validate numeric inputs with error handling
-        try:
-            bond_max_length = float(self.bond_max_length_entry.get())
-            if bond_max_length != config.molecule.bond.max_length:
-                config.molecule.bond.max_length = bond_max_length
-                redraw_molecule = True
-        except ValueError:
-            messagebox.showerror('Invalid Input', 'Bond Max Length must be a valid number.')
-            return
-
-        try:
-            bond_radius = float(self.bond_radius_entry.get())
-            if bond_radius != config.molecule.bond.radius:
-                config.molecule.bond.radius = bond_radius
-                redraw_molecule = True
-        except ValueError:
-            messagebox.showerror('Invalid Input', 'Bond Radius must be a valid number.')
-            return
-
-        if redraw_molecule:
-            self.plotter.load_molecule(config)
+        self.plotter.apply_molecule_settings()
 
     def apply_color_settings(self) -> None:
         """Apply both MO and bond color settings."""
-        self.apply_custom_mo_color_settings()
-        self.apply_bond_color_settings()
+        self.plotter.apply_color_settings()
 
     def apply_mo_color_settings(self) -> None:
         """Validate UI inputs and apply the chosen MO color settings.
 
         Only applies predefined color schemes, not custom colors.
         """
-        self.on_mo_color_scheme_change(tk.Event())  # Ensure custom entries are shown
-
-        # Check MO color scheme
-        mo_color_scheme = self.mo_color_scheme_var.get().strip()
-        if mo_color_scheme == 'custom':
-            return
-
-        if mo_color_scheme != config.mo.color_scheme:
-            self.plotter.cmap = mo_color_scheme
-            config.mo.color_scheme = mo_color_scheme
-
-            self.plot_orbital(self.current_orb_ind)
+        self.plotter.apply_mo_color_settings()
 
     def apply_custom_mo_color_settings(self) -> None:
         """Validate UI inputs and apply the chosen MO color settings.
 
         Only applies custom colors, not predefined color schemes.
         """
-        if self.mo_color_scheme_var.get().strip() != 'custom':
-            return
-
-        # Check MO custom colors
-        custom_colors = [self.mo_negative_color_entry.get().strip(), self.mo_positive_color_entry.get().strip()]
-
-        if any(not mcolors.is_color_like(c) for c in custom_colors):
-            messagebox.showerror('Invalid Input', 'One or more custom colors are not valid.')
-            return
-
-        if custom_colors != config.mo.custom_colors:
-            config.mo.custom_colors = custom_colors
-            self.plotter.cmap = self.plotter.custom_cmap_from_colors(custom_colors)
-
-            self.plot_orbital(self.current_orb_ind)
+        self.plotter.apply_custom_mo_color_settings()
 
     def apply_bond_color_settings(self) -> None:
         """Validate UI inputs and apply the chosen color settings."""
-        redraw_molecule = False
-
-        # Check bond color type
-        bond_color_type = self.bond_color_type_var.get().strip()
-        if bond_color_type != config.molecule.bond.color_type:
-            config.molecule.bond.color_type = bond_color_type
-            redraw_molecule = True
-
-        # Check bond color (only if uniform is selected)
-        bond_color = self.bond_color_entry.get().strip()
-        if self.bond_color_type_var.get() == 'uniform' and bond_color != config.molecule.bond.color:
-            config.molecule.bond.color = bond_color
-            redraw_molecule = True
-
-        if redraw_molecule:
-            self.plotter.load_molecule(config)
+        self.plotter.apply_bond_color_settings()
 
     def save_settings(self) -> None:  # noqa: PLR6301
         """Save current configuration to the user's custom config file."""
-        try:
-            config.save_current_config()
-            messagebox.showinfo('Settings Saved', 'Configuration saved successfully to ~/.config/moldenViz/config.toml')
-        except (OSError, ValueError) as e:
-            messagebox.showerror('Save Error', f'Failed to save configuration: {e!s}')
+        self.plotter.save_settings()
 
     def next_plot(self) -> None:
         """Advance to the next molecular orbital."""
-        self.current_orb_ind += 1
-        self.update_nav_button_states()
+        max_index = len(self.plotter.tabulator._parser.mos) - 1  # noqa: SLF001
+        new_index = min(self.plotter.current_orbital_index + 1, max_index)
+        self.plotter.plot_orbital(new_index)
+        self.current_orb_ind = self.plotter.current_orbital_index
         self.orb_tv.highlight_orbital(self.current_orb_ind)
-        self.plot_orbital(self.current_orb_ind)
+        self.update_nav_button_states()
 
     def prev_plot(self) -> None:
         """Return to the previous molecular orbital."""
-        self.current_orb_ind -= 1
+        new_index = max(self.plotter.current_orbital_index - 1, 0)
+        self.plotter.plot_orbital(new_index)
+        self.current_orb_ind = self.plotter.current_orbital_index
         self.orb_tv.highlight_orbital(self.current_orb_ind)
         self.update_nav_button_states()
-        self.plot_orbital(self.current_orb_ind)
 
     def _do_export(self, export_window: tk.Toplevel, format_var: tk.StringVar, scope_var: tk.StringVar) -> None:
         """Execute the export operation.
@@ -1822,6 +1813,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
     def update_nav_button_states(self) -> None:
         """Synchronize navigation button state with the current orbital index."""
+        self.current_orb_ind = self.plotter.current_orbital_index
         can_go_prev = self.current_orb_ind > 0
         can_go_next = self.current_orb_ind < len(self.plotter.tabulator._parser.mos) - 1  # noqa: SLF001
         self.prev_button.config(state=tk.NORMAL if can_go_prev else tk.DISABLED)
@@ -1848,22 +1840,8 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         orb_ind : int
             Index of the orbital to display; ``-1`` clears the current mesh.
         """
-        if self.plotter.orb_actor:
-            self.plotter.pv_plotter.remove_actor(self.plotter.orb_actor)
-
-        if orb_ind != -1:
-            self.plotter.orb_mesh['orbital'] = self.plotter.tabulator.tabulate_mos(orb_ind)
-
-            contour_mesh = self.plotter.orb_mesh.contour([-self.plotter.contour, self.plotter.contour])
-
-            self.plotter.orb_actor = self.plotter.pv_plotter.add_mesh(
-                contour_mesh,
-                clim=[-self.plotter.contour, self.plotter.contour],
-                opacity=self.plotter.opacity,
-                show_scalar_bar=False,
-                cmap=self.plotter.cmap,
-                smooth_shading=True,
-            )
+        self.plotter.plot_orbital(orb_ind)
+        self.current_orb_ind = self.plotter.current_orbital_index
 
 
 class _OrbitalsTreeview(ttk.Treeview):
