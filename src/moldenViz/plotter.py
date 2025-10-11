@@ -98,7 +98,6 @@ class Plotter:
         self.on_screen = True
         self.only_molecule = only_molecule
         self.selection_screen: _OrbitalSelectionScreen | None = None
-        self.current_orbital_index = -1
 
         self.tk_root = tk_root
         self._no_prev_tk_root = self.tk_root is None
@@ -316,6 +315,12 @@ class Plotter:
             raise RuntimeError('No Tk root available to host settings dialogs.')
         return parent
 
+    def _get_current_mo_index(self) -> int:
+        """Return the currently selected molecular orbital index."""
+        if self.selection_screen:
+            return self.selection_screen.current_mo_ind
+        return -1
+
     def grid_settings_screen(self) -> None:
         """Open the grid settings window."""
         parent = self._settings_parent()
@@ -422,8 +427,9 @@ class Plotter:
             new_contour = float(self.contour_entry.get().strip())
             self.contour = new_contour
             # Replot the current orbital with the new contour
-            if self.current_orbital_index >= 0:
-                self.plot_orbital(self.current_orbital_index)
+            idx = self._get_current_mo_index()
+            if idx >= 0:
+                self.plot_orbital(idx)
         except ValueError:
             pass  # Ignore invalid input
 
@@ -929,14 +935,18 @@ class Plotter:
                 self.update_mesh(x, y, z, GridType.CARTESIAN)
 
         # Replot the current orbital with the new grid
-        self.plot_orbital(self.current_orbital_index)
+        idx = self._get_current_mo_index()
+        if idx >= 0:
+            self.plot_orbital(idx)
 
     def apply_mo_settings(self) -> None:
         """Validate UI inputs and apply the chosen MO rendering parameters."""
         self.contour = float(self.contour_entry.get().strip())
         self.opacity = round(self.opacity_scale.get(), 2)
 
-        self.plot_orbital(self.current_orbital_index)
+        idx = self._get_current_mo_index()
+        if idx >= 0:
+            self.plot_orbital(idx)
 
         if self.orb_actor:
             self.orb_actor.GetProperty().SetOpacity(self.opacity)
@@ -982,7 +992,9 @@ class Plotter:
             self.cmap = mo_color_scheme
             config.mo.color_scheme = mo_color_scheme
 
-            self.plot_orbital(self.current_orbital_index)
+            idx = self._get_current_mo_index()
+            if idx >= 0:
+                self.plot_orbital(idx)
 
     def apply_custom_mo_color_settings(self) -> None:
         """Validate UI inputs and apply the chosen MO color settings."""
@@ -999,7 +1011,9 @@ class Plotter:
             config.mo.custom_colors = custom_colors
             self.cmap = self.custom_cmap_from_colors(custom_colors)
 
-            self.plot_orbital(self.current_orbital_index)
+            idx = self._get_current_mo_index()
+            if idx >= 0:
+                self.plot_orbital(idx)
 
     def apply_bond_color_settings(self) -> None:
         """Validate UI inputs and apply the chosen color settings."""
@@ -1027,10 +1041,12 @@ class Plotter:
         if self.orb_actor:
             self.pv_plotter.remove_actor(self.orb_actor)
             self.orb_actor = None
-
-        self.current_orbital_index = orb_ind
+        if self.selection_screen:
+            self.selection_screen.current_mo_ind = orb_ind
 
         if orb_ind == -1:
+            if self.selection_screen:
+                self.selection_screen.update_nav_button_states()
             return
 
         self.orb_mesh['orbital'] = self.tabulator.tabulate_mos(orb_ind)
@@ -1045,6 +1061,8 @@ class Plotter:
             cmap=self.cmap,
             smooth_shading=True,
         )
+        if self.selection_screen:
+            self.selection_screen.update_nav_button_states()
 
     def _show_image_export_dialog(self) -> None:
         """Show image export dialog (standalone version for only_molecule mode)."""
@@ -1201,8 +1219,8 @@ class Plotter:
         if self.orb_actor:
             self.pv_plotter.remove_actor(self.orb_actor)
             self.orb_actor = None
-            self.current_orbital_index = -1
             if self.selection_screen:
+                self.selection_screen.current_mo_ind = -1
                 self.selection_screen.update_nav_button_states()
 
     def toggle_molecule(self) -> None:
@@ -1349,7 +1367,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.protocols()
 
         self.plotter = plotter
-        self.current_orb_ind = plotter.current_orbital_index  # Start synced with plotter
+        self.current_mo_ind = -1  # Start with no orbital shown
 
         # Initialize export window attributes
         self._export_window = None
@@ -1501,19 +1519,21 @@ class _OrbitalSelectionScreen(tk.Toplevel):
     def next_plot(self) -> None:
         """Advance to the next molecular orbital."""
         max_index = len(self.plotter.tabulator._parser.mos) - 1  # noqa: SLF001
-        new_index = min(self.plotter.current_orbital_index + 1, max_index)
+        if max_index < 0:
+            return
+        current = self.current_mo_ind
+        new_index = 0 if current < 0 else min(current + 1, max_index)
         self.plotter.plot_orbital(new_index)
-        self.current_orb_ind = self.plotter.current_orbital_index
-        self.orb_tv.highlight_orbital(self.current_orb_ind)
-        self.update_nav_button_states()
+        if self.current_mo_ind >= 0:
+            self.orb_tv.highlight_orbital(self.current_mo_ind)
 
     def prev_plot(self) -> None:
         """Return to the previous molecular orbital."""
-        new_index = max(self.plotter.current_orbital_index - 1, 0)
+        if self.current_mo_ind <= 0:
+            return
+        new_index = self.current_mo_ind - 1
         self.plotter.plot_orbital(new_index)
-        self.current_orb_ind = self.plotter.current_orbital_index
-        self.orb_tv.highlight_orbital(self.current_orb_ind)
-        self.update_nav_button_states()
+        self.orb_tv.highlight_orbital(self.current_mo_ind)
 
     def _do_export(self, export_window: tk.Toplevel, format_var: tk.StringVar, scope_var: tk.StringVar) -> None:
         """Execute the export operation.
@@ -1531,7 +1551,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         scope = scope_var.get()
 
         # Validate selection
-        if scope == 'current' and self.current_orb_ind < 0:
+        if scope == 'current' and self.current_mo_ind < 0:
             messagebox.showerror('Export Error', 'No orbital is currently selected.')
             return
 
@@ -1545,7 +1565,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
         # Determine file extension and default name
         ext = '.vtk' if file_format == 'vtk' else '.cube'
-        default_name = f'orbitals_all{ext}' if scope == 'all' else f'orbital_{self.current_orb_ind}{ext}'
+        default_name = f'orbitals_all{ext}' if scope == 'all' else f'orbital_{self.current_mo_ind}{ext}'
 
         # Show file save dialog
         file_path = filedialog.asksaveasfilename(
@@ -1561,7 +1581,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
         # Perform the export
         try:
-            mo_index = self.current_orb_ind if scope == 'current' else None
+            mo_index = self.current_mo_ind if scope == 'current' else None
             self.plotter.tabulator.export(file_path, mo_index=mo_index)
             messagebox.showinfo('Export Successful', f'Orbital(s) exported successfully to:\n{file_path}')
             export_window.destroy()
@@ -1611,8 +1631,8 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         )
 
         scope_var = tk.StringVar(value='current')
-        # Use 1-based indexing for display (add 1 to current_orb_ind)
-        orbital_display = self.current_orb_ind + 1 if self.current_orb_ind >= 0 else 'None'
+        # Use 1-based indexing for display (add 1 to current_mo_ind)
+        orbital_display = self.current_mo_ind + 1 if self.current_mo_ind >= 0 else 'None'
         current_orb_radio = ttk.Radiobutton(
             main_frame,
             text=f'Current orbital (#{orbital_display})',
@@ -1620,7 +1640,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
             value='current',
         )
         current_orb_radio.grid(row=4, column=0, columnspan=2, sticky=tk.W, padx=20)
-        if self.current_orb_ind < 0:
+        if self.current_mo_ind < 0:
             current_orb_radio.config(state=tk.DISABLED)
 
         all_orb_radio = ttk.Radiobutton(main_frame, text='All orbitals', variable=scope_var, value='all')
@@ -1813,9 +1833,9 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
     def update_nav_button_states(self) -> None:
         """Synchronize navigation button state with the current orbital index."""
-        self.current_orb_ind = self.plotter.current_orbital_index
-        can_go_prev = self.current_orb_ind > 0
-        can_go_next = self.current_orb_ind < len(self.plotter.tabulator._parser.mos) - 1  # noqa: SLF001
+        total = len(self.plotter.tabulator._parser.mos)  # noqa: SLF001
+        can_go_prev = self.current_mo_ind > 0
+        can_go_next = total > 0 and self.current_mo_ind < total - 1
         self.prev_button.config(state=tk.NORMAL if can_go_prev else tk.DISABLED)
         self.next_button.config(state=tk.NORMAL if can_go_next else tk.DISABLED)
         self._update_export_dialog_label()
@@ -1823,11 +1843,11 @@ class _OrbitalSelectionScreen(tk.Toplevel):
     def _update_export_dialog_label(self) -> None:
         """Update the export dialog label to reflect the current orbital index."""
         if self._export_current_orb_radio is not None:
-            # Use 1-based indexing for display (add 1 to current_orb_ind)
-            orbital_display = self.current_orb_ind + 1 if self.current_orb_ind >= 0 else 'None'
+            # Use 1-based indexing for display (add 1 to current_mo_ind)
+            orbital_display = self.current_mo_ind + 1 if self.current_mo_ind >= 0 else 'None'
             self._export_current_orb_radio.config(text=f'Current orbital (#{orbital_display})')
             # Update the state based on whether an orbital is selected
-            if self.current_orb_ind < 0:
+            if self.current_mo_ind < 0:
                 self._export_current_orb_radio.config(state=tk.DISABLED)
             else:
                 self._export_current_orb_radio.config(state=tk.NORMAL)
@@ -1841,7 +1861,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
             Index of the orbital to display; ``-1`` clears the current mesh.
         """
         self.plotter.plot_orbital(orb_ind)
-        self.current_orb_ind = self.plotter.current_orbital_index
+        self.current_mo_ind = orb_ind
 
 
 class _OrbitalsTreeview(ttk.Treeview):
@@ -1864,7 +1884,7 @@ class _OrbitalsTreeview(ttk.Treeview):
 
         self.selection_screen = selection_screen
 
-        self.current_orb_ind = -1  # Start with no orbital shown
+        self.current_mo_ind = -1  # Start with no orbital shown
 
         # Configure tag
         self.tag_configure('highlight', background='lightblue')
@@ -1879,10 +1899,10 @@ class _OrbitalsTreeview(ttk.Treeview):
         orb_ind : int
             Index to highlight.
         """
-        if self.current_orb_ind != -1:
-            self.item(self.current_orb_ind, tags=('!hightlight',))
+        if self.current_mo_ind != -1:
+            self.item(self.current_mo_ind, tags=('!hightlight',))
 
-        self.current_orb_ind = orb_ind
+        self.current_mo_ind = orb_ind
         self.item(orb_ind, tags=('highlight',))
         self.see(orb_ind)  # Scroll to the selected item
 
@@ -1921,6 +1941,6 @@ class _OrbitalsTreeview(ttk.Treeview):
         if selected_item:
             orb_ind = int(selected_item[0])
             self.highlight_orbital(orb_ind)
-            self.selection_screen.current_orb_ind = orb_ind
+            self.selection_screen.current_mo_ind = orb_ind
             self.selection_screen.plot_orbital(orb_ind)
             self.selection_screen.update_nav_button_states()
