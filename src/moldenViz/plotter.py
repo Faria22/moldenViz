@@ -253,6 +253,12 @@ class Plotter:
         color_settings_action.triggered.connect(self.color_settings_screen)
         settings_menu.addAction(color_settings_action)
 
+        settings_menu.addSeparator()
+
+        save_settings_action = QAction('Save Settings', self.pv_plotter.app_window)
+        save_settings_action.triggered.connect(self.save_settings)
+        settings_menu.addAction(save_settings_action)
+
         # Create Export menu with dropdown
         export_menu = QMenu('Export', self.pv_plotter.app_window)
 
@@ -1203,11 +1209,23 @@ class Plotter:
 
     def reset_mo_settings(self) -> None:
         """Restore MO settings widgets back to configuration defaults."""
-        self.reset_mo_settings()
+        self.contour_entry.delete(0, tk.END)
+        self.contour_entry.insert(0, str(config.mo.contour))
+
+        self.opacity_scale.set(config.mo.opacity)
 
     def reset_molecule_settings(self) -> None:
         """Restore molecule settings widgets back to configuration defaults."""
-        self.reset_molecule_settings()
+        self.molecule_opacity_scale.set(config.molecule.opacity)
+
+        self.show_atoms_var.set(config.molecule.atom.show)
+        self.show_bonds_var.set(config.molecule.bond.show)
+
+        self.bond_max_length_entry.delete(0, tk.END)
+        self.bond_max_length_entry.insert(0, str(config.molecule.bond.max_length))
+
+        self.bond_radius_entry.delete(0, tk.END)
+        self.bond_radius_entry.insert(0, str(config.molecule.bond.radius))
 
     def reset_color_settings(self) -> None:
         """Restore color settings widgets back to configuration defaults."""
@@ -1415,9 +1433,14 @@ class Plotter:
         if redraw_molecule:
             self.load_molecule(config)
 
-    def save_settings(self) -> None:
+    @staticmethod
+    def save_settings() -> None:
         """Save current configuration to the user's custom config file."""
-        self.save_settings()
+        try:
+            config.save_current_config()
+            messagebox.showinfo('Settings Saved', 'Configuration saved successfully to ~/.config/moldenViz/config.toml')
+        except (OSError, ValueError) as e:
+            messagebox.showerror('Save Error', f'Failed to save configuration: {e!s}')
 
     def plot_orbital(self, orb_ind: int) -> None:
         """Render the selected orbital isosurface in the PyVista plotter."""

@@ -120,4 +120,3 @@ def test_invalid_grid_type_raises_error() -> None:
     """Test that invalid grid type raises ValidationError."""
     with pytest.raises(ValidationError, match='Input should be'):
         config_module.GridConfig(default_type='invalid_type')  # type: ignore[arg-type]
-
