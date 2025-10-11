@@ -93,6 +93,8 @@ class Plotter:
         tk_root: tk.Tk | None = None,
     ) -> None:
         self.on_screen = True
+        self.only_molecule = only_molecule
+        self.selection_screen: '_OrbitalSelectionScreen | None' = None
 
         self.tk_root = tk_root
         self._no_prev_tk_root = self.tk_root is None
@@ -104,9 +106,10 @@ class Plotter:
         self.pv_plotter.set_background(config.background_color)
         self.pv_plotter.show_axes()
 
-        # TODO: Update these two functions so they do not depend on self.selection_screen
-        # move all the menu options to the plotter class
-        self._add_orbital_menus_to_pv_plotter()
+        if self.only_molecule:
+            self._add_image_export_menu()
+        else:
+            self._add_orbital_menus_to_pv_plotter()
         self._connect_pv_plotter_close_signal()
         self._override_clear_all_button()
 
@@ -174,7 +177,8 @@ class Plotter:
         else:
             self.cmap = config.mo.color_scheme
 
-        self.selection_screen = _OrbitalSelectionScreen(self)
+        if not self.only_molecule:
+            self.selection_screen = _OrbitalSelectionScreen(self)
 
         if self._no_prev_tk_root:
             self.tk_root.mainloop()
@@ -232,19 +236,19 @@ class Plotter:
 
         # Add Settings submenu items
         grid_settings_action = QAction('Grid Settings', self.pv_plotter.app_window)
-        grid_settings_action.triggered.connect(self.selection_screen.grid_settings_screen)
+        grid_settings_action.triggered.connect(self._open_grid_settings_dialog)
         settings_menu.addAction(grid_settings_action)
 
         mo_settings_action = QAction('MO Settings', self.pv_plotter.app_window)
-        mo_settings_action.triggered.connect(self.selection_screen.mo_settings_screen)
+        mo_settings_action.triggered.connect(self._open_mo_settings_dialog)
         settings_menu.addAction(mo_settings_action)
 
         molecule_settings_action = QAction('Molecule Settings', self.pv_plotter.app_window)
-        molecule_settings_action.triggered.connect(self.selection_screen.molecule_settings_screen)
+        molecule_settings_action.triggered.connect(self._open_molecule_settings_dialog)
         settings_menu.addAction(molecule_settings_action)
 
         color_settings_action = QAction('Color Settings', self.pv_plotter.app_window)
-        color_settings_action.triggered.connect(self.selection_screen.color_settings_screen)
+        color_settings_action.triggered.connect(self._open_color_settings_dialog)
         settings_menu.addAction(color_settings_action)
 
         # Create Export menu with dropdown
@@ -252,11 +256,11 @@ class Plotter:
 
         # Add Export submenu items
         export_data_action = QAction('Data', self.pv_plotter.app_window)
-        export_data_action.triggered.connect(self.selection_screen.export_orbitals_dialog)
+        export_data_action.triggered.connect(self._open_orbital_export_dialog)
         export_menu.addAction(export_data_action)
 
         export_image_action = QAction('Image', self.pv_plotter.app_window)
-        export_image_action.triggered.connect(self.selection_screen.export_image_dialog)
+        export_image_action.triggered.connect(self._open_image_export_dialog)
         export_menu.addAction(export_image_action)
 
         # Add menus to main menu bar
@@ -268,10 +272,52 @@ class Plotter:
         export_menu = QMenu('Export', self.pv_plotter.app_window)
 
         export_image_action = QAction('Image', self.pv_plotter.app_window)
-        export_image_action.triggered.connect(self._show_image_export_dialog)
+        export_image_action.triggered.connect(self._open_image_export_dialog)
         export_menu.addAction(export_image_action)
 
         self.pv_plotter.main_menu.addMenu(export_menu)
+
+    def _open_grid_settings_dialog(self) -> None:
+        """Open the grid settings window from the menubar."""
+        if not self.selection_screen:
+            logger.debug('Selection screen not ready; ignoring grid settings request.')
+            return
+        self.selection_screen.grid_settings_screen()
+
+    def _open_mo_settings_dialog(self) -> None:
+        """Open the molecular orbital settings window from the menubar."""
+        if not self.selection_screen:
+            logger.debug('Selection screen not ready; ignoring MO settings request.')
+            return
+        self.selection_screen.mo_settings_screen()
+
+    def _open_molecule_settings_dialog(self) -> None:
+        """Open the molecule settings window from the menubar."""
+        if not self.selection_screen:
+            logger.debug('Selection screen not ready; ignoring molecule settings request.')
+            return
+        self.selection_screen.molecule_settings_screen()
+
+    def _open_color_settings_dialog(self) -> None:
+        """Open the color settings window from the menubar."""
+        if not self.selection_screen:
+            logger.debug('Selection screen not ready; ignoring color settings request.')
+            return
+        self.selection_screen.color_settings_screen()
+
+    def _open_orbital_export_dialog(self) -> None:
+        """Open the orbital export dialog from the menubar."""
+        if not self.selection_screen:
+            logger.debug('Selection screen not ready; ignoring orbital export request.')
+            return
+        self.selection_screen.export_orbitals_dialog()
+
+    def _open_image_export_dialog(self) -> None:
+        """Open the image export dialog from the menubar."""
+        if self.selection_screen:
+            self.selection_screen.export_image_dialog()
+        else:
+            self._show_image_export_dialog()
 
     def _show_image_export_dialog(self) -> None:
         """Show image export dialog (standalone version for only_molecule mode)."""
@@ -428,8 +474,9 @@ class Plotter:
         if self.orb_actor:
             self.pv_plotter.remove_actor(self.orb_actor)
             self.orb_actor = None
-            self.selection_screen.current_orb_ind = -1
-            self.selection_screen.update_nav_button_states()
+            if self.selection_screen:
+                self.selection_screen.current_orb_ind = -1
+                self.selection_screen.update_nav_button_states()
 
     def toggle_molecule(self) -> None:
         """Toggle the visibility of the molecule."""
@@ -446,7 +493,8 @@ class Plotter:
                 actor.SetVisibility(not actor.GetVisibility())
             self.pv_plotter.update()
 
-        self.selection_screen.update_settings_button_states()
+        if self.selection_screen:
+            self.selection_screen.update_settings_button_states()
 
     def toggle_atoms(self) -> None:
         """Toggle the visibility of the molecule."""
