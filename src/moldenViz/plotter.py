@@ -94,6 +94,33 @@ class Plotter:
     ) -> None:
         self.on_screen = True
 
+        self.tk_root = tk_root
+        self._no_prev_tk_root = self.tk_root is None
+        if self.tk_root is None:
+            self.tk_root = tk.Tk()
+            self.tk_root.withdraw()  # Hides window
+
+        self.pv_plotter = BackgroundPlotter(editor=False)
+        self.pv_plotter.set_background(config.background_color)
+        self.pv_plotter.show_axes()
+
+        # TODO: Update these two functions so they do not depend on self.selection_screen
+        # move all the menu options to the plotter class
+        self._add_orbital_menus_to_pv_plotter()
+        self._connect_pv_plotter_close_signal()
+        self._override_clear_all_button()
+
+        self.molecule: Molecule
+        self.molecule_opacity = config.molecule.opacity
+        self.load_molecule(config)
+
+        # If we want to have the molecular orbitals, we need to initiate Tk before Qt
+        # That is why we have this weird if statement separated this way
+        if only_molecule:
+            if self._no_prev_tk_root:
+                self.tk_root.mainloop()
+            return
+
         if tabulator:
             if not hasattr(tabulator, 'grid'):
                 raise ValueError('Tabulator does not have grid attribute.')
@@ -114,33 +141,6 @@ class Plotter:
         else:
             self.tabulator = Tabulator(source, only_molecule=only_molecule)
 
-        if not only_molecule:
-            self.tk_root = tk_root
-            self._no_prev_tk_root = self.tk_root is None
-            if self._no_prev_tk_root:
-                self.tk_root = tk.Tk()
-                self.tk_root.withdraw()  # Hides window
-
-        self.pv_plotter = BackgroundPlotter(editor=False)
-        self.pv_plotter.set_background(config.background_color)
-        self.pv_plotter.show_axes()
-        self._override_clear_all_button()
-
-        self.molecule: Molecule
-        self.molecule_opacity = config.molecule.opacity
-        self.load_molecule(config)
-
-        # If we want to have the molecular orbitals, we need to initiate Tk before Qt
-        # That is why we have this weird if statement separated this way
-        if only_molecule:
-            # Add Export menu with Image option even when only molecule is shown
-            self._add_image_export_menu()
-            self.pv_plotter.app.exec_()  # pyright: ignore[reportAttributeAccessIssue]
-            return
-
-        assert self.tk_root is not None  # To help type hinters
-
-        if not tabulator:
             # Use configured default grid type
             if config.grid.default_type == 'spherical':
                 self.tabulator.spherical_grid(
@@ -174,11 +174,10 @@ class Plotter:
         else:
             self.cmap = config.mo.color_scheme
 
-        self.selection_screen = _OrbitalSelectionScreen(self, self.tk_root)
-        self._add_orbital_menus_to_pv_plotter()
-        self._connect_pv_plotter_close_signal()
+        self.selection_screen = _OrbitalSelectionScreen(self)
 
-        self.tk_root.mainloop()
+        if self._no_prev_tk_root:
+            self.tk_root.mainloop()
 
     @staticmethod
     def custom_cmap_from_colors(colors: list[str]) -> LinearSegmentedColormap:
@@ -559,7 +558,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
     SPHERICAL_GRID_SETTINGS_WINDOW_SIZE = '400x350'
     CARTESIAN_GRID_SETTINGS_WINDOW_SIZE = '650x400'
 
-    def __init__(self, plotter: Plotter, tk_master: tk.Tk) -> None:
+    def __init__(self, plotter: Plotter) -> None:
         """Create the orbital selection dialog for a plotter instance.
 
         Parameters
@@ -569,7 +568,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         tk_master : tk.Tk
             Tk root or parent window that owns this dialog.
         """
-        super().__init__(tk_master)
+        super().__init__(plotter.tk_root)
         self.title('Orbitals')
         self.geometry('350x500')
 
