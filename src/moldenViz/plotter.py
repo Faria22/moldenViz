@@ -94,7 +94,7 @@ class Plotter:
     ) -> None:
         self.on_screen = True
         self.only_molecule = only_molecule
-        self.selection_screen: '_OrbitalSelectionScreen | None' = None
+        self.selection_screen: _OrbitalSelectionScreen | None = None
 
         self.tk_root = tk_root
         self._no_prev_tk_root = self.tk_root is None
@@ -112,17 +112,6 @@ class Plotter:
             self._add_orbital_menus_to_pv_plotter()
         self._connect_pv_plotter_close_signal()
         self._override_clear_all_button()
-
-        self.molecule: Molecule
-        self.molecule_opacity = config.molecule.opacity
-        self.load_molecule(config)
-
-        # If we want to have the molecular orbitals, we need to initiate Tk before Qt
-        # That is why we have this weird if statement separated this way
-        if only_molecule:
-            if self._no_prev_tk_root:
-                self.tk_root.mainloop()
-            return
 
         if tabulator:
             if not hasattr(tabulator, 'grid'):
@@ -145,23 +134,35 @@ class Plotter:
             self.tabulator = Tabulator(source, only_molecule=only_molecule)
 
             # Use configured default grid type
-            if config.grid.default_type == 'spherical':
-                self.tabulator.spherical_grid(
-                    np.linspace(
-                        0,
-                        max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius),
-                        config.grid.spherical.num_r_points,
-                    ),
-                    np.linspace(0, np.pi, config.grid.spherical.num_theta_points),
-                    np.linspace(0, 2 * np.pi, config.grid.spherical.num_phi_points),
-                )
-            else:  # cartesian
-                r = max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius)
-                self.tabulator.cartesian_grid(
-                    np.linspace(-r, r, config.grid.cartesian.num_x_points),
-                    np.linspace(-r, r, config.grid.cartesian.num_y_points),
-                    np.linspace(-r, r, config.grid.cartesian.num_z_points),
-                )
+            if not only_molecule:
+                if config.grid.default_type == 'spherical':
+                    self.tabulator.spherical_grid(
+                        np.linspace(
+                            0,
+                            max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius),
+                            config.grid.spherical.num_r_points,
+                        ),
+                        np.linspace(0, np.pi, config.grid.spherical.num_theta_points),
+                        np.linspace(0, 2 * np.pi, config.grid.spherical.num_phi_points),
+                    )
+                else:  # cartesian
+                    r = max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius)
+                    self.tabulator.cartesian_grid(
+                        np.linspace(-r, r, config.grid.cartesian.num_x_points),
+                        np.linspace(-r, r, config.grid.cartesian.num_y_points),
+                        np.linspace(-r, r, config.grid.cartesian.num_z_points),
+                    )
+
+        self.molecule: Molecule
+        self.molecule_opacity = config.molecule.opacity
+        self.load_molecule(config)
+
+        # If we want to have the molecular orbitals, we need to initiate Tk before Qt
+        # That is why we have this weird if statement separated this way
+        if only_molecule:
+            if self._no_prev_tk_root:
+                self.tk_root.mainloop()
+            return
 
         self.orb_mesh = self._create_mo_mesh()
         self.orb_actor: pv.Actor | None = None
