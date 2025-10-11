@@ -133,29 +133,29 @@ class Plotter:
         else:
             self.tabulator = Tabulator(source, only_molecule=only_molecule)
 
-            # Use configured default grid type
-            if not only_molecule:
-                if config.grid.default_type == 'spherical':
-                    self.tabulator.spherical_grid(
-                        np.linspace(
-                            0,
-                            max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius),
-                            config.grid.spherical.num_r_points,
-                        ),
-                        np.linspace(0, np.pi, config.grid.spherical.num_theta_points),
-                        np.linspace(0, 2 * np.pi, config.grid.spherical.num_phi_points),
-                    )
-                else:  # cartesian
-                    r = max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius)
-                    self.tabulator.cartesian_grid(
-                        np.linspace(-r, r, config.grid.cartesian.num_x_points),
-                        np.linspace(-r, r, config.grid.cartesian.num_y_points),
-                        np.linspace(-r, r, config.grid.cartesian.num_z_points),
-                    )
-
         self.molecule: Molecule
         self.molecule_opacity = config.molecule.opacity
         self.load_molecule(config)
+
+        # It no tabulator was passed, create default grid
+        if not only_molecule and not tabulator:
+            if config.grid.default_type == 'spherical':
+                self.tabulator.spherical_grid(
+                    np.linspace(
+                        0,
+                        max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius),
+                        config.grid.spherical.num_r_points,
+                    ),
+                    np.linspace(0, np.pi, config.grid.spherical.num_theta_points),
+                    np.linspace(0, 2 * np.pi, config.grid.spherical.num_phi_points),
+                )
+            else:  # cartesian
+                r = max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius)
+                self.tabulator.cartesian_grid(
+                    np.linspace(-r, r, config.grid.cartesian.num_x_points),
+                    np.linspace(-r, r, config.grid.cartesian.num_y_points),
+                    np.linspace(-r, r, config.grid.cartesian.num_z_points),
+                )
 
         # If we want to have the molecular orbitals, we need to initiate Tk before Qt
         # That is why we have this weird if statement separated this way
@@ -238,19 +238,19 @@ class Plotter:
         # Add Settings submenu items
         if not self.only_molecule:
             grid_settings_action = QAction('Grid Settings', self.pv_plotter.app_window)
-            grid_settings_action.triggered.connect(self._open_grid_settings_dialog)
+            grid_settings_action.triggered.connect(self.grid_settings_screen)
             settings_menu.addAction(grid_settings_action)
 
             mo_settings_action = QAction('MO Settings', self.pv_plotter.app_window)
-            mo_settings_action.triggered.connect(self._open_mo_settings_dialog)
+            mo_settings_action.triggered.connect(self.mo_settings_screen)
             settings_menu.addAction(mo_settings_action)
 
         molecule_settings_action = QAction('Molecule Settings', self.pv_plotter.app_window)
-        molecule_settings_action.triggered.connect(self._open_molecule_settings_dialog)
+        molecule_settings_action.triggered.connect(self.molecule_settings_screen)
         settings_menu.addAction(molecule_settings_action)
 
         color_settings_action = QAction('Color Settings', self.pv_plotter.app_window)
-        color_settings_action.triggered.connect(self._open_color_settings_dialog)
+        color_settings_action.triggered.connect(self.color_settings_screen)
         settings_menu.addAction(color_settings_action)
 
         # Create Export menu with dropdown
@@ -259,64 +259,343 @@ class Plotter:
         # Add Export submenu items
         if not self.only_molecule:
             export_data_action = QAction('Data', self.pv_plotter.app_window)
-            export_data_action.triggered.connect(self._open_orbital_export_dialog)
+            export_data_action.triggered.connect(self.export_orbitals_dialog)
             export_menu.addAction(export_data_action)
 
         export_image_action = QAction('Image', self.pv_plotter.app_window)
-        export_image_action.triggered.connect(self._open_image_export_dialog)
+        export_image_action.triggered.connect(self.export_image_dialog)
         export_menu.addAction(export_image_action)
 
         # Add menus to main menu bar
         self.pv_plotter.main_menu.addMenu(settings_menu)
         self.pv_plotter.main_menu.addMenu(export_menu)
 
-    def _add_image_export_menu(self) -> None:
-        """Add Export menu with Image option when only molecule is shown."""
-        export_menu = QMenu('Export', self.pv_plotter.app_window)
+    def _do_export(self, export_window: tk.Toplevel, format_var: tk.StringVar, scope_var: tk.StringVar) -> None:
+        """Execute the export operation.
 
-        export_image_action = QAction('Image', self.pv_plotter.app_window)
-        export_image_action.triggered.connect(self._open_image_export_dialog)
-        export_menu.addAction(export_image_action)
+        Parameters
+        ----------
+        export_window : tk.Toplevel
+            The export dialog window to close on success.
+        format_var : tk.StringVar
+            Variable holding the selected export format ('vtk' or 'cube').
+        scope_var : tk.StringVar
+            Variable holding the selected scope ('current' or 'all').
+        """
+        assert self.selection_screen is not None
 
-        self.pv_plotter.main_menu.addMenu(export_menu)
+        file_format = format_var.get()
+        scope = scope_var.get()
 
-    def _open_grid_settings_dialog(self) -> None:
-        """Open the grid settings window from the menubar."""
-        self.grid_settings_screen()
+        # Validate selection
+        if scope == 'current' and self.selection_screen.current_mo_ind < 0:
+            messagebox.showerror('Export Error', 'No orbital is currently selected.')
+            return
 
-    def _open_mo_settings_dialog(self) -> None:
-        """Open the molecular orbital settings window from the menubar."""
-        self.mo_settings_screen()
+        if file_format == 'cube' and scope == 'all':
+            messagebox.showerror(
+                'Export Error',
+                'Cube format only supports exporting a single orbital.\n\n'
+                'Please select "Current orbital" or choose VTK format.',
+            )
+            return
 
-    def _open_molecule_settings_dialog(self) -> None:
-        """Open the molecule settings window from the menubar."""
-        self.molecule_settings_screen()
+        # Determine file extension and default name
+        ext = '.vtk' if file_format == 'vtk' else '.cube'
+        default_name = (
+            f'orbitals_all{ext}' if scope == 'all' else f'orbital_{self.selection_screen.current_mo_ind}{ext}'
+        )
 
-    def _open_color_settings_dialog(self) -> None:
-        """Open the color settings window from the menubar."""
-        self.color_settings_screen()
+        # Show file save dialog
+        file_path = filedialog.asksaveasfilename(
+            parent=export_window,
+            title='Save Orbital Export',
+            defaultextension=ext,
+            initialfile=default_name,
+            filetypes=[('VTK Files', '*.vtk'), ('Gaussian Cube Files', '*.cube'), ('All Files', '*.*')],
+        )
 
-    def _open_orbital_export_dialog(self) -> None:
-        """Open the orbital export dialog from the menubar."""
-        if self.selection_screen:
-            self.selection_screen.export_orbitals_dialog()
+        if not file_path:
+            return  # User cancelled
 
-    def _open_image_export_dialog(self) -> None:
-        """Open the image export dialog from the menubar."""
-        if self.selection_screen:
-            self.selection_screen.export_image_dialog()
-        else:
-            self._show_image_export_dialog()
+        # Perform the export
+        try:
+            mo_index = self.selection_screen.current_mo_ind if scope == 'current' else None
+            self.tabulator.export(file_path, mo_index=mo_index)
+            messagebox.showinfo('Export Successful', f'Orbital(s) exported successfully to:\n{file_path}')
+            export_window.destroy()
+        except (RuntimeError, ValueError) as e:
+            messagebox.showerror('Export Failed', f'Failed to export orbital(s):\n\n{e!s}')
+
+    def export_orbitals_dialog(self) -> None:
+        """Open a dialog to configure and export molecular orbitals."""
+        assert self.selection_screen is not None
+
+        export_window = tk.Toplevel(self.tk_root)
+        export_window.title('Export Orbitals')
+        export_window.geometry('400x300')
+
+        main_frame = ttk.Frame(export_window, padding=20)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        # File format selection
+        ttk.Label(main_frame, text='Export Format:', font=('TkDefaultFont', 10, 'bold')).grid(
+            row=0,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            pady=(0, 10),
+        )
+
+        format_var = tk.StringVar(value='vtk')
+        ttk.Radiobutton(main_frame, text='VTK (.vtk) - All orbitals or single', variable=format_var, value='vtk').grid(
+            row=1,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            padx=20,
+        )
+        ttk.Radiobutton(
+            main_frame,
+            text='Gaussian Cube (.cube) - Single orbital only',
+            variable=format_var,
+            value='cube',
+        ).grid(row=2, column=0, columnspan=2, sticky=tk.W, padx=20, pady=(5, 15))
+
+        # Orbital selection
+        ttk.Label(main_frame, text='Orbital Selection:', font=('TkDefaultFont', 10, 'bold')).grid(
+            row=3,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            pady=(0, 10),
+        )
+
+        scope_var = tk.StringVar(value='current')
+        # Use 1-based indexing for display (add 1 to current_mo_ind)
+        orbital_display = (
+            self.selection_screen.current_mo_ind + 1 if self.selection_screen.current_mo_ind >= 0 else 'None'
+        )
+        current_orb_radio = ttk.Radiobutton(
+            main_frame,
+            text=f'Current orbital (#{orbital_display})',
+            variable=scope_var,
+            value='current',
+        )
+        current_orb_radio.grid(row=4, column=0, columnspan=2, sticky=tk.W, padx=20)
+        if self.selection_screen.current_mo_ind < 0:
+            current_orb_radio.config(state=tk.DISABLED)
+
+        all_orb_radio = ttk.Radiobutton(main_frame, text='All orbitals', variable=scope_var, value='all')
+        all_orb_radio.grid(row=5, column=0, columnspan=2, sticky=tk.W, padx=20, pady=(5, 0))
+
+        # Store references for updating the label dynamically
+        self._export_window = export_window
+        self._export_current_orb_radio = current_orb_radio
+        self._export_all_orb_radio = all_orb_radio
+
+        def update_scope_options(*_args: object) -> None:
+            """Adjust which export scopes are available based on the format."""
+            if self._export_all_orb_radio is None:
+                return
+
+            if format_var.get() == 'cube':
+                self._export_all_orb_radio.config(state=tk.DISABLED)
+                if scope_var.get() == 'all':
+                    scope_var.set('current')
+            else:
+                self._export_all_orb_radio.config(state=tk.NORMAL)
+
+        format_var.trace_add('write', update_scope_options)
+        update_scope_options()
+
+        # Clean up references when window is closed
+        def on_close() -> None:
+            self._export_window = None
+            self._export_current_orb_radio = None
+            self._export_all_orb_radio = None
+            export_window.destroy()
+
+        # Buttons
+        button_frame = ttk.Frame(main_frame)
+        button_frame.grid(row=6, column=0, columnspan=2, pady=(20, 0))
+
+        ttk.Button(
+            button_frame,
+            text='Export',
+            command=lambda: self._do_export(export_window, format_var, scope_var),
+        ).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text='Cancel', command=on_close).pack(side=tk.LEFT, padx=5)
+        export_window.protocol('WM_DELETE_WINDOW', on_close)
+
+    def export_image_dialog(self) -> None:
+        """Open a dialog to export the current visualization as an image."""
+        export_window = tk.Toplevel(self.tk_root)
+        export_window.title('Export Image')
+        export_window.geometry('400x250')
+
+        main_frame = ttk.Frame(export_window, padding=20)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        # File format selection
+        ttk.Label(main_frame, text='Image Format:', font=('TkDefaultFont', 10, 'bold')).grid(
+            row=0,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            pady=(0, 10),
+        )
+
+        format_var = tk.StringVar(value='png')
+        ttk.Radiobutton(main_frame, text='PNG (.png) - Raster format', variable=format_var, value='png').grid(
+            row=1,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            padx=20,
+        )
+        ttk.Radiobutton(main_frame, text='JPEG (.jpg) - Raster format', variable=format_var, value='jpeg').grid(
+            row=2,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            padx=20,
+            pady=(5, 0),
+        )
+        ttk.Radiobutton(main_frame, text='SVG (.svg) - Vector format', variable=format_var, value='svg').grid(
+            row=3,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            padx=20,
+            pady=(5, 0),
+        )
+        ttk.Radiobutton(main_frame, text='PDF (.pdf) - Vector format', variable=format_var, value='pdf').grid(
+            row=4,
+            column=0,
+            columnspan=2,
+            sticky=tk.W,
+            padx=20,
+            pady=(5, 15),
+        )
+
+        # Transparent background option (only for PNG)
+        transparent_var = tk.BooleanVar(value=False)
+        transparent_check = ttk.Checkbutton(
+            main_frame,
+            text='Transparent background (PNG only)',
+            variable=transparent_var,
+        )
+        transparent_check.grid(row=5, column=0, columnspan=2, sticky=tk.W, padx=20, pady=(0, 15))
+
+        def update_transparent_option(*_args: object) -> None:
+            """Enable/disable transparent option based on format."""
+            if format_var.get() == 'png':
+                transparent_check.config(state=tk.NORMAL)
+            else:
+                transparent_check.config(state=tk.DISABLED)
+
+        format_var.trace_add('write', update_transparent_option)
+        update_transparent_option()
+
+        # Buttons
+        button_frame = ttk.Frame(main_frame)
+        button_frame.grid(row=6, column=0, columnspan=2, pady=(20, 0))
+
+        ttk.Button(
+            button_frame,
+            text='Export',
+            command=lambda: self._do_image_export(export_window, format_var, transparent_var),
+        ).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text='Cancel', command=export_window.destroy).pack(side=tk.LEFT, padx=5)
+        export_window.protocol('WM_DELETE_WINDOW', export_window.destroy)
+
+    def _do_image_export(
+        self,
+        export_window: tk.Toplevel,
+        format_var: tk.StringVar,
+        transparent_var: tk.BooleanVar,
+    ) -> None:
+        """Execute the image export operation.
+
+        Parameters
+        ----------
+        export_window : tk.Toplevel
+            The export dialog window to close on success.
+        format_var : tk.StringVar
+            Variable holding the selected export format ('png', 'jpeg', 'svg', or 'pdf').
+            Note: JPEG files are saved with .jpg extension (the standard).
+        transparent_var : tk.BooleanVar
+            Variable indicating whether to use a transparent background (PNG only).
+        """
+        file_format = format_var.get()
+        transparent = transparent_var.get()
+
+        # Determine file extension and default name
+        # Note: JPEG format uses .jpg as the standard extension
+        ext_map = {'png': '.png', 'jpeg': '.jpg', 'svg': '.svg', 'pdf': '.pdf'}
+        ext = ext_map[file_format]
+        default_name = f'moldenviz_export{ext}'
+
+        # Define file types for dialog
+        file_types = {
+            'png': ('PNG Files', '*.png'),
+            'jpeg': ('JPEG Files', '*.jpg *.jpeg'),
+            'svg': ('SVG Files', '*.svg'),
+            'pdf': ('PDF Files', '*.pdf'),
+        }
+
+        # Show file save dialog
+        file_path = filedialog.asksaveasfilename(
+            parent=export_window,
+            title='Save Image Export',
+            defaultextension=ext,
+            initialfile=default_name,
+            filetypes=[file_types[file_format], ('All Files', '*.*')],
+        )
+
+        if not file_path:
+            return  # User cancelled
+
+        # Perform the export
+        try:
+            if file_format in {'svg', 'pdf'}:
+                # Use save_graphic for vector formats
+                self.pv_plotter.save_graphic(file_path)
+            else:
+                # Use screenshot for raster formats
+                self.pv_plotter.screenshot(
+                    file_path,
+                    transparent_background=transparent if file_format == 'png' else False,
+                )
+
+            messagebox.showinfo('Export Successful', f'Image exported successfully to:\n{file_path}')
+            export_window.destroy()
+        except (RuntimeError, OSError, ValueError) as e:
+            messagebox.showerror('Export Failed', f'Failed to export image:\n\n{e!s}')
 
     def _settings_parent(self) -> tk.Misc:
-        """Return the appropriate parent widget for settings dialogs."""
+        """Return the appropriate parent widget for settings dialogs.
+
+        Returns
+        -------
+        tk.Misc
+            The parent widget for settings dialogs.
+        """
         parent = self.selection_screen if self.selection_screen is not None else self.tk_root
         if parent is None:
             raise RuntimeError('No Tk root available to host settings dialogs.')
         return parent
 
     def _get_current_mo_index(self) -> int:
-        """Return the currently selected molecular orbital index."""
+        """Return the currently selected molecular orbital index.
+
+        Returns
+        -------
+        int
+            The index of the currently selected molecular orbital, or -1 if none is selected.
+
+        """
         if self.selection_screen:
             return self.selection_screen.current_mo_ind
         return -1
@@ -549,11 +828,23 @@ class Plotter:
 
     def on_mo_color_scheme_change(self, _event: tk.Event) -> None:
         """Handle MO color scheme dropdown change to show/hide custom color entries."""
-        self.plotter.on_mo_color_scheme_change(_event)
+        if self.mo_color_scheme_var.get() == 'custom':
+            for widget in self.mo_custom_color_widgets:
+                widget.grid()
+        else:
+            for widget in self.mo_custom_color_widgets:
+                widget.grid_remove()
 
     def on_bond_color_type_change(self) -> None:
         """Handle bond color type change to show/hide bond color entry."""
-        self.plotter.on_bond_color_type_change()
+        if self.bond_color_type_var.get() == 'uniform':
+            self.bond_color_label.grid()
+            self.bond_color_entry.grid()
+        else:
+            self.bond_color_label.grid_remove()
+            self.bond_color_entry.grid_remove()
+
+        self.apply_bond_color_settings()
 
     def color_settings_screen(self) -> None:
         """Open the color settings window."""
@@ -585,70 +876,71 @@ class Plotter:
         # Separator
         ttk.Separator(settings_frame, orient='horizontal').grid(row=2, column=0, columnspan=2, sticky='ew', pady=10)
 
-        # MO Color section
-        ttk.Label(settings_frame, text='Molecular Orbital Colors', font=('TkDefaultFont', 10, 'bold')).grid(
-            row=3,
-            column=0,
-            columnspan=2,
-            padx=5,
-            pady=5,
-            sticky='w',
-        )
+        if not self.only_molecule:
+            # MO Color section
+            ttk.Label(settings_frame, text='Molecular Orbital Colors', font=('TkDefaultFont', 10, 'bold')).grid(
+                row=3,
+                column=0,
+                columnspan=2,
+                padx=5,
+                pady=5,
+                sticky='w',
+            )
 
-        ttk.Label(settings_frame, text='Color Scheme:').grid(row=4, column=0, padx=5, pady=5, sticky='w')
-        # Create dropdown with predefined color schemes
-        predefined_schemes = ['bwr', 'RdBu', 'seismic', 'coolwarm', 'PiYG']
+            ttk.Label(settings_frame, text='Color Scheme:').grid(row=4, column=0, padx=5, pady=5, sticky='w')
+            # Create dropdown with predefined color schemes
+            predefined_schemes = ['bwr', 'RdBu', 'seismic', 'coolwarm', 'PiYG']
 
-        # Check if user has a custom scheme in config that's not in predefined list
-        if config.mo.color_scheme not in predefined_schemes and config.mo.color_scheme != 'custom':
-            # Add the user's scheme as the first item
-            color_schemes = [config.mo.color_scheme, *predefined_schemes, 'custom']
-            default_scheme = config.mo.color_scheme
-        else:
-            color_schemes = [*predefined_schemes, 'custom']
-            default_scheme = config.mo.color_scheme if config.mo.color_scheme in predefined_schemes else 'custom'
+            # Check if user has a custom scheme in config that's not in predefined list
+            if config.mo.color_scheme not in predefined_schemes and config.mo.color_scheme != 'custom':
+                # Add the user's scheme as the first item
+                color_schemes = [config.mo.color_scheme, *predefined_schemes, 'custom']
+                default_scheme = config.mo.color_scheme
+            else:
+                color_schemes = [*predefined_schemes, 'custom']
+                default_scheme = config.mo.color_scheme if config.mo.color_scheme in predefined_schemes else 'custom'
 
-        self.mo_color_scheme_var = tk.StringVar(value=default_scheme)
-        self.mo_color_scheme_dropdown = ttk.Combobox(
-            settings_frame,
-            state='readonly',
-            textvariable=self.mo_color_scheme_var,
-            values=color_schemes,
-        )
-        self.mo_color_scheme_dropdown.grid(row=4, column=1, padx=5, pady=5, sticky='w')
-        self.mo_color_scheme_dropdown.bind('<<ComboboxSelected>>', self.on_mo_color_scheme_change)
-        self.mo_color_scheme_dropdown.bind('<<ComboboxSelected>>', lambda _e: self.apply_mo_color_settings())
+            self.mo_color_scheme_var = tk.StringVar(value=default_scheme)
+            self.mo_color_scheme_dropdown = ttk.Combobox(
+                settings_frame,
+                state='readonly',
+                textvariable=self.mo_color_scheme_var,
+                values=color_schemes,
+            )
+            self.mo_color_scheme_dropdown.grid(row=4, column=1, padx=5, pady=5, sticky='w')
+            self.mo_color_scheme_dropdown.bind('<<ComboboxSelected>>', self.on_mo_color_scheme_change)
+            self.mo_color_scheme_dropdown.bind('<<ComboboxSelected>>', lambda _e: self.apply_mo_color_settings())
 
-        # Custom color entries (initially hidden unless 'custom' is selected)
-        negative_color_label = ttk.Label(settings_frame, text='Negative Color:')
-        negative_color_label.grid(row=5, column=0, padx=5, pady=5, sticky='w')
-        self.mo_negative_color_entry = ttk.Entry(settings_frame, width=15)
-        if config.mo.custom_colors and len(config.mo.custom_colors) > 0:
-            self.mo_negative_color_entry.insert(0, config.mo.custom_colors[0])
-        self.mo_negative_color_entry.grid(row=5, column=1, padx=5, pady=5, sticky='w')
+            # Custom color entries (initially hidden unless 'custom' is selected)
+            negative_color_label = ttk.Label(settings_frame, text='Negative Color:')
+            negative_color_label.grid(row=5, column=0, padx=5, pady=5, sticky='w')
+            self.mo_negative_color_entry = ttk.Entry(settings_frame, width=15)
+            if config.mo.custom_colors and len(config.mo.custom_colors) > 0:
+                self.mo_negative_color_entry.insert(0, config.mo.custom_colors[0])
+            self.mo_negative_color_entry.grid(row=5, column=1, padx=5, pady=5, sticky='w')
 
-        positive_color_label = ttk.Label(settings_frame, text='Positive Color:')
-        positive_color_label.grid(row=6, column=0, padx=5, pady=5, sticky='w')
-        self.mo_positive_color_entry = ttk.Entry(settings_frame, width=15)
-        if config.mo.custom_colors and len(config.mo.custom_colors) > 1:
-            self.mo_positive_color_entry.insert(0, config.mo.custom_colors[1])
-        self.mo_positive_color_entry.grid(row=6, column=1, padx=5, pady=5, sticky='w')
+            positive_color_label = ttk.Label(settings_frame, text='Positive Color:')
+            positive_color_label.grid(row=6, column=0, padx=5, pady=5, sticky='w')
+            self.mo_positive_color_entry = ttk.Entry(settings_frame, width=15)
+            if config.mo.custom_colors and len(config.mo.custom_colors) > 1:
+                self.mo_positive_color_entry.insert(0, config.mo.custom_colors[1])
+            self.mo_positive_color_entry.grid(row=6, column=1, padx=5, pady=5, sticky='w')
 
-        # Store references to custom color widgets for show/hide
-        self.mo_custom_color_widgets = [
-            self.mo_negative_color_entry,
-            self.mo_positive_color_entry,
-            negative_color_label,
-            positive_color_label,
-        ]
+            # Store references to custom color widgets for show/hide
+            self.mo_custom_color_widgets = [
+                self.mo_negative_color_entry,
+                self.mo_positive_color_entry,
+                negative_color_label,
+                positive_color_label,
+            ]
 
-        # Hide custom color entries if predefined scheme is selected
-        if self.mo_color_scheme_var.get() != 'custom':
-            for widget in self.mo_custom_color_widgets:
-                widget.grid_remove()
+            # Hide custom color entries if predefined scheme is selected
+            if self.mo_color_scheme_var.get() != 'custom':
+                for widget in self.mo_custom_color_widgets:
+                    widget.grid_remove()
 
-        # Separator
-        ttk.Separator(settings_frame, orient='horizontal').grid(row=7, column=0, columnspan=2, sticky='ew', pady=10)
+            # Separator
+            ttk.Separator(settings_frame, orient='horizontal').grid(row=7, column=0, columnspan=2, sticky='ew', pady=10)
 
         # Bond Color section
         ttk.Label(settings_frame, text='Bond Colors', font=('TkDefaultFont', 10, 'bold')).grid(
@@ -719,7 +1011,19 @@ class Plotter:
             self.cart_grid_params_frame_setup()
 
     def sph_grid_params_frame_widgets(self, master: ttk.Frame) -> ttk.Frame:
-        """Build widgets that capture spherical grid parameters."""
+        """Build widgets that capture spherical grid parameters.
+
+        Parameters
+        ----------
+        master : ttk.Frame
+            The parent frame to contain the spherical grid parameter widgets.
+
+        Returns
+        -------
+        ttk.Frame
+            The frame containing the spherical grid parameter widgets.
+
+        """
         grid_params_frame = ttk.Frame(master)
 
         # Radius
@@ -746,7 +1050,18 @@ class Plotter:
         return grid_params_frame
 
     def cart_grid_params_frame_widgets(self, master: ttk.Frame) -> ttk.Frame:
-        """Build widgets that capture cartesian grid parameters."""
+        """Build widgets that capture cartesian grid parameters.
+
+        Parameters
+        ----------
+        master : ttk.Frame
+            The parent frame to contain the cartesian grid parameter widgets.
+
+        Returns
+        -------
+        ttk.Frame
+            The frame containing the cartesian grid parameter widgets.
+        """
         grid_params_frame = ttk.Frame(master)
 
         # X
@@ -792,11 +1107,78 @@ class Plotter:
 
     def sph_grid_params_frame_setup(self) -> None:
         """Populate the spherical grid widgets with defaults or existing values."""
-        self.plotter.sph_grid_params_frame_setup()
+        self.radius_entry.delete(0, tk.END)
+        self.radius_points_entry.delete(0, tk.END)
+        self.theta_points_entry.delete(0, tk.END)
+        self.phi_points_entry.delete(0, tk.END)
+
+        # Previous grid was cartesian, so use default values
+        if self.tabulator._grid_type == GridType.CARTESIAN:  # noqa: SLF001
+            self.radius_entry.insert(
+                0,
+                str(max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius)),
+            )
+            self.radius_points_entry.insert(0, str(config.grid.spherical.num_r_points))
+            self.theta_points_entry.insert(0, str(config.grid.spherical.num_theta_points))
+            self.phi_points_entry.insert(0, str(config.grid.spherical.num_phi_points))
+            return
+
+        num_r, num_theta, num_phi = self.tabulator._grid_dimensions  # noqa: SLF001
+
+        # The last point of the grid for sure has the largest r
+        r, _, _ = _cartesian_to_spherical(*self.tabulator.grid[-1, :])  # pyright: ignore[reportArgumentType]
+
+        self.radius_entry.insert(0, str(r))
+        self.radius_points_entry.insert(0, str(num_r))
+        self.theta_points_entry.insert(0, str(num_theta))
+        self.phi_points_entry.insert(0, str(num_phi))
 
     def cart_grid_params_frame_setup(self) -> None:
         """Populate the Cartesian grid widgets with defaults or existing values."""
-        self.plotter.cart_grid_params_frame_setup()
+        self.x_min_entry.delete(0, tk.END)
+        self.x_max_entry.delete(0, tk.END)
+        self.x_num_points_entry.delete(0, tk.END)
+
+        self.y_min_entry.delete(0, tk.END)
+        self.y_max_entry.delete(0, tk.END)
+        self.y_num_points_entry.delete(0, tk.END)
+
+        self.z_min_entry.delete(0, tk.END)
+        self.z_max_entry.delete(0, tk.END)
+        self.z_num_points_entry.delete(0, tk.END)
+
+        # Previous grid was sphesical, so use adapted default values
+        if self.tabulator._grid_type == GridType.SPHERICAL:  # noqa: SLF001
+            r = max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius)
+
+            self.x_min_entry.insert(0, str(-r))
+            self.y_min_entry.insert(0, str(-r))
+            self.z_min_entry.insert(0, str(-r))
+
+            self.x_max_entry.insert(0, str(r))
+            self.y_max_entry.insert(0, str(r))
+            self.z_max_entry.insert(0, str(r))
+
+            self.x_num_points_entry.insert(0, str(config.grid.cartesian.num_x_points))
+            self.y_num_points_entry.insert(0, str(config.grid.cartesian.num_y_points))
+            self.z_num_points_entry.insert(0, str(config.grid.cartesian.num_z_points))
+            return
+
+        x_num, y_num, z_num = self.tabulator._grid_dimensions  # noqa: SLF001
+        x_min, y_min, z_min = self.tabulator.grid[0, :]
+        x_max, y_max, z_max = self.tabulator.grid[-1, :]
+
+        self.x_min_entry.insert(0, str(x_min))
+        self.x_max_entry.insert(0, str(x_max))
+        self.x_num_points_entry.insert(0, str(x_num))
+
+        self.y_min_entry.insert(0, str(y_min))
+        self.y_max_entry.insert(0, str(y_max))
+        self.y_num_points_entry.insert(0, str(y_num))
+
+        self.z_min_entry.insert(0, str(z_min))
+        self.z_max_entry.insert(0, str(z_max))
+        self.z_num_points_entry.insert(0, str(z_num))
 
     def reset_grid_settings(self) -> None:
         """Restore grid settings widgets back to configuration defaults."""
@@ -821,11 +1203,11 @@ class Plotter:
 
     def reset_mo_settings(self) -> None:
         """Restore MO settings widgets back to configuration defaults."""
-        self.plotter.reset_mo_settings()
+        self.reset_mo_settings()
 
     def reset_molecule_settings(self) -> None:
         """Restore molecule settings widgets back to configuration defaults."""
-        self.plotter.reset_molecule_settings()
+        self.reset_molecule_settings()
 
     def reset_color_settings(self) -> None:
         """Restore color settings widgets back to configuration defaults."""
@@ -978,11 +1360,12 @@ class Plotter:
 
     def apply_color_settings(self) -> None:
         """Apply both MO and bond color settings."""
-        self.plotter.apply_color_settings()
+        self.apply_custom_mo_color_settings()
+        self.apply_bond_color_settings()
 
     def apply_mo_color_settings(self) -> None:
         """Validate UI inputs and apply the chosen MO color settings."""
-        self.on_mo_color_scheme_change(tk.Event())  # Ensure custom entries are shown
+        self.on_mo_color_scheme_change(tk.Event())  # Update visibility of custom color entries
 
         mo_color_scheme = self.mo_color_scheme_var.get().strip()
         if mo_color_scheme == 'custom':
@@ -1032,9 +1415,9 @@ class Plotter:
         if redraw_molecule:
             self.load_molecule(config)
 
-    def save_settings(self) -> None:  # noqa: PLR6301
+    def save_settings(self) -> None:
         """Save current configuration to the user's custom config file."""
-        self.plotter.save_settings()
+        self.save_settings()
 
     def plot_orbital(self, orb_ind: int) -> None:
         """Render the selected orbital isosurface in the PyVista plotter."""
@@ -1406,116 +1789,6 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.bind('<Control-q>', lambda _event: self.on_close())
         self.bind('<Control-w>', lambda _event: self.on_close())
 
-    def grid_settings_screen(self) -> None:
-        """Open the grid settings window."""
-        self.plotter.grid_settings_screen()
-
-    def mo_settings_screen(self) -> None:
-        """Open the molecular orbital settings window."""
-        self.plotter.mo_settings_screen()
-
-    def on_opacity_change(self, val: str) -> None:
-        """Handle opacity slider changes and apply immediately."""
-        self.plotter.on_opacity_change(val)
-
-    def apply_mo_contour(self) -> None:
-        """Apply contour changes immediately."""
-        self.plotter.apply_mo_contour()
-
-    def update_settings_button_states(self) -> None:
-        """Update the state of the settings buttons based on current plotter state."""
-        self.plotter.update_settings_button_states()
-
-    def molecule_settings_screen(self) -> None:
-        """Open the molecule settings window."""
-        self.plotter.molecule_settings_screen()
-
-    def on_molecule_opacity_change(self, val: str) -> None:
-        """Handle molecule opacity slider changes and apply immediately."""
-        self.plotter.on_molecule_opacity_change(val)
-
-    def apply_background_color(self) -> None:
-        """Apply background color changes immediately."""
-        self.plotter.apply_background_color()
-
-    def on_mo_color_scheme_change(self, _event: tk.Event) -> None:
-        """Handle MO color scheme dropdown change to show/hide custom color entries."""
-        self.plotter.on_mo_color_scheme_change(_event)
-
-    def on_bond_color_type_change(self) -> None:
-        """Handle bond color type change to show/hide bond color entry."""
-        self.plotter.on_bond_color_type_change()
-
-    def color_settings_screen(self) -> None:
-        """Open the color settings window."""
-        self.plotter.color_settings_screen()
-
-
-    def sph_grid_params_frame_setup(self) -> None:
-        """Populate the spherical grid widgets with defaults or existing values."""
-        self.plotter.sph_grid_params_frame_setup()
-
-    def cart_grid_params_frame_setup(self) -> None:
-        """Populate the Cartesian grid widgets with defaults or existing values."""
-        self.plotter.cart_grid_params_frame_setup()
-
-    def reset_grid_settings(self) -> None:
-        """Restore grid settings widgets back to configuration defaults."""
-        self.plotter.reset_grid_settings()
-
-    def reset_mo_settings(self) -> None:
-        """Restore MO settings widgets back to configuration defaults."""
-        self.plotter.reset_mo_settings()
-
-    def reset_molecule_settings(self) -> None:
-        """Restore molecule settings widgets back to configuration defaults."""
-        self.plotter.reset_molecule_settings()
-
-    def reset_color_settings(self) -> None:
-        """Restore color settings widgets back to configuration defaults."""
-        self.plotter.reset_color_settings()
-
-    def apply_grid_settings(self) -> None:
-        """Validate UI inputs and apply the chosen grid parameters."""
-        self.plotter.apply_grid_settings()
-
-    def apply_mo_settings(self) -> None:
-        """Validate UI inputs and apply the chosen MO rendering parameters."""
-        self.plotter.apply_mo_settings()
-
-    def apply_molecule_settings(self) -> None:
-        """Validate UI inputs and apply the chosen molecule rendering parameters.
-
-        This method only handles bond settings that require reload.
-        """
-        self.plotter.apply_molecule_settings()
-
-    def apply_color_settings(self) -> None:
-        """Apply both MO and bond color settings."""
-        self.plotter.apply_color_settings()
-
-    def apply_mo_color_settings(self) -> None:
-        """Validate UI inputs and apply the chosen MO color settings.
-
-        Only applies predefined color schemes, not custom colors.
-        """
-        self.plotter.apply_mo_color_settings()
-
-    def apply_custom_mo_color_settings(self) -> None:
-        """Validate UI inputs and apply the chosen MO color settings.
-
-        Only applies custom colors, not predefined color schemes.
-        """
-        self.plotter.apply_custom_mo_color_settings()
-
-    def apply_bond_color_settings(self) -> None:
-        """Validate UI inputs and apply the chosen color settings."""
-        self.plotter.apply_bond_color_settings()
-
-    def save_settings(self) -> None:  # noqa: PLR6301
-        """Save current configuration to the user's custom config file."""
-        self.plotter.save_settings()
-
     def next_plot(self) -> None:
         """Advance to the next molecular orbital."""
         max_index = len(self.plotter.tabulator._parser.mos) - 1  # noqa: SLF001
@@ -1534,302 +1807,6 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         new_index = self.current_mo_ind - 1
         self.plotter.plot_orbital(new_index)
         self.orb_tv.highlight_orbital(self.current_mo_ind)
-
-    def _do_export(self, export_window: tk.Toplevel, format_var: tk.StringVar, scope_var: tk.StringVar) -> None:
-        """Execute the export operation.
-
-        Parameters
-        ----------
-        export_window : tk.Toplevel
-            The export dialog window to close on success.
-        format_var : tk.StringVar
-            Variable holding the selected export format ('vtk' or 'cube').
-        scope_var : tk.StringVar
-            Variable holding the selected scope ('current' or 'all').
-        """
-        file_format = format_var.get()
-        scope = scope_var.get()
-
-        # Validate selection
-        if scope == 'current' and self.current_mo_ind < 0:
-            messagebox.showerror('Export Error', 'No orbital is currently selected.')
-            return
-
-        if file_format == 'cube' and scope == 'all':
-            messagebox.showerror(
-                'Export Error',
-                'Cube format only supports exporting a single orbital.\n\n'
-                'Please select "Current orbital" or choose VTK format.',
-            )
-            return
-
-        # Determine file extension and default name
-        ext = '.vtk' if file_format == 'vtk' else '.cube'
-        default_name = f'orbitals_all{ext}' if scope == 'all' else f'orbital_{self.current_mo_ind}{ext}'
-
-        # Show file save dialog
-        file_path = filedialog.asksaveasfilename(
-            parent=export_window,
-            title='Save Orbital Export',
-            defaultextension=ext,
-            initialfile=default_name,
-            filetypes=[('VTK Files', '*.vtk'), ('Gaussian Cube Files', '*.cube'), ('All Files', '*.*')],
-        )
-
-        if not file_path:
-            return  # User cancelled
-
-        # Perform the export
-        try:
-            mo_index = self.current_mo_ind if scope == 'current' else None
-            self.plotter.tabulator.export(file_path, mo_index=mo_index)
-            messagebox.showinfo('Export Successful', f'Orbital(s) exported successfully to:\n{file_path}')
-            export_window.destroy()
-        except (RuntimeError, ValueError) as e:
-            messagebox.showerror('Export Failed', f'Failed to export orbital(s):\n\n{e!s}')
-
-    def export_orbitals_dialog(self) -> None:
-        """Open a dialog to configure and export molecular orbitals."""
-        export_window = tk.Toplevel(self)
-        export_window.title('Export Orbitals')
-        export_window.geometry('400x300')
-
-        main_frame = ttk.Frame(export_window, padding=20)
-        main_frame.pack(fill=tk.BOTH, expand=True)
-
-        # File format selection
-        ttk.Label(main_frame, text='Export Format:', font=('TkDefaultFont', 10, 'bold')).grid(
-            row=0,
-            column=0,
-            columnspan=2,
-            sticky=tk.W,
-            pady=(0, 10),
-        )
-
-        format_var = tk.StringVar(value='vtk')
-        ttk.Radiobutton(main_frame, text='VTK (.vtk) - All orbitals or single', variable=format_var, value='vtk').grid(
-            row=1,
-            column=0,
-            columnspan=2,
-            sticky=tk.W,
-            padx=20,
-        )
-        ttk.Radiobutton(
-            main_frame,
-            text='Gaussian Cube (.cube) - Single orbital only',
-            variable=format_var,
-            value='cube',
-        ).grid(row=2, column=0, columnspan=2, sticky=tk.W, padx=20, pady=(5, 15))
-
-        # Orbital selection
-        ttk.Label(main_frame, text='Orbital Selection:', font=('TkDefaultFont', 10, 'bold')).grid(
-            row=3,
-            column=0,
-            columnspan=2,
-            sticky=tk.W,
-            pady=(0, 10),
-        )
-
-        scope_var = tk.StringVar(value='current')
-        # Use 1-based indexing for display (add 1 to current_mo_ind)
-        orbital_display = self.current_mo_ind + 1 if self.current_mo_ind >= 0 else 'None'
-        current_orb_radio = ttk.Radiobutton(
-            main_frame,
-            text=f'Current orbital (#{orbital_display})',
-            variable=scope_var,
-            value='current',
-        )
-        current_orb_radio.grid(row=4, column=0, columnspan=2, sticky=tk.W, padx=20)
-        if self.current_mo_ind < 0:
-            current_orb_radio.config(state=tk.DISABLED)
-
-        all_orb_radio = ttk.Radiobutton(main_frame, text='All orbitals', variable=scope_var, value='all')
-        all_orb_radio.grid(row=5, column=0, columnspan=2, sticky=tk.W, padx=20, pady=(5, 0))
-
-        # Store references for updating the label dynamically
-        self._export_window = export_window
-        self._export_current_orb_radio = current_orb_radio
-        self._export_all_orb_radio = all_orb_radio
-
-        def update_scope_options(*_args: object) -> None:
-            """Adjust which export scopes are available based on the format."""
-            if self._export_all_orb_radio is None:
-                return
-
-            if format_var.get() == 'cube':
-                self._export_all_orb_radio.config(state=tk.DISABLED)
-                if scope_var.get() == 'all':
-                    scope_var.set('current')
-            else:
-                self._export_all_orb_radio.config(state=tk.NORMAL)
-
-        format_var.trace_add('write', update_scope_options)
-        update_scope_options()
-
-        # Clean up references when window is closed
-        def on_close() -> None:
-            self._export_window = None
-            self._export_current_orb_radio = None
-            self._export_all_orb_radio = None
-            export_window.destroy()
-
-        # Buttons
-        button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=6, column=0, columnspan=2, pady=(20, 0))
-
-        ttk.Button(
-            button_frame,
-            text='Export',
-            command=lambda: self._do_export(export_window, format_var, scope_var),
-        ).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text='Cancel', command=on_close).pack(side=tk.LEFT, padx=5)
-        export_window.protocol('WM_DELETE_WINDOW', on_close)
-
-    def export_image_dialog(self) -> None:
-        """Open a dialog to export the current visualization as an image."""
-        export_window = tk.Toplevel(self)
-        export_window.title('Export Image')
-        export_window.geometry('400x250')
-
-        main_frame = ttk.Frame(export_window, padding=20)
-        main_frame.pack(fill=tk.BOTH, expand=True)
-
-        # File format selection
-        ttk.Label(main_frame, text='Image Format:', font=('TkDefaultFont', 10, 'bold')).grid(
-            row=0,
-            column=0,
-            columnspan=2,
-            sticky=tk.W,
-            pady=(0, 10),
-        )
-
-        format_var = tk.StringVar(value='png')
-        ttk.Radiobutton(main_frame, text='PNG (.png) - Raster format', variable=format_var, value='png').grid(
-            row=1,
-            column=0,
-            columnspan=2,
-            sticky=tk.W,
-            padx=20,
-        )
-        ttk.Radiobutton(main_frame, text='JPEG (.jpg) - Raster format', variable=format_var, value='jpeg').grid(
-            row=2,
-            column=0,
-            columnspan=2,
-            sticky=tk.W,
-            padx=20,
-            pady=(5, 0),
-        )
-        ttk.Radiobutton(main_frame, text='SVG (.svg) - Vector format', variable=format_var, value='svg').grid(
-            row=3,
-            column=0,
-            columnspan=2,
-            sticky=tk.W,
-            padx=20,
-            pady=(5, 0),
-        )
-        ttk.Radiobutton(main_frame, text='PDF (.pdf) - Vector format', variable=format_var, value='pdf').grid(
-            row=4,
-            column=0,
-            columnspan=2,
-            sticky=tk.W,
-            padx=20,
-            pady=(5, 15),
-        )
-
-        # Transparent background option (only for PNG)
-        transparent_var = tk.BooleanVar(value=False)
-        transparent_check = ttk.Checkbutton(
-            main_frame,
-            text='Transparent background (PNG only)',
-            variable=transparent_var,
-        )
-        transparent_check.grid(row=5, column=0, columnspan=2, sticky=tk.W, padx=20, pady=(0, 15))
-
-        def update_transparent_option(*_args: object) -> None:
-            """Enable/disable transparent option based on format."""
-            if format_var.get() == 'png':
-                transparent_check.config(state=tk.NORMAL)
-            else:
-                transparent_check.config(state=tk.DISABLED)
-
-        format_var.trace_add('write', update_transparent_option)
-        update_transparent_option()
-
-        # Buttons
-        button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=6, column=0, columnspan=2, pady=(20, 0))
-
-        ttk.Button(
-            button_frame,
-            text='Export',
-            command=lambda: self._do_image_export(export_window, format_var, transparent_var),
-        ).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text='Cancel', command=export_window.destroy).pack(side=tk.LEFT, padx=5)
-        export_window.protocol('WM_DELETE_WINDOW', export_window.destroy)
-
-    def _do_image_export(
-        self,
-        export_window: tk.Toplevel,
-        format_var: tk.StringVar,
-        transparent_var: tk.BooleanVar,
-    ) -> None:
-        """Execute the image export operation.
-
-        Parameters
-        ----------
-        export_window : tk.Toplevel
-            The export dialog window to close on success.
-        format_var : tk.StringVar
-            Variable holding the selected export format ('png', 'jpeg', 'svg', or 'pdf').
-            Note: JPEG files are saved with .jpg extension (the standard).
-        transparent_var : tk.BooleanVar
-            Variable indicating whether to use a transparent background (PNG only).
-        """
-        file_format = format_var.get()
-        transparent = transparent_var.get()
-
-        # Determine file extension and default name
-        # Note: JPEG format uses .jpg as the standard extension
-        ext_map = {'png': '.png', 'jpeg': '.jpg', 'svg': '.svg', 'pdf': '.pdf'}
-        ext = ext_map[file_format]
-        default_name = f'moldenviz_export{ext}'
-
-        # Define file types for dialog
-        file_types = {
-            'png': ('PNG Files', '*.png'),
-            'jpeg': ('JPEG Files', '*.jpg *.jpeg'),
-            'svg': ('SVG Files', '*.svg'),
-            'pdf': ('PDF Files', '*.pdf'),
-        }
-
-        # Show file save dialog
-        file_path = filedialog.asksaveasfilename(
-            parent=export_window,
-            title='Save Image Export',
-            defaultextension=ext,
-            initialfile=default_name,
-            filetypes=[file_types[file_format], ('All Files', '*.*')],
-        )
-
-        if not file_path:
-            return  # User cancelled
-
-        # Perform the export
-        try:
-            if file_format in {'svg', 'pdf'}:
-                # Use save_graphic for vector formats
-                self.plotter.pv_plotter.save_graphic(file_path)
-            else:
-                # Use screenshot for raster formats
-                self.plotter.pv_plotter.screenshot(
-                    file_path,
-                    transparent_background=transparent if file_format == 'png' else False,
-                )
-
-            messagebox.showinfo('Export Successful', f'Image exported successfully to:\n{file_path}')
-            export_window.destroy()
-        except (RuntimeError, OSError, ValueError) as e:
-            messagebox.showerror('Export Failed', f'Failed to export image:\n\n{e!s}')
 
     def update_nav_button_states(self) -> None:
         """Synchronize navigation button state with the current orbital index."""
