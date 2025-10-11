@@ -7,6 +7,12 @@ import toml
 
 from tests._src_imports import config_module
 
+BACKGROUND_COLOR = 'black'
+MO_CONTOUR = 0.2
+MO_OPACITY = 0.5
+GRID_MIN_RADIUS = 10
+BOND_MAX_LENGTH = 5.0
+
 
 def test_save_current_config_creates_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that save_current_config creates the config file."""
@@ -38,11 +44,11 @@ def test_save_current_config_preserves_values(tmp_path: Path, monkeypatch: pytes
     config = config_module.Config()
 
     # Modify some values
-    config.config.background_color = 'black'
-    config.config.mo.contour = 0.2
-    config.config.mo.opacity = 0.5
-    config.config.grid.min_radius = 10
-    config.config.molecule.bond.max_length = 5.0
+    config.config.background_color = BACKGROUND_COLOR
+    config.config.mo.contour = MO_CONTOUR
+    config.config.mo.opacity = MO_OPACITY
+    config.config.grid.min_radius = GRID_MIN_RADIUS
+    config.config.molecule.bond.max_length = BOND_MAX_LENGTH
 
     # Save the config
     config.save_current_config()
@@ -51,11 +57,11 @@ def test_save_current_config_preserves_values(tmp_path: Path, monkeypatch: pytes
     with test_config_path.open('r') as f:
         saved_config = toml.load(f)
 
-    assert saved_config['background_color'] == 'black'
-    assert saved_config['MO']['contour'] == 0.2
-    assert saved_config['MO']['opacity'] == 0.5
-    assert saved_config['grid']['min_radius'] == 10
-    assert saved_config['molecule']['bond']['max_length'] == 5.0
+    assert saved_config['background_color'] == BACKGROUND_COLOR
+    assert saved_config['MO']['contour'] == MO_CONTOUR
+    assert saved_config['MO']['opacity'] == MO_OPACITY
+    assert saved_config['grid']['min_radius'] == GRID_MIN_RADIUS
+    assert saved_config['molecule']['bond']['max_length'] == BOND_MAX_LENGTH
 
 
 def test_save_current_config_with_custom_colors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
