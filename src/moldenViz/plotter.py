@@ -1214,12 +1214,21 @@ class Plotter:
 
         self.opacity_scale.set(config.mo.opacity)
 
+        self.apply_mo_contour()  # Reapply contour with new value
+
     def reset_molecule_settings(self) -> None:
         """Restore molecule settings widgets back to configuration defaults."""
+        config = Config()  # Reload config to discard unsaved changes
+
         self.molecule_opacity_scale.set(config.molecule.opacity)
 
         self.show_atoms_var.set(config.molecule.atom.show)
         self.show_bonds_var.set(config.molecule.bond.show)
+
+        if not self.are_atoms_visible():
+            self.toggle_atoms()
+        if not self.are_bonds_visible():
+            self.toggle_bonds()
 
         self.bond_max_length_entry.delete(0, tk.END)
         self.bond_max_length_entry.insert(0, str(config.molecule.bond.max_length))
@@ -1227,36 +1236,38 @@ class Plotter:
         self.bond_radius_entry.delete(0, tk.END)
         self.bond_radius_entry.insert(0, str(config.molecule.bond.radius))
 
+        self.apply_molecule_settings()  # Reapply molecule settings with new values
+
     def reset_color_settings(self) -> None:
         """Restore color settings widgets back to configuration defaults."""
-        new_config = Config()  # Reload config to discard unsaved changes
+        config = Config()  # Reload config to discard unsaved changes
 
         self.background_color_entry.delete(0, tk.END)
-        self.background_color_entry.insert(0, str(new_config.background_color))
+        self.background_color_entry.insert(0, str(config.background_color))
 
         # Reset MO color scheme dropdown
         predefined_schemes = ['bwr', 'RdBu', 'seismic', 'coolwarm', 'PiYG']
 
-        if new_config.mo.color_scheme not in predefined_schemes and new_config.mo.color_scheme != 'custom':
-            color_schemes = [new_config.mo.color_scheme, *predefined_schemes, 'custom']
+        if config.mo.color_scheme not in predefined_schemes and config.mo.color_scheme != 'custom':
+            color_schemes = [config.mo.color_scheme, *predefined_schemes, 'custom']
             self.mo_color_scheme_dropdown['values'] = color_schemes
-            self.mo_color_scheme_var.set(new_config.mo.color_scheme)
+            self.mo_color_scheme_var.set(config.mo.color_scheme)
         else:
             color_schemes = [*predefined_schemes, 'custom']
             self.mo_color_scheme_dropdown['values'] = color_schemes
-            if new_config.mo.color_scheme in predefined_schemes:
-                self.mo_color_scheme_var.set(new_config.mo.color_scheme)
+            if config.mo.color_scheme in predefined_schemes:
+                self.mo_color_scheme_var.set(config.mo.color_scheme)
             else:
                 self.mo_color_scheme_var.set('custom')
 
         # Reset custom color entries
         self.mo_negative_color_entry.delete(0, tk.END)
         self.mo_positive_color_entry.delete(0, tk.END)
-        if new_config.mo.custom_colors:
-            if len(new_config.mo.custom_colors) > 0:
-                self.mo_negative_color_entry.insert(0, new_config.mo.custom_colors[0])
-            if len(new_config.mo.custom_colors) > 1:
-                self.mo_positive_color_entry.insert(0, new_config.mo.custom_colors[1])
+        if config.mo.custom_colors:
+            if len(config.mo.custom_colors) > 0:
+                self.mo_negative_color_entry.insert(0, config.mo.custom_colors[0])
+            if len(config.mo.custom_colors) > 1:
+                self.mo_positive_color_entry.insert(0, config.mo.custom_colors[1])
 
         if self.mo_color_scheme_var.get() == 'custom':
             for widget in self.mo_custom_color_widgets:
@@ -1266,11 +1277,11 @@ class Plotter:
                 widget.grid_remove()
 
         # Reset bond color type
-        self.bond_color_type_var.set(new_config.molecule.bond.color_type)
+        self.bond_color_type_var.set(config.molecule.bond.color_type)
 
         # Reset bond color entry
         self.bond_color_entry.delete(0, tk.END)
-        self.bond_color_entry.insert(0, str(new_config.molecule.bond.color))
+        self.bond_color_entry.insert(0, str(config.molecule.bond.color))
 
         # Show/hide bond color entry based on type
         if self.bond_color_type_var.get() == 'uniform':
@@ -1279,6 +1290,9 @@ class Plotter:
         else:
             self.bond_color_label.grid_remove()
             self.bond_color_entry.grid_remove()
+
+        self.apply_background_color()  # Reapply background color with new value
+        self.apply_color_settings()  # Reapply MO and bond color settings with new values
 
     def apply_grid_settings(self) -> None:
         """Validate UI inputs and apply the chosen grid parameters."""
@@ -1366,6 +1380,7 @@ class Plotter:
 
     def apply_color_settings(self) -> None:
         """Apply both MO and bond color settings."""
+        self.apply_mo_color_settings()
         self.apply_custom_mo_color_settings()
         self.apply_bond_color_settings()
 
@@ -1380,6 +1395,7 @@ class Plotter:
         if mo_color_scheme != config.mo.color_scheme:
             self.cmap = mo_color_scheme
             config.mo.color_scheme = mo_color_scheme
+            config.mo.custom_colors = []
 
             idx = self._get_current_mo_index()
             if idx >= 0:
@@ -1398,6 +1414,7 @@ class Plotter:
 
         if custom_colors != config.mo.custom_colors:
             config.mo.custom_colors = custom_colors
+            config.mo.color_scheme = 'custom'
             self.cmap = self.custom_cmap_from_colors(custom_colors)
 
             idx = self._get_current_mo_index()
