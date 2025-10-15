@@ -178,19 +178,19 @@ When creating actual screenshots to replace these placeholders:
 6. `placeholder-image-export-dialog.png` - Important export workflow
 
 ### Medium Priority (Feature Demonstrations)
-7. `placeholder-plotter-comparison.png` - Shows flexibility
-8. `placeholder-grid-types.png` - Shows technical capability
-9. `placeholder-orbital-series.png` - Shows typical use case
-10. `placeholder-colormap-comparison.png` - Visual customization
-11. `placeholder-background-comparison.png` - Visual customization
+1. `placeholder-plotter-comparison.png` - Shows flexibility
+2. `placeholder-grid-types.png` - Shows technical capability
+3. `placeholder-orbital-series.png` - Shows typical use case
+4. `placeholder-colormap-comparison.png` - Visual customization
+5. `placeholder-background-comparison.png` - Visual customization
 
 ### Lower Priority (Additional Context)
-12. `placeholder-molecule-only.png` - Secondary mode
-13. `placeholder-example-co.png` - One of many examples
-14. `placeholder-examples-grid.png` - Overview
-15. `placeholder-exported-comparison.png` - Format comparison
-16. `placeholder-export-formats.png` - Technical details
-17. `placeholder-batch-export.png` - Workflow diagram
-18. `placeholder-bond-styles.png` - Configuration example
-19. `placeholder-grid-settings-dialog.png` - Configuration dialog
-20. `placeholder-grid-resolution.png` - Technical comparison
+1. `placeholder-molecule-only.png` - Secondary mode
+2. `placeholder-example-co.png` - One of many examples
+3. `placeholder-examples-grid.png` - Overview
+4. `placeholder-exported-comparison.png` - Format comparison
+5. `placeholder-export-formats.png` - Technical details
+6. `placeholder-batch-export.png` - Workflow diagram
+7. `placeholder-bond-styles.png` - Configuration example
+8. `placeholder-grid-settings-dialog.png` - Configuration dialog
+9. `placeholder-grid-resolution.png` - Technical comparison
