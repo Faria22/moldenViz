@@ -39,8 +39,9 @@ Latest docs: https://moldenviz.readthedocs.io/en/latest/
 
 Major milestones and planned features are tracked in the [Roadmap](https://moldenviz.readthedocs.io/en/latest/roadmap.html). Highlights:
 
+- ✅ v1.8.1 – Current stable release with bug fixes and improvements.
 - ✅ v1.1 – VTK/cube export, expanded CLI reference, richer docs.
-- ▶️ v2.0 – cartesian basis support
+- ▶️ v2.0 – Cartesian basis support
 
 ## Contributing
 

@@ -27,3 +27,17 @@
 - Commits stay small and descriptive in present tense (`Add grid validation`) as shown in `git log`.
 - PRs should link issues, outline behaviour changes, enumerate tests run, and note doc updates if user-facing behaviour shifts.
 - Confirm `pytest`, `ruff check`, `basedpyright`, and `make -C docs html` succeed locally before requesting review.
+
+## Release and Version Management
+- Version is defined in `src/moldenViz/__about__.py` and follows semantic versioning.
+- When creating a new release, **always** update the roadmap in both locations:
+  - `docs/source/roadmap.rst` – Add the new version to the "Shipped" section with a brief description of key features.
+  - `README.md` – Update the roadmap section to show the latest version as shipped (✅) and upcoming work as planned (▶️).
+- Keep the shipped versions in reverse chronological order (newest first).
+- Move planned features from "Planned" to "Shipped" when they are released.
+- Release workflow:
+  1. Update version in `src/moldenViz/__about__.py`
+  2. Update both roadmap files (`docs/source/roadmap.rst` and `README.md`)
+  3. Run `make -C docs html` to verify documentation builds correctly
+  4. Tag the release with `git tag vX.Y.Z` and push the tag
+  5. Build and publish to PyPI if applicable

@@ -6,6 +6,7 @@ This roadmap tracks major themes planned for upcoming releases. Items move from 
 Shipped
 -------
 
+- **v1.8.1** – Current stable release with bug fixes and improvements.
 - **v1.1** – Volumetric export to VTK/Gaussian cube, expanded documentation, CLI option reference.
 - **v1.0** – Configuration system overhaul, revised docs, PyVista plotter improvements.
 - **v0.3** – CLI for interactive viewing of Molden files and bundled examples.
