@@ -49,10 +49,19 @@ Render a provided example molecule directly from the command line:
 
    moldenViz -e benzene
 
+This will open an interactive 3D visualization window showing the benzene molecule with its molecular orbitals:
+
 .. image:: _static/placeholder-cli.png
    :alt: Screenshot of the moldenViz CLI window showing benzene with orbital controls
    :align: center
    :class: screenshot-placeholder
+
+The viewer provides controls to:
+
+* Navigate through different molecular orbitals
+* Adjust contour levels and opacity
+* Modify grid resolution
+* Export data and images
 
 Use your own Molden file instead:
 
@@ -72,10 +81,14 @@ Create plots programmatically by importing the high-level API:
 
    Plotter(benzene)
 
+This opens an interactive plotter window with full orbital visualization and control panel:
+
 .. image:: _static/placeholder-python.png
    :alt: Screenshot of the moldenViz Python plotter rendering an isosurface next to molecule controls
    :align: center
    :class: screenshot-placeholder
+
+The Python API provides the same interactive capabilities as the CLI, with additional programmatic control over grid settings, tabulation, and export workflows.
 
 Next Steps
 ----------

@@ -21,6 +21,7 @@ Key Features
 * **Molden File Parsing**: Read and parse molden files to extract molecular structures and orbital data
 * **3D Visualization**: Interactive plotting of molecules and molecular orbitals using PyVista
 * **Grid Tabulation**: Create custom grids and tabulate Gaussian-type orbitals (GTOs)
+* **Export Capabilities**: Export orbital data to VTK/Gaussian cube formats and visualizations to PNG/JPEG/SVG/PDF
 * **CLI and Python API**: Use from command line or integrate into Python scripts
 * **Example Molecules**: Built-in example molecules for testing and demonstration
 

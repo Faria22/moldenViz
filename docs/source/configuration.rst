@@ -49,6 +49,11 @@ Examples:
    # Or use a custom gray with hex code
    background_color = '#2A2A2A'
 
+.. image:: _static/placeholder-background-comparison.png
+   :alt: Side-by-side comparison of white vs black background rendering
+   :align: center
+   :class: screenshot-placeholder
+
 Bond Settings
 -------------
 
@@ -62,6 +67,11 @@ Tune how bonds are rendered:
    color_type = 'uniform'  # 'uniform' or 'split'
    color = 'grey'       # Hex string or colour name
    radius = 0.15        # Cylinder radius
+
+.. image:: _static/placeholder-bond-styles.png
+   :alt: Examples showing uniform vs split bond coloring and different radii
+   :align: center
+   :class: screenshot-placeholder
 
 Switch to per-atom colouring and thicker cylinders:
 
@@ -100,6 +110,11 @@ The ``default_type`` option determines which grid type is used when the plotter 
 
 Users can switch between grid types within the plotter interface, but this setting controls the initial grid type.
 
+.. image:: _static/placeholder-grid-settings-dialog.png
+   :alt: Grid settings dialog showing spherical and cartesian grid configuration options
+   :align: center
+   :class: screenshot-placeholder
+
 Set cartesian as the default grid type:
 
 .. code-block:: toml
@@ -115,6 +130,11 @@ Increase the resolution in the cartesian grid only:
    num_x_points = 150
    num_y_points = 150
    num_z_points = 150
+
+.. image:: _static/placeholder-grid-resolution.png
+   :alt: Comparison of low vs high resolution grid effects on orbital visualization
+   :align: center
+   :class: screenshot-placeholder
 
 Molecular Orbital Settings
 --------------------------
@@ -134,6 +154,11 @@ The ``color_scheme`` option accepts any valid matplotlib colormap name. Divergin
 - ``RdBu`` (red-blue)
 - ``seismic``
 - ``coolwarm``
+
+.. image:: _static/placeholder-colormap-comparison.png
+   :alt: Comparison of different colormaps applied to the same molecular orbital
+   :align: center
+   :class: screenshot-placeholder
 
 You can also define custom two-color gradients:
 

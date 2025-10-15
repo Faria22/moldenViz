@@ -6,6 +6,7 @@ This roadmap tracks major themes planned for upcoming releases. Items move from 
 Shipped
 -------
 
+- **v1.8** – Image export (PNG, JPEG, SVG, PDF), enhanced GUI export dialogs, improved export workflows.
 - **v1.1** – Volumetric export to VTK/Gaussian cube, expanded documentation, CLI option reference.
 - **v1.0** – Configuration system overhaul, revised docs, PyVista plotter improvements.
 - **v0.3** – CLI for interactive viewing of Molden files and bundled examples.
@@ -15,7 +16,7 @@ Shipped
 Planned
 -------
 
-- **Support for cartesian basis functions** – expand the parser and tabulator to accept cartesian (5D/9G) shells.
+- **v2.0: Cartesian basis functions** – expand the parser and tabulator to accept cartesian (5D/9G) shells.
 
 How to Influence the Roadmap
 ----------------------------
