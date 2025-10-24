@@ -22,6 +22,18 @@ Primary Options
    * - ``-m``, ``--only-molecule``
      - Skip orbital surfaces and render only the nuclear framework.
      - ``False``
+   * - ``-V``, ``--version``
+     - Print the installed ``moldenViz`` version and exit immediately.
+     - ---
+   * - ``-v``, ``--verbose``
+     - Increase log verbosity to include informative progress messages.
+     - ``False``
+   * - ``-d``, ``--debug``
+     - Emit detailed debugging messages useful when reporting issues.
+     - ``False``
+   * - ``-q``, ``--quiet``
+     - Reduce log output so that only errors are shown.
+     - ``False``
    * - ``-h``, ``--help``
      - Display inline help and exit.
      - ---
@@ -55,6 +67,9 @@ Tips
 
 - Combine ``-e`` with ``-m`` to explore only the geometry of an example.
 - Use configuration overrides (:doc:`see details <configuration>`) to change colors, bond lengths, or orbital contours before launching the CLI.
+- Turn on ``-v`` or ``-d`` to watch parsing and grid generation progress; add ``-q`` to silence routine status messages in batch scripts.
+- Run ``moldenViz --version`` to verify the installed release when sharing logs or bug reports.
+
 Common recipes
 --------------
 
@@ -69,5 +84,15 @@ Use the following patterns as building blocks:
 
    # Plot only the molecule of one of the examples
    moldenViz -e co -m
+
+.. code-block:: bash
+
+   # Inspect the installed version
+   moldenViz --version
+
+.. code-block:: bash
+
+   # Launch with verbose logging to follow parsing progress
+   moldenViz -v my.molden
 
 For additional Python-based export options, see :ref:`exporting-from-python` in the :doc:`Python API guide <python-api>`.

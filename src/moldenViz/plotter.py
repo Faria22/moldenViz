@@ -18,6 +18,15 @@ from ._plotting_objects import Molecule
 from .parser import _MolecularOrbital
 from .tabulator import GridType, Tabulator, _cartesian_to_spherical, _spherical_to_cartesian
 
+
+def _describe_source(source: str | list[str]) -> str:
+    """Return a human readable description of the data source."""
+
+    if isinstance(source, str):
+        return source
+    return f'{len(source)} molden lines'
+
+
 logger = logging.getLogger(__name__)
 
 config = Config()
@@ -95,6 +104,8 @@ class Plotter:
         tabulator: Tabulator | None = None,
         tk_root: tk.Tk | None = None,
     ) -> None:
+        logger.info('Initialising Plotter (only_molecule=%s)', only_molecule)
+
         self.on_screen = True
         self.only_molecule = only_molecule
         self.selection_screen: _OrbitalSelectionScreen | None = None
@@ -104,16 +115,19 @@ class Plotter:
         if self.tk_root is None:
             self.tk_root = tk.Tk()
             self.tk_root.withdraw()  # Hides window
+            logger.debug('Created internal Tk root window for Plotter UI.')
 
         self.pv_plotter = BackgroundPlotter(editor=False)
         self.pv_plotter.set_background(config.background_color)
         self.pv_plotter.show_axes()
+        logger.debug('Configured PyVista plotter background colour to %s', config.background_color)
 
         self._add_orbital_menus_to_pv_plotter()
         self._connect_pv_plotter_close_signal()
         self._override_clear_all_button()
 
         if tabulator:
+            logger.info('Using provided Tabulator instance with grid type %s', tabulator._grid_type.value)  # noqa: SLF001
             if not hasattr(tabulator, 'grid'):
                 raise ValueError('Tabulator does not have grid attribute.')
 
@@ -131,6 +145,7 @@ class Plotter:
 
             self.tabulator = tabulator
         else:
+            logger.info('Creating Tabulator for source %s', _describe_source(source))
             self.tabulator = Tabulator(source, only_molecule=only_molecule)
 
         self.molecule: Molecule
@@ -140,6 +155,12 @@ class Plotter:
         # It no tabulator was passed, create default grid
         if not only_molecule and not tabulator:
             if config.grid.default_type == 'spherical':
+                logger.info(
+                    'Generating default spherical grid with %d×%d×%d samples.',
+                    config.grid.spherical.num_r_points,
+                    config.grid.spherical.num_theta_points,
+                    config.grid.spherical.num_phi_points,
+                )
                 self.tabulator.spherical_grid(
                     np.linspace(
                         0,
@@ -151,6 +172,13 @@ class Plotter:
                 )
             else:  # cartesian
                 r = max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius)
+                logger.info(
+                    'Generating default cartesian grid spanning ±%.2f with %d×%d×%d samples.',
+                    r,
+                    config.grid.cartesian.num_x_points,
+                    config.grid.cartesian.num_y_points,
+                    config.grid.cartesian.num_z_points,
+                )
                 self.tabulator.cartesian_grid(
                     np.linspace(-r, r, config.grid.cartesian.num_x_points),
                     np.linspace(-r, r, config.grid.cartesian.num_y_points),
@@ -160,7 +188,9 @@ class Plotter:
         # If we want to have the molecular orbitals, we need to initiate Tk before Qt
         # That is why we have this weird if statement separated this way
         if only_molecule:
+            logger.info('Running in molecule-only mode; skipping orbital mesh creation.')
             if self._no_prev_tk_root:
+                logger.debug('Entering Tk main loop for molecule-only display.')
                 self.tk_root.mainloop()
             return
 
@@ -180,8 +210,10 @@ class Plotter:
 
         if not self.only_molecule:
             self.selection_screen = _OrbitalSelectionScreen(self)
+            logger.debug('Orbital selection screen initialised.')
 
         if self._no_prev_tk_root:
+            logger.debug('Entering Tk main loop for full Plotter UI.')
             self.tk_root.mainloop()
 
     @staticmethod
@@ -203,6 +235,7 @@ class Plotter:
     def load_molecule(self, config: Config) -> None:
         """Reload the molecule from the parser data."""
         self.molecule = Molecule(self.tabulator._parser.atoms, config)  # noqa: SLF001
+        logger.info('Loaded molecule with %d atoms.', len(self.molecule.atoms))
 
         for actor in self.molecule_actors if hasattr(self, 'molecule_actors') else []:
             self.pv_plotter.remove_actor(actor)
@@ -211,6 +244,7 @@ class Plotter:
             self.pv_plotter,
             self.molecule_opacity,
         )
+        logger.debug('Added %d molecule actors to the scene.', len(self.molecule_actors))
 
     def _override_clear_all_button(self) -> None:
         """Override the default "Clear All" action in the PyVista plotter's View menu."""
@@ -292,6 +326,7 @@ class Plotter:
 
         file_format = format_var.get()
         scope = scope_var.get()
+        logger.info('Export requested: format=%s, scope=%s.', file_format, scope)
 
         # Validate selection
         if scope == 'current' and self.selection_screen.current_mo_ind < 0:
@@ -329,8 +364,10 @@ class Plotter:
             mo_index = self.selection_screen.current_mo_ind if scope == 'current' else None
             self.tabulator.export(file_path, mo_index=mo_index)
             messagebox.showinfo('Export Successful', f'Orbital(s) exported successfully to:\n{file_path}')
+            logger.info('Export completed successfully to %s.', file_path)
             export_window.destroy()
         except (RuntimeError, ValueError) as e:
+            logger.exception('Export failed: %s', e)
             messagebox.showerror('Export Failed', f'Failed to export orbital(s):\n\n{e!s}')
 
     def export_orbitals_dialog(self) -> None:

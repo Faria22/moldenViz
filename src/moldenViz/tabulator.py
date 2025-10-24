@@ -289,6 +289,14 @@ class Tabulator:
         self._grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
         self._grid_type = grid_type
         self._grid_dimensions = (len(x), len(y), len(z))
+        logger.info(
+            'Created %s grid with %d points (%d×%d×%d).',
+            grid_type.value,
+            self._grid.shape[0],
+            len(x),
+            len(y),
+            len(z),
+        )
 
         if tabulate_gtos:
             self._gtos = self.tabulate_gtos()
@@ -314,6 +322,7 @@ class Tabulator:
             Whether to tabulate Gaussian-type orbitals (GTOs) after creating the grid.
             Defaults to True.
         """
+        logger.debug('Setting cartesian grid axes with lengths x=%d, y=%d, z=%d.', len(x), len(y), len(z))
         self._set_grid(x, y, z, GridType.CARTESIAN, tabulate_gtos)
 
     def spherical_grid(
@@ -342,6 +351,7 @@ class Tabulator:
         Grid points are converted to Cartesian coordinates.
 
         """
+        logger.debug('Setting spherical grid axes with lengths r=%d, theta=%d, phi=%d.', len(r), len(theta), len(phi))
         self._set_grid(r, theta, phi, GridType.SPHERICAL, tabulate_gtos)
 
     def tabulate_gtos(self) -> NDArray[np.floating]:
@@ -364,8 +374,17 @@ class Tabulator:
         if not hasattr(self, 'grid'):
             raise RuntimeError('Grid is not defined. Please create a grid before tabulating GTOs.')
 
+        total_points = self._grid.shape[0]
+        total_coeffs = self._parser.mo_coeffs.shape[1]
+        logger.info(
+            'Tabulating GTOs for %d atoms on %d grid points with %d coefficients.',
+            len(self._parser.atoms),
+            total_points,
+            total_coeffs,
+        )
+
         # Having a predefined array makes it faster to fill the data
-        gto_data = np.empty((self._grid.shape[0], self._parser.mo_coeffs.shape[1]))
+        gto_data = np.empty((total_points, total_coeffs))
         self._atom_gto_slices = []
         ind = 0
         for atom in self._parser.atoms:
@@ -426,6 +445,9 @@ class Tabulator:
 
         if mo_inds is None:
             mo_inds = list(range(len(self._parser.mos)))
+
+        num_requested = 1 if isinstance(mo_inds, int) else len(mo_inds)
+        logger.info('Tabulating %d molecular orbital(s).', num_requested)
 
         if isinstance(mo_inds, range):
             mo_inds = list(mo_inds)
@@ -488,6 +510,7 @@ class Tabulator:
 
         destination = Path(path)
         filetype = destination.suffix
+        logger.info('Exporting data to %s (format: %s).', destination, filetype or 'unknown')
 
         if filetype == '.vtk':
             self._export_vtk(destination, mo_index)
@@ -505,6 +528,7 @@ class Tabulator:
 
         mo_data = self.tabulate_mos(mo_index)
         dims = self._grid_dimensions[::-1]
+        logger.debug('Writing VTK file %s with grid dimensions %s.', destination, dims)
 
         struct_grid = pv.StructuredGrid()
         struct_grid.points = self._grid.copy()
@@ -525,6 +549,7 @@ class Tabulator:
             raise RuntimeError('Cube exports are only supported for Cartesian grids.')
 
         mo_values = self.tabulate_mos(mo_index)
+        logger.debug('Writing cube file %s for MO %d.', destination, mo_index)
 
         x, y, z = self.original_axes
         dx = self._axis_spacing(x, 'x')
