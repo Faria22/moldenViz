@@ -1,6 +1,9 @@
 """CLI entrance point."""
 
 import argparse
+import logging
+
+from moldenViz.__about__ import __version__
 
 from .examples.get_example_files import all_examples
 from .plotter import Plotter
@@ -26,8 +29,25 @@ def main() -> None:
         choices=all_examples.keys(),
         help='Load example %(metavar)s. Options are: %(choices)s',
     )
+    parser.add_argument('-V', '--version', action='version', version=f'%(prog)s {__version__}')
+
+    verbosity = parser.add_mutually_exclusive_group()
+    verbosity.add_argument('-v', '--verbose', action='store_true', help='Increase logging verbosity to INFO')
+    verbosity.add_argument('-d', '--debug', action='store_true', help='Enable debug logging')
+    verbosity.add_argument('-q', '--quiet', action='store_true', help='Reduce logging output to errors only')
 
     args = parser.parse_args()
+
+    if args.debug:
+        level = logging.DEBUG
+    elif args.verbose:
+        level = logging.INFO
+    elif args.quiet:
+        level = logging.ERROR
+    else:
+        level = logging.WARNING
+
+    logging.basicConfig(level=level, format='%(levelname)s %(name)s: %(message)s', force=True)
 
     Plotter(
         args.file or all_examples[args.example],
