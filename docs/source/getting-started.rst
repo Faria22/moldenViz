@@ -64,7 +64,7 @@ Get comfortable with the logging toggles early:
 
 .. code-block:: bash
 
-   moldenViz --version
+   moldenViz -d my-calculation.molden
    moldenViz -v my-calculation.molden
    moldenViz -q my-calculation.molden
 
