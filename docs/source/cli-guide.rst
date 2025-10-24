@@ -22,6 +22,18 @@ Primary Options
    * - ``-m``, ``--only-molecule``
      - Skip orbital surfaces and render only the nuclear framework.
      - ``False``
+   * - ``-V``, ``--version``
+     - Print the installed ``moldenViz`` version and exit without launching the viewer.
+     - ---
+   * - ``-v``, ``--verbose``
+     - Increase logging to show informative progress messages while loading and rendering data.
+     - ``False``
+   * - ``-d``, ``--debug``
+     - Emit detailed debug logs for troubleshooting parsing or rendering issues.
+     - ``False``
+   * - ``-q``, ``--quiet``
+     - Suppress non-error log messages for minimal console output.
+     - ``False``
    * - ``-h``, ``--help``
      - Display inline help and exit.
      - ---
@@ -54,7 +66,27 @@ Tips
 ----
 
 - Combine ``-e`` with ``-m`` to explore only the geometry of an example.
+
 - Use configuration overrides (:doc:`see details <configuration>`) to change colors, bond lengths, or orbital contours before launching the CLI.
+
+- Check your installed version quickly without rendering a window:
+
+  .. code-block:: bash
+
+     moldenViz --version
+
+- Turn on additional logging when diagnosing issues (``FILE`` can be any Molden path):
+
+  .. code-block:: bash
+
+     moldenViz -v FILE
+
+- Silence informational output if you only care about errors during batch runs:
+
+  .. code-block:: bash
+
+     moldenViz -q FILE
+
 Common recipes
 --------------
 

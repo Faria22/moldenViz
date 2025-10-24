@@ -60,6 +60,16 @@ Use your own Molden file instead:
 
    moldenViz my-calculation.molden
 
+Get comfortable with the logging toggles early:
+
+.. code-block:: bash
+
+   moldenViz --version
+   moldenViz -v my-calculation.molden
+   moldenViz -q my-calculation.molden
+
+These flags help you audit which steps the CLI performs or keep output quiet during batch runs. See :doc:`Command Line Guide <cli-guide>` for more combinations.
+
 Quick Python Preview
 --------------------
 
