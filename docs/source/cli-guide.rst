@@ -102,4 +102,14 @@ Use the following patterns as building blocks:
    # Plot only the molecule of one of the examples
    moldenViz -e co -m
 
+.. code-block:: bash
+
+   # Inspect the installed version
+   moldenViz --version
+
+.. code-block:: bash
+
+   # Launch with verbose logging to follow parsing progress
+   moldenViz -v my.molden
+
 For additional Python-based export options, see :ref:`exporting-from-python` in the :doc:`Python API guide <python-api>`.

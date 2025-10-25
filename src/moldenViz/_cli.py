@@ -3,10 +3,11 @@
 import argparse
 import logging
 
-from moldenViz.__about__ import __version__
-
+from .__about__ import __version__
 from .examples.get_example_files import all_examples
 from .plotter import Plotter
+
+logger = logging.getLogger(__name__)
 
 
 def main() -> None:
@@ -17,6 +18,7 @@ def main() -> None:
     structure without molecular orbitals.
     """
     parser = argparse.ArgumentParser(prog='moldenViz')
+    parser.add_argument('-V', '--version', action='version', version=f'%(prog)s {__version__}')
     source = parser.add_mutually_exclusive_group(required=True)
 
     source.add_argument('file', nargs='?', default=None, help='Optional molden file path', type=str)
@@ -29,9 +31,9 @@ def main() -> None:
         choices=all_examples.keys(),
         help='Load example %(metavar)s. Options are: %(choices)s',
     )
-    parser.add_argument('-V', '--version', action='version', version=f'%(prog)s {__version__}')
 
-    verbosity = parser.add_mutually_exclusive_group()
+    verbosity_group = parser.add_argument_group('verbosity')
+    verbosity = verbosity_group.add_mutually_exclusive_group()
     verbosity.add_argument('-v', '--verbose', action='store_true', help='Increase logging verbosity to INFO')
     verbosity.add_argument('-d', '--debug', action='store_true', help='Enable debug logging')
     verbosity.add_argument('-q', '--quiet', action='store_true', help='Reduce logging output to errors only')
@@ -49,8 +51,14 @@ def main() -> None:
 
     logging.basicConfig(level=level, format='%(levelname)s %(name)s: %(message)s', force=True)
 
+    logger.debug('Parsed CLI arguments: %s', vars(args))
+
+    source_path = args.file or all_examples[args.example]
+    source_label = args.file or f'example {args.example}'
+    logger.info('Launching plotter for %s', source_label)
+
     Plotter(
-        args.file or all_examples[args.example],
+        source_path,
         only_molecule=args.only_molecule,
     )
 
