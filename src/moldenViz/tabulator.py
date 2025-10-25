@@ -376,12 +376,7 @@ class Tabulator:
 
         total_points = self._grid.shape[0]
         total_coeffs = self._parser.mo_coeffs.shape[1]
-        logger.info(
-            'Tabulating GTOs for %d atoms on %d grid points with %d coefficients.',
-            len(self._parser.atoms),
-            total_points,
-            total_coeffs,
-        )
+        logger.info('Tabulating GTOs on %d grid points.', total_points)
 
         # Having a predefined array makes it faster to fill the data
         gto_data = np.empty((total_points, total_coeffs))
