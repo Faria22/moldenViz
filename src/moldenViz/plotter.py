@@ -20,8 +20,18 @@ from .tabulator import GridType, Tabulator, _cartesian_to_spherical, _spherical_
 
 
 def _describe_source(source: str | list[str]) -> str:
-    """Return a human readable description of the data source."""
+    """Return a human readable description of the data source.
 
+    Parameters
+    ----------
+    source : str | list[str]
+        Path to a Molden file or the raw lines read from one.
+
+    Returns
+    -------
+    str
+        Description suitable for logging output.
+    """
     if isinstance(source, str):
         return source
     return f'{len(source)} molden lines'
@@ -156,7 +166,7 @@ class Plotter:
         if not only_molecule and not tabulator:
             if config.grid.default_type == 'spherical':
                 logger.info(
-                    'Generating default spherical grid with %d×%d×%d samples.',
+                    'Generating default spherical grid with %dx%dx%d samples.',
                     config.grid.spherical.num_r_points,
                     config.grid.spherical.num_theta_points,
                     config.grid.spherical.num_phi_points,
@@ -173,7 +183,7 @@ class Plotter:
             else:  # cartesian
                 r = max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius)
                 logger.info(
-                    'Generating default cartesian grid spanning ±%.2f with %d×%d×%d samples.',
+                    'Generating default cartesian grid spanning ±%.2f with %dx%dx%d samples.',
                     r,
                     config.grid.cartesian.num_x_points,
                     config.grid.cartesian.num_y_points,
@@ -367,7 +377,7 @@ class Plotter:
             logger.info('Export completed successfully to %s.', file_path)
             export_window.destroy()
         except (RuntimeError, ValueError) as e:
-            logger.exception('Export failed: %s', e)
+            logger.exception('Export failed during orbital export.')
             messagebox.showerror('Export Failed', f'Failed to export orbital(s):\n\n{e!s}')
 
     def export_orbitals_dialog(self) -> None:
@@ -1673,8 +1683,6 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         ----------
         plotter : Plotter
             Active plotter that supplies molecular orbital data.
-        tk_master : tk.Tk
-            Tk root or parent window that owns this dialog.
         """
         super().__init__(plotter.tk_root)
         self.title('Orbitals')

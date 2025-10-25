@@ -31,16 +31,11 @@ def main() -> None:
         choices=all_examples.keys(),
         help='Load example %(metavar)s. Options are: %(choices)s',
     )
-    parser.add_argument('-V', '--version', action='version', version=f'%(prog)s {__version__}')
 
-    verbosity = parser.add_mutually_exclusive_group()
+    verbosity_group = parser.add_argument_group('verbosity')
+    verbosity = verbosity_group.add_mutually_exclusive_group()
     verbosity.add_argument('-v', '--verbose', action='store_true', help='Increase logging verbosity to INFO')
     verbosity.add_argument('-d', '--debug', action='store_true', help='Enable debug logging')
-    verbosity.add_argument('-q', '--quiet', action='store_true', help='Reduce logging output to errors only')
-
-    verbosity = parser.add_mutually_exclusive_group()
-    verbosity.add_argument('-v', '--verbose', action='store_true', help='Enable INFO level logging output')
-    verbosity.add_argument('-d', '--debug', action='store_true', help='Enable DEBUG level logging output')
     verbosity.add_argument('-q', '--quiet', action='store_true', help='Reduce logging output to errors only')
 
     args = parser.parse_args()

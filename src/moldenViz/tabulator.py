@@ -290,7 +290,7 @@ class Tabulator:
         self._grid_type = grid_type
         self._grid_dimensions = (len(x), len(y), len(z))
         logger.info(
-            'Created %s grid with %d points (%d×%d×%d).',
+            'Created %s grid with %d points (%dx%dx%d).',
             grid_type.value,
             self._grid.shape[0],
             len(x),

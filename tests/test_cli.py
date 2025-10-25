@@ -6,18 +6,27 @@ import importlib
 import logging
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from tests import _src_imports  # noqa: F401  # Ensure src/ is on sys.path before importing moldenViz
 from moldenViz import __about__
+from tests import _src_imports  # noqa: F401  # Ensure src/ is on sys.path before importing moldenViz
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
+    from types import ModuleType
 
 
 @pytest.fixture(autouse=True)
-def reset_root_logger() -> None:
-    """Ensure each test starts with a clean logging configuration."""
+def reset_root_logger() -> Generator[None, None, None]:
+    """Ensure each test starts with a clean logging configuration.
 
+    Yields
+    ------
+    None
+        Allows the test body to run with a pristine logger before cleanup.
+    """
     root = logging.getLogger()
     for handler in root.handlers[:]:
         root.removeHandler(handler)
@@ -28,11 +37,22 @@ def reset_root_logger() -> None:
     root.setLevel(logging.WARNING)
 
 
-def _reload_cli(monkeypatch: pytest.MonkeyPatch, plotter: Any | None = None):
-    """Return a freshly reloaded CLI module with an optional Plotter patch."""
+def _reload_cli(monkeypatch: pytest.MonkeyPatch, plotter: Any | None = None) -> ModuleType:
+    """Return a freshly reloaded CLI module with an optional Plotter patch.
 
-    import moldenViz._cli as cli
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture used to patch the CLI module during the test.
+    plotter : Any | None, optional
+        Replacement callable for `Plotter` to capture arguments in tests.
 
+    Returns
+    -------
+    ModuleType
+        Reloaded CLI module ready for invocation.
+    """
+    cli = importlib.import_module('moldenViz._cli')
     cli = importlib.reload(cli)
     if plotter is not None:
         monkeypatch.setattr(cli, 'Plotter', plotter)
@@ -40,6 +60,7 @@ def _reload_cli(monkeypatch: pytest.MonkeyPatch, plotter: Any | None = None):
 
 
 def test_cli_version(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    """Verify ``--version`` prints the package version and exits successfully."""
     cli = _reload_cli(monkeypatch)
     monkeypatch.setattr(sys, 'argv', ['moldenViz', '--version'])
 
@@ -65,6 +86,7 @@ def test_cli_logging_levels(
     flags: list[str],
     expected_level: int,
 ) -> None:
+    """Ensure verbosity flags set the expected logging level."""
     calls: dict[str, Any] = {}
 
     def fake_plotter(source: Any, *, only_molecule: bool = False) -> None:
@@ -83,6 +105,7 @@ def test_cli_logging_levels(
 
 
 def test_cli_example_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Confirm the ``--example`` flag dispatches bundled Molden data."""
     calls: dict[str, Any] = {}
 
     def fake_plotter(source: Any, *, only_molecule: bool = False) -> None:
