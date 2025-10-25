@@ -31,31 +31,20 @@ jobs:
       - name: Determine package version
         id: package_version
         run: |
-          VERSION=$(python - <<'PY'
-from pathlib import Path
-namespace = {}
-about_path = Path("src/moldenViz/__about__.py")
-exec(about_path.read_text(), namespace)
-print(namespace["__version__"])
-PY
-          )
+          VERSION=$(hatch run python -c "from moldenViz.__about__ import __version__; print(__version__)")
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
-      - name: Validate tag matches version
+      - name: Verify package version matches tag
         if: startsWith(github.ref, 'refs/tags/')
-        env:
-          TAG_NAME: ${{ github.ref_name }}
-          PACKAGE_VERSION: ${{ steps.package_version.outputs.version }}
         run: |
-          sanitize() {
-            echo "$1" | tr -d '[:alpha:]'
-          }
-          TAG_VALUE=$(sanitize "$TAG_NAME")
-          VERSION_VALUE=$(sanitize "$PACKAGE_VERSION")
-          if [ "$TAG_VALUE" != "$VERSION_VALUE" ]; then
-            echo "Tag '${TAG_NAME}' does not match project version '${PACKAGE_VERSION}' after removing letters." >&2
+          TAG_VERSION=${GITHUB_REF#refs/tags/}
+          TAG_VERSION_STRIPPED=${TAG_VERSION#v}
+          PACKAGE_VERSION=$(hatch run python -c "from moldenViz.__about__ import __version__; print(__version__)")
+          if [ "$TAG_VERSION_STRIPPED" != "$PACKAGE_VERSION" ]; then
+            echo "Tag version ($TAG_VERSION) does not match package version ($PACKAGE_VERSION)"
             exit 1
           fi
+          echo "Version check passed: $PACKAGE_VERSION"
 
       - name: Ensure version not already on PyPI
         env:
