@@ -8,6 +8,7 @@
 
 ## Build, Test, and Development Commands
 - Install dependencies: `pip install -e .[dev]` (adds pytest, ruff, basedpyright, mypy).
+- After every change, run `hatch run all`; if anything fails, fix the code before continuing.
 - Run tests: `pytest` (append `--maxfail=1 -k name` while debugging). Use `pytest --cov=moldenViz` for coverage.
 - Lint & format: `ruff check src tests` and `ruff format src tests`; static types via `basedpyright src tests`.
 - Docs: `make -C docs html`; run `make -C docs clean` first when autosummary signatures change.
