@@ -28,6 +28,62 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install hatch
 
+      - name: Determine package version
+        id: package_version
+        run: |
+          VERSION=$(python - <<'PY'
+from pathlib import Path
+namespace = {}
+about_path = Path("src/moldenViz/__about__.py")
+exec(about_path.read_text(), namespace)
+print(namespace["__version__"])
+PY
+          )
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate tag matches version
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+          PACKAGE_VERSION: ${{ steps.package_version.outputs.version }}
+        run: |
+          sanitize() {
+            echo "$1" | tr -d '[:alpha:]'
+          }
+          TAG_VALUE=$(sanitize "$TAG_NAME")
+          VERSION_VALUE=$(sanitize "$PACKAGE_VERSION")
+          if [ "$TAG_VALUE" != "$VERSION_VALUE" ]; then
+            echo "Tag '${TAG_NAME}' does not match project version '${PACKAGE_VERSION}' after removing letters." >&2
+            exit 1
+          fi
+
+      - name: Ensure version not already on PyPI
+        env:
+          PACKAGE_VERSION: ${{ steps.package_version.outputs.version }}
+        run: |
+          python - <<'PY'
+import json
+import os
+import sys
+import urllib.error
+import urllib.request
+
+package = "moldenViz"
+version = os.environ["PACKAGE_VERSION"]
+
+try:
+    with urllib.request.urlopen(f"https://pypi.org/pypi/{package}/json") as response:
+        data = json.load(response)
+except urllib.error.HTTPError as exc:
+    if exc.code == 404:
+        sys.exit(0)
+    raise
+else:
+    if version in data.get("releases", {}):
+        print(f"Version {version} already exists on PyPI.", file=sys.stderr)
+        sys.exit(1)
+PY
+
       - name: Verify PyPI credentials
         env:
           PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
@@ -47,4 +103,4 @@ jobs:
         env:
           HATCH_INDEX_USER: __token__
           HATCH_INDEX_AUTH: ${{ secrets.PYPI_TOKEN }}
-        run: hatch publish --yes
+        run: hatch publish
