@@ -48,7 +48,8 @@ moldenViz = "moldenViz._cli:main"
 path = "src/moldenViz/__about__.py"
 
 [tool.hatch.envs.default]
-dependencies = [".[dev]"]
+dev-mode = true
+features = ["dev"]
 
 [tool.hatch.envs.default.scripts]
 lint = "ruff check {args:src tests}"
