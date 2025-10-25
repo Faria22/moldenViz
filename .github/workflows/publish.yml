@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -26,6 +27,15 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install hatch
+
+      - name: Verify PyPI credentials
+        env:
+          PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          if [ -z "${PYPI_API_TOKEN}" ]; then
+            echo "PYPI_API_TOKEN secret is not configured. Add it in the repository settings before tagging a release." >&2
+            exit 1
+          fi
 
       - name: Run tests
         run: hatch run all
