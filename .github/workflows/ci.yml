@@ -36,6 +36,14 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install hatch
     
-    - name: Run all tests (lint, typecheck, test)
+    - name: Run linting
       run: |
-        hatch run all
+        hatch run lint
+    
+    - name: Run type checking
+      run: |
+        hatch run typecheck
+    
+    - name: Run tests
+      run: |
+        hatch run test
