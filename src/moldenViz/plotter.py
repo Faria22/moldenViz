@@ -752,12 +752,14 @@ class Plotter:
             for child in widget.winfo_children():
                 if isinstance(child, ttk.Label) and 'Molecular Orbital Opacity:' in child.cget('text'):
                     child.config(text=f'Molecular Orbital Opacity: {opacity:.2f}')
+        logger.info('Set molecular orbital opacity to %.2f.', opacity)
 
     def apply_mo_contour(self) -> None:
         """Apply contour changes immediately."""
         try:
             new_contour = float(self.contour_entry.get().strip())
             self.contour = new_contour
+            logger.info('Set molecular orbital contour to %.2f.', new_contour)
             # Replot the current orbital with the new contour
             idx = self._get_current_mo_index()
             if idx >= 0:
@@ -867,6 +869,7 @@ class Plotter:
             for child in widget.winfo_children():
                 if isinstance(child, ttk.Label) and 'Molecule Opacity:' in child.cget('text'):
                     child.config(text=f'Molecule Opacity: {opacity:.2f}')
+        logger.info('Set molecule opacity to %.2f.', opacity)
 
     def apply_background_color(self) -> None:
         """Apply background color changes immediately."""
@@ -874,6 +877,7 @@ class Plotter:
             color = self.background_color_entry.get().strip()
             if mcolors.is_color_like(color):
                 self.pv_plotter.set_background(color)
+                logger.info('Set background color to %s.', color)
             else:
                 messagebox.showerror('Invalid Input', f'"{color}" is not a valid color.')
         except (ValueError, RuntimeError) as e:
@@ -1366,6 +1370,13 @@ class Plotter:
 
             new_grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
             if not np.array_equal(new_grid, self.tabulator.grid):
+                logger.info(
+                    'Applying spherical grid: radius=%.3f (r=%d theta=%d phi=%d points).',
+                    radius,
+                    num_r_points,
+                    num_theta_points,
+                    num_phi_points,
+                )
                 self.update_mesh(r, theta, phi, GridType.SPHERICAL)
 
         else:
@@ -1393,6 +1404,19 @@ class Plotter:
 
             new_grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
             if not np.array_equal(new_grid, self.tabulator.grid):
+                logger.info(
+                    'Applying cartesian grid: x=[%.2f, %.2f] (%d pts), y=[%.2f, %.2f] (%d pts), '
+                    'z=[%.2f, %.2f] (%d pts).',
+                    x_min,
+                    x_max,
+                    x_num,
+                    y_min,
+                    y_max,
+                    y_num,
+                    z_min,
+                    z_max,
+                    z_num,
+                )
                 self.update_mesh(x, y, z, GridType.CARTESIAN)
 
         # Replot the current orbital with the new grid
@@ -1402,13 +1426,13 @@ class Plotter:
 
     def apply_molecule_settings(self) -> None:
         """Validate UI inputs and apply the chosen molecule rendering parameters."""
-        redraw_molecule = False
+        changes: list[str] = []
 
         try:
             bond_max_length = float(self.bond_max_length_entry.get())
             if bond_max_length != config.molecule.bond.max_length:
                 config.molecule.bond.max_length = bond_max_length
-                redraw_molecule = True
+                changes.append(f'bond_max_length={bond_max_length:.2f}')
         except ValueError:
             messagebox.showerror('Invalid Input', 'Bond Max Length must be a valid number.')
             return
@@ -1417,13 +1441,16 @@ class Plotter:
             bond_radius = float(self.bond_radius_entry.get())
             if bond_radius != config.molecule.bond.radius:
                 config.molecule.bond.radius = bond_radius
-                redraw_molecule = True
+                changes.append(f'bond_radius={bond_radius:.2f}')
         except ValueError:
             messagebox.showerror('Invalid Input', 'Bond Radius must be a valid number.')
             return
 
-        if redraw_molecule:
+        if changes:
+            logger.info('Applying molecule settings: %s.', ', '.join(changes))
             self.load_molecule(config)
+        else:
+            logger.debug('Molecule settings unchanged; skipping reload.')
 
     def apply_color_settings(self) -> None:
         """Apply both MO and bond color settings."""
@@ -1443,6 +1470,7 @@ class Plotter:
             self.cmap = mo_color_scheme
             config.mo.color_scheme = mo_color_scheme
             config.mo.custom_colors = []
+            logger.info('Applied MO color scheme: %s.', mo_color_scheme)
 
             idx = self._get_current_mo_index()
             if idx >= 0:
@@ -1463,6 +1491,7 @@ class Plotter:
             config.mo.custom_colors = custom_colors
             config.mo.color_scheme = 'custom'
             self.cmap = self.custom_cmap_from_colors(custom_colors)
+            logger.info('Applied custom MO colors: negative=%s, positive=%s.', custom_colors[0], custom_colors[1])
 
             idx = self._get_current_mo_index()
             if idx >= 0:
@@ -1470,20 +1499,23 @@ class Plotter:
 
     def apply_bond_color_settings(self) -> None:
         """Validate UI inputs and apply the chosen color settings."""
-        redraw_molecule = False
+        changes: list[str] = []
 
         bond_color_type = self.bond_color_type_var.get().strip()
         if bond_color_type != config.molecule.bond.color_type:
             config.molecule.bond.color_type = bond_color_type
-            redraw_molecule = True
+            changes.append(f'color_type={bond_color_type}')
 
         bond_color = self.bond_color_entry.get().strip()
         if self.bond_color_type_var.get() == 'uniform' and bond_color != config.molecule.bond.color:
             config.molecule.bond.color = bond_color
-            redraw_molecule = True
+            changes.append(f'color={bond_color}')
 
-        if redraw_molecule:
+        if changes:
+            logger.info('Applying bond color settings: %s.', ', '.join(changes))
             self.load_molecule(config)
+        else:
+            logger.debug('Bond color settings unchanged; skipping reload.')
 
     @staticmethod
     def save_settings() -> None:
@@ -1505,7 +1537,18 @@ class Plotter:
         if orb_ind == -1:
             if self.selection_screen:
                 self.selection_screen.update_nav_button_states()
+            logger.info('Clearing molecular orbital from scene.')
             return
+
+        mo = self.tabulator._parser.mos[orb_ind]  # noqa: SLF001
+        logger.info(
+            'Displaying molecular orbital #%d (%s, spin=%s, occ=%s, energy=%.6f au).',
+            orb_ind + 1,
+            mo.sym,
+            mo.spin,
+            mo.occ,
+            mo.energy,
+        )
 
         self.orb_mesh['orbital'] = self.tabulator.tabulate_mos(orb_ind)
 
@@ -1666,6 +1709,14 @@ class Plotter:
             self.tabulator.spherical_grid(i_points, j_points, k_points)
         else:
             raise ValueError('The plotter only supports spherical and cartesian grids.')
+
+        dimensions = 'x'.join(str(val) for val in self.tabulator._grid_dimensions)  # noqa: SLF001
+        logger.info(
+            'Rebuilt %s grid with %d points (dimensions %s).',
+            grid_type.value,
+            self.tabulator.grid.shape[0],
+            dimensions,
+        )
 
         self.orb_mesh = self._create_mo_mesh()
 

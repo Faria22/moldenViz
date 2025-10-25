@@ -9,6 +9,25 @@ from .plotter import Plotter
 
 logger = logging.getLogger(__name__)
 
+COLORS = {
+    'ERROR': '\033[38;5;196m',  # Bright Red
+    'WARNING': '\033[38;5;208m',  # Bright Orange
+    'INFO': '\033[38;5;34m',  # Bright Green
+    'DEBUG': '\033[38;5;27m',  # Bright Blue
+    'RESET': '\033[0m',  # Reset to default color
+}
+
+
+class ColorFormatter(logging.Formatter):
+    """Apply ANSI colors to log level prefixes."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        message = super().format(record)
+        color = COLORS.get(record.levelname)
+        if not color:
+            return message
+        return f'{color}{message}{COLORS["RESET"]}'
+
 
 def main() -> None:
     """Entry point for the moldenViz command-line interface.
@@ -49,7 +68,9 @@ def main() -> None:
     else:
         level = logging.WARNING
 
-    logging.basicConfig(level=level, format='%(levelname)s %(name)s: %(message)s', force=True)
+    handler = logging.StreamHandler()
+    handler.setFormatter(ColorFormatter('%(levelname)s %(name)s: %(message)s'))
+    logging.basicConfig(level=level, handlers=[handler], force=True)
 
     logger.debug('Parsed CLI arguments: %s', vars(args))
 
