@@ -1636,8 +1636,6 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         ----------
         plotter : Plotter
             Active plotter that supplies molecular orbital data.
-        tk_master : tk.Tk
-            Tk root or parent window that owns this dialog.
         """
         super().__init__(plotter.tk_root)
         self.title('Orbitals')
