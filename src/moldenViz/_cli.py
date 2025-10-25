@@ -10,6 +10,50 @@ from .plotter import Plotter
 logger = logging.getLogger(__name__)
 
 
+class ColoredFormatter(logging.Formatter):
+    """Logging formatter that adds color codes to log levels."""
+
+    COLORS = {
+        'ERROR': '\033[38;5;196m',  # Bright Red
+        'WARNING': '\033[38;5;208m',  # Bright Orange
+        'INFO': '\033[38;5;34m',  # Bright Green
+        'DEBUG': '\033[38;5;27m',  # Bright Blue
+        'RESET': '\033[0m',  # Reset to default color
+    }
+
+    def format(self, record: logging.LogRecord) -> str:
+        """Format the log record with colors.
+
+        Parameters
+        ----------
+        record : logging.LogRecord
+            The log record to format.
+
+        Returns
+        -------
+        str
+            The formatted log message with color codes.
+        """
+        # Get color for this level, default to no color
+        color = self.COLORS.get(record.levelname, '')
+        reset = self.COLORS['RESET'] if color else ''
+
+        # Store original levelname
+        original_levelname = record.levelname
+
+        # Add color to levelname if we have a color for this level
+        if color:
+            record.levelname = f'{color}{record.levelname}{reset}'
+
+        # Format the message
+        result = super().format(record)
+
+        # Restore original levelname
+        record.levelname = original_levelname
+
+        return result
+
+
 def main() -> None:
     """Entry point for the moldenViz command-line interface.
 
@@ -49,7 +93,10 @@ def main() -> None:
     else:
         level = logging.WARNING
 
-    logging.basicConfig(level=level, format='%(levelname)s %(name)s: %(message)s', force=True)
+    # Configure logging with colored formatter
+    handler = logging.StreamHandler()
+    handler.setFormatter(ColoredFormatter('%(levelname)s %(name)s: %(message)s'))
+    logging.basicConfig(level=level, handlers=[handler], force=True)
 
     logger.debug('Parsed CLI arguments: %s', vars(args))
 
