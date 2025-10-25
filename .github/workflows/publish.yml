@@ -46,33 +46,6 @@ jobs:
           fi
           echo "Version check passed: $PACKAGE_VERSION"
 
-      - name: Ensure version not already on PyPI
-        env:
-          PACKAGE_VERSION: ${{ steps.package_version.outputs.version }}
-        run: |
-          python - <<'PY'
-import json
-import os
-import sys
-import urllib.error
-import urllib.request
-
-package = "moldenViz"
-version = os.environ["PACKAGE_VERSION"]
-
-try:
-    with urllib.request.urlopen(f"https://pypi.org/pypi/{package}/json") as response:
-        data = json.load(response)
-except urllib.error.HTTPError as exc:
-    if exc.code == 404:
-        sys.exit(0)
-    raise
-else:
-    if version in data.get("releases", {}):
-        print(f"Version {version} already exists on PyPI.", file=sys.stderr)
-        sys.exit(1)
-PY
-
       - name: Verify PyPI credentials
         env:
           PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
