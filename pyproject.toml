@@ -22,7 +22,7 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
-    "numpy>=2.3",
+    "numpy>=2.2",
     "pyvista>=0.46",
     "pyvistaqt>=0.11",
     "scipy>=1.16",
