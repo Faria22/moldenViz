@@ -11,6 +11,7 @@ import numpy as np
 import pyvista as pv
 from numpy.typing import NDArray
 
+from ._config_module import Config
 from .parser import Parser
 
 logger = logging.getLogger(__name__)
@@ -303,45 +304,65 @@ class Tabulator:
 
     def cartesian_grid(
         self,
-        x: NDArray[np.floating],
-        y: NDArray[np.floating],
-        z: NDArray[np.floating],
+        x: NDArray[np.floating] | None = None,
+        y: NDArray[np.floating] | None = None,
+        z: NDArray[np.floating] | None = None,
         tabulate_gtos: bool = True,
     ) -> None:
         r"""Create cartesian grid from x, y, z arrays and tabulate GTOs.
 
         Parameters
         ----------
-        x : NDArray[np.floating]
-            1D array of x coordinates.
-        y : NDArray[np.floating]
-            1D array of y coordinates.
-        z : NDArray[np.floating]
-            1D array of z coordinates.
+        x : NDArray[np.floating] | None, optional
+            1D array of x coordinates. If None, uses config parameters to generate default grid.
+        y : NDArray[np.floating] | None, optional
+            1D array of y coordinates. If None, uses config parameters to generate default grid.
+        z : NDArray[np.floating] | None, optional
+            1D array of z coordinates. If None, uses config parameters to generate default grid.
         tabulate_gtos : bool, optional
             Whether to tabulate Gaussian-type orbitals (GTOs) after creating the grid.
             Defaults to True.
         """
+        if x is None or y is None or z is None:
+            config = Config()
+            # Calculate max_radius from atom positions
+            atom_centers = np.array([atom.position for atom in self._parser.atoms])
+            molecule_max_radius = np.max(np.linalg.norm(atom_centers, axis=1)) if len(atom_centers) > 0 else 0
+            max_radius = max(
+                config.config.grid.max_radius_multiplier * molecule_max_radius,
+                config.config.grid.min_radius,
+            )
+            logger.info(
+                'Using config parameters for cartesian grid: ±%.2f with %dx%dx%d samples.',
+                max_radius,
+                config.config.grid.cartesian.num_x_points,
+                config.config.grid.cartesian.num_y_points,
+                config.config.grid.cartesian.num_z_points,
+            )
+            x = np.linspace(-max_radius, max_radius, config.config.grid.cartesian.num_x_points)
+            y = np.linspace(-max_radius, max_radius, config.config.grid.cartesian.num_y_points)
+            z = np.linspace(-max_radius, max_radius, config.config.grid.cartesian.num_z_points)
+
         logger.debug('Setting cartesian grid axes with lengths x=%d, y=%d, z=%d.', len(x), len(y), len(z))
         self._set_grid(x, y, z, GridType.CARTESIAN, tabulate_gtos)
 
     def spherical_grid(
         self,
-        r: NDArray[np.floating],
-        theta: NDArray[np.floating],
-        phi: NDArray[np.floating],
+        r: NDArray[np.floating] | None = None,
+        theta: NDArray[np.floating] | None = None,
+        phi: NDArray[np.floating] | None = None,
         tabulate_gtos: bool = True,
     ) -> None:
         r"""Create spherical grid from r, theta, phi arrays and tabulate GTOs.
 
         Parameters
         ----------
-        r : NDArray[np.floating]
-            1D array of radial coordinates.
-        theta : NDArray[np.floating]
-            1D array of polar angles (radians).
-        phi : NDArray[np.floating]
-            1D array of azimuthal angles (radians).
+        r : NDArray[np.floating] | None, optional
+            1D array of radial coordinates. If None, uses config parameters to generate default grid.
+        theta : NDArray[np.floating] | None, optional
+            1D array of polar angles (radians). If None, uses config parameters to generate default grid.
+        phi : NDArray[np.floating] | None, optional
+            1D array of azimuthal angles (radians). If None, uses config parameters to generate default grid.
         tabulate_gtos : bool, optional
             Whether to tabulate Gaussian-type orbitals (GTOs) after creating the grid.
             Defaults to True.
@@ -351,6 +372,26 @@ class Tabulator:
         Grid points are converted to Cartesian coordinates.
 
         """
+        if r is None or theta is None or phi is None:
+            config = Config()
+            # Calculate max_radius from atom positions
+            atom_centers = np.array([atom.position for atom in self._parser.atoms])
+            molecule_max_radius = np.max(np.linalg.norm(atom_centers, axis=1)) if len(atom_centers) > 0 else 0
+            max_radius = max(
+                config.config.grid.max_radius_multiplier * molecule_max_radius,
+                config.config.grid.min_radius,
+            )
+            logger.info(
+                'Using config parameters for spherical grid: r=0 to %.2f with %dx%dx%d samples.',
+                max_radius,
+                config.config.grid.spherical.num_r_points,
+                config.config.grid.spherical.num_theta_points,
+                config.config.grid.spherical.num_phi_points,
+            )
+            r = np.linspace(0, max_radius, config.config.grid.spherical.num_r_points)
+            theta = np.linspace(0, np.pi, config.config.grid.spherical.num_theta_points)
+            phi = np.linspace(0, 2 * np.pi, config.config.grid.spherical.num_phi_points)
+
         logger.debug('Setting spherical grid axes with lengths r=%d, theta=%d, phi=%d.', len(r), len(theta), len(phi))
         self._set_grid(r, theta, phi, GridType.SPHERICAL, tabulate_gtos)
 
