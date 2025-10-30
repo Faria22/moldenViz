@@ -1747,7 +1747,7 @@ class Plotter:
         grid_points = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
 
         mesh = pv.StructuredGrid()
-        mesh.points = pv.pyvista_ndarray(grid_points)
+        mesh.points = grid_points
         mesh.dimensions = (len(z), len(y), len(x))
         mesh['orbital'] = self.tabulator.tabulate_mos(mo_ind, grid_points)
 
