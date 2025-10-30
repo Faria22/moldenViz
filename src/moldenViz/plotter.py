@@ -107,6 +107,9 @@ class Plotter:
     SPHERICAL_GRID_SETTINGS_WINDOW_SIZE = '400x350'
     CARTESIAN_GRID_SETTINGS_WINDOW_SIZE = '650x400'
 
+    INITIAL_GRID_SPACING = 0.5
+    FINAL_GRID_SPACING = 0.1
+
     def __init__(
         self,
         source: str | list[str],
@@ -164,36 +167,16 @@ class Plotter:
 
         # It no tabulator was passed, create default grid
         if not only_molecule and not tabulator:
-            if config.grid.default_type == 'spherical':
-                logger.info(
-                    'Generating default spherical grid with %dx%dx%d samples.',
-                    config.grid.spherical.num_r_points,
-                    config.grid.spherical.num_theta_points,
-                    config.grid.spherical.num_phi_points,
-                )
-                self.tabulator.spherical_grid(
-                    np.linspace(
-                        0,
-                        max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius),
-                        config.grid.spherical.num_r_points,
-                    ),
-                    np.linspace(0, np.pi, config.grid.spherical.num_theta_points),
-                    np.linspace(0, 2 * np.pi, config.grid.spherical.num_phi_points),
-                )
-            else:  # cartesian
-                r = max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius)
-                logger.info(
-                    'Generating default cartesian grid spanning ±%.2f with %dx%dx%d samples.',
-                    r,
-                    config.grid.cartesian.num_x_points,
-                    config.grid.cartesian.num_y_points,
-                    config.grid.cartesian.num_z_points,
-                )
-                self.tabulator.cartesian_grid(
-                    np.linspace(-r, r, config.grid.cartesian.num_x_points),
-                    np.linspace(-r, r, config.grid.cartesian.num_y_points),
-                    np.linspace(-r, r, config.grid.cartesian.num_z_points),
-                )
+            r = max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius)
+            x = np.arange(-r, r + self.INITIAL_GRID_SPACING, self.INITIAL_GRID_SPACING)
+            logger.info(
+                'Generating default cartesian grid spanning ±%.2f with %dx%dx%d samples.',
+                r,
+                len(x),
+                len(x),
+                len(x),
+            )
+            self.tabulator.cartesian_grid(x, x, x)
 
         # If we want to have the molecular orbitals, we need to initiate Tk before Qt
         # That is why we have this weird if statement separated this way
@@ -1554,8 +1537,13 @@ class Plotter:
 
         contour_mesh = self.orb_mesh.contour([-self.contour, self.contour])
 
+        assert isinstance(contour_mesh, pv.PolyData)
+
+        refined_contour_mesh = self.refine_countour_mesh(contour_mesh, orb_ind)
+        logger.debug('Refined contour mesh has %d points.', refined_contour_mesh.n_points)
+
         self.orb_actor = self.pv_plotter.add_mesh(
-            contour_mesh,
+            refined_contour_mesh,
             clim=[-self.contour, self.contour],
             opacity=self.opacity,
             show_scalar_bar=False,
@@ -1719,6 +1707,79 @@ class Plotter:
         )
 
         self.orb_mesh = self._create_mo_mesh()
+
+    def create_grid_from_bounds(self, bounds: NDArray[np.floating], mo_ind: int) -> pv.StructuredGrid:
+        """Create a Cartesian grid mesh from given bounds.
+
+        Parameters
+        ----------
+        bounds : NDArray[np.floating]
+            Array of shape (6,) defining the min and max for x, y, z in the order
+            (x_min, x_max, y_min, y_max, z_min, z_max).
+
+        mo_ind : int
+            Index of the molecular orbital to use for grid spacing determination.
+
+        Returns
+        -------
+        pv.StructuredGrid
+            The generated Cartesian grid mesh.
+        """
+        x_min, x_max, y_min, y_max, z_min, z_max = bounds
+
+        x = np.arange(
+            x_min - self.INITIAL_GRID_SPACING,
+            x_max + self.INITIAL_GRID_SPACING + self.FINAL_GRID_SPACING,
+            self.FINAL_GRID_SPACING,
+        )
+        y = np.arange(
+            y_min - self.INITIAL_GRID_SPACING,
+            y_max + self.INITIAL_GRID_SPACING + self.FINAL_GRID_SPACING,
+            self.FINAL_GRID_SPACING,
+        )
+        z = np.arange(
+            z_min - self.INITIAL_GRID_SPACING,
+            z_max + self.INITIAL_GRID_SPACING + self.FINAL_GRID_SPACING,
+            self.FINAL_GRID_SPACING,
+        )
+
+        xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
+        grid_points = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
+
+        mesh = pv.StructuredGrid()
+        mesh.points = pv.pyvista_ndarray(grid_points)
+        mesh.dimensions = (len(z), len(y), len(x))
+        mesh['orbital'] = self.tabulator.tabulate_mos(mo_ind, grid_points)
+
+        return mesh
+
+    def refine_countour_mesh(self, contour_mesh: pv.PolyData, mo_ind: int) -> pv.PolyData:
+        """Refine the contour mesh to improve visual quality.
+
+        Parameters
+        ----------
+        contour_mesh : pv.PolyData
+            The initial contour mesh generated from the orbital data.
+
+        mo_ind : int
+            Index of the molecular orbital being processed.
+
+        Returns
+        -------
+        pv.PolyData
+            The refined contour mesh.
+        """
+        blocks = contour_mesh.split_bodies()
+        logger.debug('Refining contour mesh with %d blocks.', len(blocks))
+
+        refined_blocks = []
+        for block in blocks:
+            refined_grid = self.create_grid_from_bounds(block.bounds, mo_ind)
+
+            refined_contour = refined_grid.contour([-self.contour, self.contour])
+            refined_blocks.append(refined_contour)
+
+        return refined_blocks[0].merge(refined_blocks[1:]) if len(blocks) > 1 else refined_blocks[0]
 
 
 class _OrbitalSelectionScreen(tk.Toplevel):

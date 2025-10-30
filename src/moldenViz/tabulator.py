@@ -354,8 +354,13 @@ class Tabulator:
         logger.debug('Setting spherical grid axes with lengths r=%d, theta=%d, phi=%d.', len(r), len(theta), len(phi))
         self._set_grid(r, theta, phi, GridType.SPHERICAL, tabulate_gtos)
 
-    def tabulate_gtos(self) -> NDArray[np.floating]:
+    def tabulate_gtos(self, grid: NDArray | None = None) -> NDArray[np.floating]:
         """Tabulate Gaussian-type orbitals (GTOs) on the current grid.
+
+        Parameters
+        ----------
+        grid : NDArray | None, optional
+            Optional grid to use for tabulation. If None, uses the existing grid.
 
         Returns
         -------
@@ -371,10 +376,16 @@ class Tabulator:
         if self._only_molecule:
             raise RuntimeError('Grid creation is not allowed when `only_molecule` is set to `True`.')
 
-        if not hasattr(self, 'grid'):
+        if grid is None and not hasattr(self, 'grid'):
             raise RuntimeError('Grid is not defined. Please create a grid before tabulating GTOs.')
 
-        total_points = self._grid.shape[0]
+        if grid is not None:
+            logger.info('Using provided grid for GTO tabulation.')
+        else:
+            logger.info('Using existing grid for GTO tabulation.')
+            grid = self._grid
+
+        total_points = grid.shape[0]
         total_coeffs = self._parser.mo_coeffs.shape[1]
         logger.info('Tabulating GTOs on %d grid points.', total_points)
 
@@ -384,7 +395,7 @@ class Tabulator:
         ind = 0
         for atom in self._parser.atoms:
             atom_start = ind
-            centered_grid = self._grid - atom.position
+            centered_grid = grid - atom.position
             max_l = atom.shells[-1].l
 
             r, theta, phi = _cartesian_to_spherical(*centered_grid.T)  # pyright: ignore[reportArgumentType]
@@ -405,16 +416,22 @@ class Tabulator:
 
         logger.debug('GTO data shape: %s', gto_data.shape)
 
-        self._gtos = gto_data
         return gto_data
 
-    def tabulate_mos(self, mo_inds: int | array_like_type | None = None) -> NDArray[np.floating]:
+    def tabulate_mos(
+        self,
+        mo_inds: int | array_like_type | None = None,
+        grid: NDArray | None = None,
+    ) -> NDArray[np.floating]:
         """Tabulate molecular orbitals (MOs) on the current grid.
 
         Parameters
         ----------
         mo_inds : int, array-like, or None, optional
             Indices of the MOs to tabulate. If None, all MOs are tabulated.
+
+        grid : NDArray | None, optional
+            Optional grid to use for tabulation. If None, uses the existing grid.
 
         Returns
         -------
@@ -433,10 +450,17 @@ class Tabulator:
         ValueError
             If provided mo_inds is invalid.
         """
-        if not hasattr(self, '_grid'):
+        if grid is None and not hasattr(self, '_grid'):
             raise RuntimeError('Grid is not defined. Please create a grid before tabulating MOs.')
-        if not hasattr(self, 'gtos'):
+        if grid is None and not hasattr(self, 'gtos'):
             raise RuntimeError('GTOs are not tabulated. Please tabulate GTOs before tabulating MOs.')
+
+        if grid is not None:
+            logger.info('Using provided grid for MO tabulation.')
+            gtos = self.tabulate_gtos(grid)
+        else:
+            logger.info('Using existing grid for MO tabulation.')
+            gtos = self.gtos
 
         if mo_inds is None:
             mo_inds = list(range(len(self._parser.mos)))
@@ -457,12 +481,12 @@ class Tabulator:
             raise ValueError('Provided mo_inds contains invalid indices. Please provide valid indices.')
 
         if isinstance(mo_inds, int):
-            mo_data = np.sum(self.gtos * self._parser.mo_coeffs[mo_inds][None, :], axis=1)
+            mo_data = np.sum(gtos * self._parser.mo_coeffs[mo_inds][None, :], axis=1)
         else:
             # Use direct slicing of mo_coeffs array
             mo_coeffs = self._parser.mo_coeffs[mo_inds]
 
-            mo_data = np.sum(self.gtos[:, None, :] * mo_coeffs[None, ...], axis=2)
+            mo_data = np.sum(gtos[:, None, :] * mo_coeffs[None, ...], axis=2)
             logger.debug('MO data shape: %s', mo_data.shape)
 
         return mo_data
@@ -518,8 +542,8 @@ class Tabulator:
 
     def _export_vtk(self, destination: Path, mo_index: int | None = None) -> None:
         """Write orbital data to a VTK multiblock dataset."""
-        if not hasattr(self, 'gtos'):
-            self.tabulate_gtos()
+        if not hasattr(self, '_gtos'):
+            self._gtos = self.tabulate_gtos()
 
         mo_data = self.tabulate_mos(mo_index)
         dims = self._grid_dimensions[::-1]
