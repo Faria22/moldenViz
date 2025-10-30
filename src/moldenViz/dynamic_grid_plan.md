@@ -10,3 +10,4 @@
 1. See if spherical grid gives better results with less points
 2. Update settings screen and configuration file options
 3. Update documentation
+4. Check for errors (when mos are too small)
