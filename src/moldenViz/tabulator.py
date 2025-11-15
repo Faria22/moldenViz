@@ -2,14 +2,13 @@
 
 import logging
 from enum import Enum
-from functools import cache
-from math import factorial
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pyvista as pv
 from numpy.typing import NDArray
+from scipy.special import assoc_legendre_p_all as s_plm
 
 from .parser import Parser
 
@@ -84,57 +83,6 @@ def _cartesian_to_spherical(
     phi = np.arctan2(y, x)
 
     return r, theta, phi
-
-
-@cache
-def _cached_factorial(n: int) -> int:
-    """Compute factorial with caching for non-negative integers.
-
-    Returns
-    -------
-    int
-        The factorial of n.
-    """
-    return factorial(n)
-
-
-@cache
-def _binomial(r: float, k: int) -> float:
-    """Calculate the generalized binomial coefficient (r over k).
-
-    This function supports real or complex 'r' and non-negative integer 'k'.
-    The formula is: C(r, k) = r * (r-1) * ... * (r-k+1) / k!
-
-    Parameters
-    ----------
-    r : float
-        A real or complex number.
-    k : int
-        A non-negative integer.
-
-    Returns
-    -------
-    float
-        The value of the generalized binomial coefficient as a float or complex number.
-
-    Raises
-    ------
-    ValueError
-        If k is a negative integer.
-    """
-    if not isinstance(k, int) or k < 0:
-        raise ValueError('k must be a non-negative integer.')
-
-    if k == 0:
-        return 1
-    if k == 1:
-        return r
-
-    numerator = 1
-    for i in range(k):
-        numerator *= r - i
-
-    return numerator / _cached_factorial(k)
 
 
 class GridType(Enum):
@@ -535,7 +483,7 @@ class Tabulator:
         else:
             struct_grid.point_data[f'mo_{mo_index}'] = mo_data
 
-        struct_grid.save(destination)
+        struct_grid.save(str(destination))
 
     def _export_cube(self, destination: Path, mo_index: int) -> None:
         """Write a single molecular orbital to a Gaussian cube file."""
@@ -617,57 +565,32 @@ class Tabulator:
         if lmax < 0:
             raise ValueError('lmax must be a non-negative integer.')
 
-        plms = Tabulator._tabulate_plms(np.cos(theta), lmax)
+        plms = s_plm(lmax, lmax, Tabulator.check_bounds(np.cos(theta)), norm=True)[0]
 
-        xlms = np.empty((lmax + 1, 2 * lmax + 1, theta.size), dtype=float)
+        xlms = np.empty_like(plms, dtype=float)
         xlms[:, 0, :] = plms[:, 0, :]
 
         for m in range(1, lmax + 1):
-            xlms[:, -m, :] = np.sqrt(2) * plms[:, m, :] * np.sin(m * phi)
-            xlms[:, m, :] = np.sqrt(2) * plms[:, m, :] * np.cos(m * phi)
+            factor = -1 if (m % 2) else 1  # Condon-Shortley phase
+            xlms[:, -m, :] = factor * np.sqrt(2) * plms[:, m, :] * np.sin(m * phi)
+            xlms[:, m, :] = factor * np.sqrt(2) * plms[:, m, :] * np.cos(m * phi)
 
         return xlms
 
     @staticmethod
-    def _tabulate_plms(x: NDArray[np.floating], lmax: int) -> NDArray[np.floating]:
-        """Tabulate normalized associated Legendre polynomials (without Condon-Shortley phase).
-
-        Returns a 3D array with axes `(l, m, index)` where:
-            The first axis enumerates ``l`` in ``[0, lmax]``.
-            The second axis enumerates ``m`` in ``[0, lmax]``.
-            The third axis spans the samples of ``x``.
-
-        Using closed form outlined here:
-        https://en.m.wikipedia.org/wiki/Associated_Legendre_polynomials#Closed_Form
+    def check_bounds(x: np.ndarray) -> np.ndarray:
+        """Ensure that x is within the open interval (-1, 1) for scipy's associated Legendre polynomial.
 
         Parameters
         ----------
-        x : NDArray[np.floating]
-            Array of x values.
-        lmax : int
-            Maximum angular momentum quantum number.
+        x : np.ndarray
+            Input array of x values.
 
         Returns
         -------
-        NDArray[np.floating]
-            Tabulated associated Legendre polynomials.
+        np.ndarray
+            Clipped array with values in the open interval (-1, 1).
         """
-        plms = np.empty((lmax + 1, lmax + 1, x.size), dtype=float)
-
-        for l in range(lmax + 1):
-            for m in range(l + 1):
-                plms[l, m, :] = (
-                    np.sqrt((2 * l + 1) * _cached_factorial(l - m) / _cached_factorial(l + m) / 4 / np.pi)
-                    * 2**l
-                    * (1 - x**2) ** (m / 2)
-                    * sum(
-                        _cached_factorial(k)
-                        * x ** (k - m)
-                        * _binomial(l, k)
-                        * _binomial((l + k - 1) / 2, l)
-                        / _cached_factorial(k - m)
-                        for k in range(m, l + 1)
-                    )
-                )
-
-        return plms
+        min_x = np.nextafter(-1.0, 0.0)
+        max_x = np.nextafter(1.0, 0.0)
+        return np.clip(x, min_x, max_x)
