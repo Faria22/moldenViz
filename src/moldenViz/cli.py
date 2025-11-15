@@ -55,6 +55,18 @@ class ColorFormatter(logging.Formatter):
     """Apply ANSI colors to log level prefixes."""
 
     def format(self, record: logging.LogRecord) -> str:
+        """Format the log record with colors based on its level.
+
+        Parameters
+        ----------
+        record : logging.LogRecord
+            The log record to format.
+
+        Returns
+        -------
+        str
+            The formatted log message with ANSI color codes.
+        """
         message = super().format(record)
         color = COLORS.get(record.levelname)
         if not color:

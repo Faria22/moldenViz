@@ -51,7 +51,7 @@ def _reload_cli(monkeypatch: pytest.MonkeyPatch, plotter: Any | None = None) -> 
     ModuleType
         Reloaded CLI module ready for invocation.
     """
-    cli = importlib.import_module('moldenViz._cli')
+    cli = importlib.import_module('moldenViz.cli')
     cli = importlib.reload(cli)
     if plotter is not None:
         monkeypatch.setattr(cli, '_resolve_plotter', lambda: plotter)
