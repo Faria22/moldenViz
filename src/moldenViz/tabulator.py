@@ -314,10 +314,10 @@ class Tabulator:
 
         # Calculate the slices for each atom's shells
         for atom in self._parser.atoms:
-            shell_width = sum(2 * shell.l + 1 for shell in atom.shells)
-            atom_slice = slice(idx_shell_start, idx_shell_start + shell_width)
+            num_gtos_in_shell = sum(2 * shell.l + 1 for shell in atom.shells)
+            atom_slice = slice(idx_shell_start, idx_shell_start + num_gtos_in_shell)
             atom_tasks.append((atom, atom_slice))
-            idx_shell_start += shell_width
+            idx_shell_start += num_gtos_in_shell
 
         max_workers = min(len(atom_tasks), os.cpu_count() or 1)
         if max_workers <= 1:
