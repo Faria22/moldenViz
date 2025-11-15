@@ -27,6 +27,30 @@ COLORS = {
 }
 
 
+@lru_cache(maxsize=1)
+def _resolve_plotter() -> Callable[..., Any]:
+    """Return the Plotter class, importing it lazily to avoid heavy deps.
+
+    Returns
+    -------
+    Callable[..., Any]
+        The Plotter class used to launch the UI.
+
+    Raises
+    ------
+    RuntimeError
+        If GUI dependencies are unavailable.
+    """
+    try:
+        module = import_module('moldenViz.plotter')
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            'Plotter UI dependencies are missing. Install moldenViz with GUI extras to run the CLI.',
+        ) from exc
+
+    return module.Plotter
+
+
 class ColorFormatter(logging.Formatter):
     """Apply ANSI colors to log level prefixes."""
 
@@ -89,30 +113,6 @@ def main() -> None:
 
     plotter_cls = _resolve_plotter()
     plotter_cls(source_path, only_molecule=args.only_molecule)
-
-
-@lru_cache(maxsize=1)
-def _resolve_plotter() -> Callable[..., Any]:
-    """Return the Plotter class, importing it lazily to avoid heavy deps.
-
-    Returns
-    -------
-    Callable[..., Any]
-        The Plotter class used to launch the UI.
-
-    Raises
-    ------
-    RuntimeError
-        If GUI dependencies are unavailable.
-    """
-    try:
-        module = import_module('moldenViz.plotter')
-    except ModuleNotFoundError as exc:
-        raise RuntimeError(
-            'Plotter UI dependencies are missing. Install moldenViz with GUI extras to run the CLI.',
-        ) from exc
-
-    return module.Plotter
 
 
 if __name__ == '__main__':
