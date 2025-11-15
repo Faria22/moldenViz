@@ -606,33 +606,3 @@ class Tabulator:
         min_x = np.nextafter(-1.0, 0.0)
         max_x = np.nextafter(1.0, 0.0)
         return np.clip(x, min_x, max_x)
-
-
-def _cartesian_to_spherical(
-    x: NDArray[np.floating],
-    y: NDArray[np.floating],
-    z: NDArray[np.floating],
-) -> tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]:
-    """Backward-compatible wrapper for the Tabulator helper.
-
-    Returns
-    -------
-    tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]
-        Tuple containing spherical coordinates ``(r, theta, phi)``.
-    """
-    return Tabulator._cartesian_to_spherical(x, y, z)  # noqa: SLF001
-
-
-def _spherical_to_cartesian(
-    r: NDArray[np.floating],
-    theta: NDArray[np.floating],
-    phi: NDArray[np.floating],
-) -> tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]:
-    """Backward-compatible wrapper for the Tabulator helper.
-
-    Returns
-    -------
-    tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]
-        Tuple containing Cartesian coordinates ``(x, y, z)``.
-    """
-    return Tabulator._spherical_to_cartesian(r, theta, phi)  # noqa: SLF001
