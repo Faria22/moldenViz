@@ -16,7 +16,7 @@ from shiboken6 import isValid
 from ._config_module import Config
 from ._plotting_objects import Molecule
 from .parser import _MolecularOrbital
-from .tabulator import GridType, Tabulator, _cartesian_to_spherical, _spherical_to_cartesian
+from .tabulator import GridType, Tabulator
 
 
 def _describe_source(source: str | list[str]) -> str:
@@ -1166,7 +1166,7 @@ class Plotter:
         num_r, num_theta, num_phi = self.tabulator._grid_dimensions  # noqa: SLF001
 
         # The last point of the grid for sure has the largest r
-        r, _, _ = _cartesian_to_spherical(*self.tabulator.grid[-1, :])  # pyright: ignore[reportArgumentType]
+        r, _, _ = Tabulator._cartesian_to_spherical(*self.tabulator.grid[-1, :])  # noqa: SLF001
 
         self.radius_entry.insert(0, str(r))
         self.radius_points_entry.insert(0, str(num_r))
@@ -1349,7 +1349,7 @@ class Plotter:
             phi = np.linspace(0, 2 * np.pi, num_phi_points)
 
             rr, tt, pp = np.meshgrid(r, theta, phi, indexing='ij')
-            xx, yy, zz = _spherical_to_cartesian(rr, tt, pp)
+            xx, yy, zz = Tabulator._spherical_to_cartesian(rr, tt, pp)  # noqa: SLF001
 
             new_grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
             if not np.array_equal(new_grid, self.tabulator.grid):
