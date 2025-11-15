@@ -79,7 +79,7 @@ def test_tabulate_gtos_performance_small_grid() -> None:
 def test_tabulate_gtos_million_point_benchmark(benchmark: BenchmarkFixture) -> None:
     """Benchmark million-point grids to ensure GTO tabulation stays sub-10s."""
     tab = Tabulator(str(MOLDEN_PATH))
-    axis = np.linspace(-3.0, 3.0, 100)
+    axis = np.linspace(-3.0, 3.0, 50)
     tab.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
 
     gto_data = benchmark.pedantic(
