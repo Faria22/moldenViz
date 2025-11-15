@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-import pyvista as pv
 from numpy.typing import NDArray
 from scipy.special import assoc_legendre_p_all as s_plm
 
@@ -78,7 +77,7 @@ def _cartesian_to_spherical(
     tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]
         Tuple containing spherical coordinates ``(r, theta, phi)``.
     """
-    r = np.sqrt(x**2 + y**2 + z**2)
+    r = np.sqrt(x * x + y * y + z * z)
     theta = np.arccos(z / r)
     phi = np.arctan2(y, x)
 
@@ -329,9 +328,8 @@ class Tabulator:
         # Having a predefined array makes it faster to fill the data
         gto_data = np.empty((total_points, total_coeffs))
         self._atom_gto_slices = []
-        ind = 0
+        idx_shell_start = 0
         for atom in self._parser.atoms:
-            atom_start = ind
             centered_grid = self._grid - atom.position
             max_l = atom.shells[-1].l
 
@@ -341,15 +339,13 @@ class Tabulator:
             for shell in atom.shells:
                 l = shell.l
                 m_inds = np.arange(-l, l + 1)
-                gto_inds = ind + l + m_inds
+                gto_inds = slice(idx_shell_start, idx_shell_start + 2 * l + 1)
 
                 radial = shell.norm * r**l * sum(gto.norm * gto.coeff * np.exp(-gto.exp * r**2) for gto in shell.gtos)
 
                 gto_data[:, gto_inds] = radial[:, None] * xlms[l, m_inds, ...].T
 
-                ind += 2 * l + 1
-
-            self._atom_gto_slices.append(slice(atom_start, ind))
+                idx_shell_start += 2 * l + 1
 
         logger.debug('GTO data shape: %s', gto_data.shape)
 
@@ -466,6 +462,9 @@ class Tabulator:
 
     def _export_vtk(self, destination: Path, mo_index: int | None = None) -> None:
         """Write orbital data to a VTK multiblock dataset."""
+        # Import lazily so tabulator-only workflows do not require PyVista/VTK at import time.
+        import pyvista as pv  # noqa: PLC0415
+
         if not hasattr(self, 'gtos'):
             self.tabulate_gtos()
 

@@ -33,7 +33,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["basedpyright>=1.31.4", "pytest>=8.4", "ruff>=0.14"]
+dev = [
+    "basedpyright>=1.31.4",
+    "pytest>=8.4",
+    "pytest-benchmark>=4.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.14",
+]
 docs = ["pydata-sphinx-theme>=0.16", "sphinx>=8.0"]
 
 [project.urls]
@@ -54,7 +60,9 @@ features = ["dev"]
 [tool.hatch.envs.default.scripts]
 lint = "ruff check {args:src tests}"
 typecheck = "basedpyright {args:src tests}"
-test = "pytest {args:tests}"
+test = "pytest --benchmark-skip"
+bench = "pytest --benchmark-only"
+cov = "pytest --cov=moldenViz --benchmark-skip"
 all = ["lint", "typecheck", "test"]
 
 [tool.basedpyright]

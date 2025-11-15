@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from moldenViz import __about__
-from tests import _src_imports  # noqa: F401  # Ensure src/ is on sys.path before importing moldenViz
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -55,7 +54,7 @@ def _reload_cli(monkeypatch: pytest.MonkeyPatch, plotter: Any | None = None) -> 
     cli = importlib.import_module('moldenViz._cli')
     cli = importlib.reload(cli)
     if plotter is not None:
-        monkeypatch.setattr(cli, 'Plotter', plotter)
+        monkeypatch.setattr(cli, '_resolve_plotter', lambda: plotter)
     return cli
 
 

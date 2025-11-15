@@ -1,11 +1,20 @@
 """CLI entrance point."""
 
+from __future__ import annotations
+
 import argparse
 import logging
+from functools import lru_cache
+from importlib import import_module
+from typing import TYPE_CHECKING, Any
 
 from .__about__ import __version__
 from .examples.get_example_files import all_examples
-from .plotter import Plotter
+
+if TYPE_CHECKING:  # pragma: no cover - typing helper
+    from collections.abc import Callable
+else:
+    Callable = Any  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -78,10 +87,32 @@ def main() -> None:
     source_label = args.file or f'example {args.example}'
     logger.info('Launching plotter for %s', source_label)
 
-    Plotter(
-        source_path,
-        only_molecule=args.only_molecule,
-    )
+    plotter_cls = _resolve_plotter()
+    plotter_cls(source_path, only_molecule=args.only_molecule)
+
+
+@lru_cache(maxsize=1)
+def _resolve_plotter() -> Callable[..., Any]:
+    """Return the Plotter class, importing it lazily to avoid heavy deps.
+
+    Returns
+    -------
+    Callable[..., Any]
+        The Plotter class used to launch the UI.
+
+    Raises
+    ------
+    RuntimeError
+        If GUI dependencies are unavailable.
+    """
+    try:
+        module = import_module('moldenViz.plotter')
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            'Plotter UI dependencies are missing. Install moldenViz with GUI extras to run the CLI.',
+        ) from exc
+
+    return module.Plotter
 
 
 if __name__ == '__main__':

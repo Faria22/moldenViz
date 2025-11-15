@@ -6,7 +6,11 @@ from typing import Any
 import numpy as np
 import pytest
 
-from tests._src_imports import _GTO, Parser, _Shell
+import moldenViz.parser as parser_module
+
+Parser = parser_module.Parser
+_GTO = parser_module._GTO  # noqa: SLF001
+_Shell = parser_module._Shell  # noqa: SLF001
 
 # ----------------------------------------------------------------------
 # utilities
