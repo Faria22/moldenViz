@@ -1,9 +1,13 @@
 """Unit tests for the configuration module."""
 
+import importlib
+
 import pytest
+
+pytest.importorskip('pydantic')
 from pydantic import ValidationError
 
-from tests._src_imports import config_module
+config_module = importlib.import_module('moldenViz._config_module')
 
 
 def test_default_color_scheme() -> None:
