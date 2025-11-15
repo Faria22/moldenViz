@@ -82,7 +82,12 @@ def test_tabulate_gtos_million_point_benchmark(benchmark: BenchmarkFixture) -> N
     axis = np.linspace(-3.0, 3.0, 100)
     tab.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
 
-    gto_data = benchmark(tab.tabulate_gtos)
+    gto_data = benchmark.pedantic(
+        tab.tabulate_gtos,
+        warmup_rounds=1,
+        rounds=5,
+        iterations=2,
+    )
 
     expected_points = axis.size**3
     expected_coeffs = tab._parser.mo_coeffs.shape[1]  # noqa: SLF001
