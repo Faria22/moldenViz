@@ -375,7 +375,11 @@ class Tabulator:
             atom_block[:, inner_slice] = radial[:, None] * xlms[l, m_inds, ...].T
             block_cursor += num_m
 
-    def tabulate_mos(self, mo_inds: int | array_like_type | None = None) -> NDArray[np.floating]:
+    def tabulate_mos(
+        self,
+        mo_inds: int | array_like_type | None = None,
+        grid: NDArray[np.floating] | None = None,
+    ) -> NDArray[np.floating]:
         """Tabulate molecular orbitals (MOs) on the current grid.
 
         Parameters

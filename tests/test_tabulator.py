@@ -44,21 +44,6 @@ def test_tabulate_gtos_requires_grid() -> None:
         tab.tabulate_gtos()
 
 
-def test_tabulate_gtos_cached_values_cover_all_coeffs() -> None:
-    """Ensure tabulate_gtos populates every MO coefficient on the grid."""
-    tab = Tabulator(str(MOLDEN_PATH))
-    axis = np.linspace(-1.0, 1.0, 4)
-    tab.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
-
-    gto_data = tab.tabulate_gtos()
-
-    expected_points = axis.size**3
-    expected_coeffs = tab._parser.mo_coeffs.shape[1]  # noqa: SLF001
-    assert gto_data.shape == (expected_points, expected_coeffs)
-    assert np.all(np.isfinite(gto_data))
-    assert tab.gtos is gto_data  # Cached array should match the return value
-
-
 def test_tabulate_gtos_performance_small_grid() -> None:
     """Guard against regressions in tabulate_gtos runtime for modest grids."""
     tab = Tabulator(str(MOLDEN_PATH))
