@@ -1,11 +1,13 @@
 """Unit tests for the configuration save functionality."""
 
+import importlib
 from pathlib import Path
 
 import pytest
 import toml
 
-from tests._src_imports import config_module
+pytest.importorskip('pydantic')
+config_module = importlib.import_module('moldenViz._config_module')
 
 BACKGROUND_COLOR = 'black'
 MO_CONTOUR = 0.2

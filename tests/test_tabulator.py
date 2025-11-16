@@ -1,16 +1,23 @@
 """Tests for the Tabulator class and related functions."""
 
+from __future__ import annotations
+
 from pathlib import Path
+from time import perf_counter
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
 
-from tests._src_imports import (
+from moldenViz.tabulator import (
     Tabulator,
-    _cartesian_to_spherical,
-    _spherical_to_cartesian,
     array_like_type,
 )
+
+SMALL_GRID_MAX_SECONDS = 0.5
+
+if TYPE_CHECKING:
+    from pytest_benchmark.fixture import BenchmarkFixture
 
 MOLDEN_PATH = Path(__file__).with_name('sample_molden.inp')
 
@@ -22,8 +29,8 @@ def test_spherical_cartesian_roundtrip() -> None:
     theta_vals = rng.uniform(0.0, np.pi, size=100)
     phi_vals = rng.uniform(-np.pi, np.pi, size=100)
 
-    x, y, z = _spherical_to_cartesian(r_vals, theta_vals, phi_vals)
-    r2, theta2, phi2 = _cartesian_to_spherical(x, y, z)
+    x, y, z = Tabulator._spherical_to_cartesian(r_vals, theta_vals, phi_vals)  # noqa: SLF001
+    r2, theta2, phi2 = Tabulator._cartesian_to_spherical(x, y, z)  # noqa: SLF001
 
     np.testing.assert_allclose(r_vals, r2, rtol=1e-12, atol=1e-12)
     np.testing.assert_allclose(theta_vals, theta2, rtol=1e-12, atol=1e-12)
@@ -35,6 +42,54 @@ def test_tabulate_gtos_requires_grid() -> None:
     tab = Tabulator(str(MOLDEN_PATH))
     with pytest.raises(RuntimeError):
         tab.tabulate_gtos()
+
+
+def test_tabulate_gtos_cached_values_cover_all_coeffs() -> None:
+    """Ensure tabulate_gtos populates every MO coefficient on the grid."""
+    tab = Tabulator(str(MOLDEN_PATH))
+    axis = np.linspace(-1.0, 1.0, 4)
+    tab.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
+
+    gto_data = tab.tabulate_gtos()
+
+    expected_points = axis.size**3
+    expected_coeffs = tab._parser.mo_coeffs.shape[1]  # noqa: SLF001
+    assert gto_data.shape == (expected_points, expected_coeffs)
+    assert np.all(np.isfinite(gto_data))
+    assert tab.gtos is gto_data  # Cached array should match the return value
+
+
+def test_tabulate_gtos_performance_small_grid() -> None:
+    """Guard against regressions in tabulate_gtos runtime for modest grids."""
+    tab = Tabulator(str(MOLDEN_PATH))
+    axis = np.linspace(-2.0, 2.0, 10)
+    tab.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
+
+    start = perf_counter()
+    tab.tabulate_gtos()
+    duration = perf_counter() - start
+
+    # The modest grid should tabulate well below half a second on CI hardware.
+    assert duration < SMALL_GRID_MAX_SECONDS, f'tabulate_gtos took {duration:.3f}s'
+
+
+@pytest.mark.benchmark
+def test_tabulate_gtos_million_point_benchmark(benchmark: BenchmarkFixture) -> None:
+    """Benchmark million-point grids to ensure GTO tabulation stays sub-10s."""
+    tab = Tabulator(str(MOLDEN_PATH))
+    axis = np.linspace(-3.0, 3.0, 50)
+    tab.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
+
+    gto_data = benchmark.pedantic(
+        tab.tabulate_gtos,
+        warmup_rounds=1,
+        rounds=5,
+        iterations=2,
+    )
+
+    expected_points = axis.size**3
+    expected_coeffs = tab._parser.mo_coeffs.shape[1]  # noqa: SLF001
+    assert gto_data.shape == (expected_points, expected_coeffs)
 
 
 def test_cartesian_grid_shape() -> None:
