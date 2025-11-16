@@ -124,3 +124,41 @@ def test_invalid_grid_type_raises_error() -> None:
     """Test that invalid grid type raises ValidationError."""
     with pytest.raises(ValidationError, match='Input should be'):
         config_module.GridConfig(default_type='invalid_type')  # type: ignore[arg-type]
+
+
+def test_default_grid_mode() -> None:
+    """Test that default grid mode is 'single'."""
+    grid_config = config_module.GridConfig()
+    assert grid_config.mode == 'single'
+
+
+@pytest.mark.parametrize('mode', ['single', 'dynamic'])
+def test_valid_grid_modes(mode: str) -> None:
+    """Test that valid grid modes are accepted."""
+    grid_config = config_module.GridConfig(mode=mode)
+    assert grid_config.mode == mode
+
+
+def test_invalid_grid_mode_raises_error() -> None:
+    """Test that invalid grid mode raises ValidationError."""
+    with pytest.raises(ValidationError, match='Input should be'):
+        config_module.GridConfig(mode='invalid_mode')  # type: ignore[arg-type]
+
+
+def test_default_dynamic_grid_type() -> None:
+    """Test that the default dynamic grid type is 'cartesian'."""
+    grid_config = config_module.GridConfig()
+    assert grid_config.dynamic_type == 'cartesian'
+
+
+@pytest.mark.parametrize('grid_type', ['cartesian', 'spherical'])
+def test_valid_dynamic_grid_type(grid_type: str) -> None:
+    """Test that valid dynamic grid types are accepted."""
+    grid_config = config_module.GridConfig(dynamic_type=grid_type)
+    assert grid_config.dynamic_type == grid_type
+
+
+def test_invalid_dynamic_grid_type_raises_error() -> None:
+    """Test that invalid dynamic grid type raises ValidationError."""
+    with pytest.raises(ValidationError, match='Input should be'):
+        config_module.GridConfig(dynamic_type='invalid_type')  # type: ignore[arg-type]

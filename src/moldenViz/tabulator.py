@@ -310,11 +310,12 @@ class Tabulator:
 
         if grid is not None:
             logger.info('Using provided grid for GTO tabulation.')
+            target_grid = grid
         else:
             logger.info('Using existing grid for GTO tabulation.')
-            grid = self._grid
+            target_grid = self._grid
 
-        total_points = grid.shape[0]
+        total_points = target_grid.shape[0]
         total_coeffs = self._parser.mo_coeffs.shape[1]
         logger.info('Tabulating GTOs on %d grid points.', total_points)
 
@@ -333,11 +334,12 @@ class Tabulator:
         max_workers = min(len(atom_tasks), os.cpu_count() or 1)
         if max_workers <= 1:
             for atom, atom_slice in atom_tasks:
-                self._tabulate_atom(atom, atom_slice, gto_data)
+                self._tabulate_atom(atom, atom_slice, gto_data, target_grid)
         else:
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = [
-                    executor.submit(self._tabulate_atom, atom, atom_slice, gto_data) for atom, atom_slice in atom_tasks
+                    executor.submit(self._tabulate_atom, atom, atom_slice, gto_data, target_grid)
+                    for atom, atom_slice in atom_tasks
                 ]
                 for future in futures:
                     future.result()
@@ -346,11 +348,17 @@ class Tabulator:
 
         return gto_data
 
-    def _tabulate_atom(self, atom: Any, atom_slice: slice, gto_data: NDArray[np.floating]) -> None:
+    def _tabulate_atom(
+        self,
+        atom: Any,
+        atom_slice: slice,
+        gto_data: NDArray[np.floating],
+        grid: NDArray[np.floating],
+    ) -> None:
         """Tabulate all shells for a single atom into the shared GTO array."""
-        centered_grid = self._grid - atom.position
+        centered_grid = grid - atom.position
         max_l = atom.shells[-1].l
-        total_points = self._grid.shape[0]
+        total_points = grid.shape[0]
 
         r, theta, phi = self._cartesian_to_spherical(*centered_grid.T)  # pyright: ignore[reportArgumentType]
 

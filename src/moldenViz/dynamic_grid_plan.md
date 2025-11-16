@@ -5,9 +5,8 @@
 2. Split each mo into its separate lobes
 3. For each lobe, create a new grid with the bounds of the original (plus a margin of error) and a very fine grid
 4. Merge all grids together and plot
+5. Add settings/configuration toggles so users can switch between single and dynamic grids and choose the dynamic grid coordinate system (spherical or cartesian)
 
 ## TODO
-1. See if spherical grid gives better results with less points
-2. Update settings screen and configuration file options
-3. Update documentation
-4. Check for errors (when mos are too small)
+1. Update documentation
+2. Check for errors (when mos are too small)

@@ -5,6 +5,8 @@ background_color = 'white'
 min_radius = 5
 max_radius_multiplier = 2
 default_type = 'spherical'
+mode = 'single'
+dynamic_type = 'cartesian'
 
 [grid.spherical]
 num_r_points = 100

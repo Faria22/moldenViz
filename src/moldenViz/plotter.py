@@ -2,6 +2,7 @@
 
 import logging
 import tkinter as tk
+from enum import Enum
 from tkinter import filedialog, messagebox, ttk
 
 import matplotlib.colors as mcolors
@@ -40,6 +41,13 @@ def _describe_source(source: str | list[str]) -> str:
 logger = logging.getLogger(__name__)
 
 config = Config()
+
+
+class GridMode(Enum):
+    """Selection between a single global grid or the dynamic per-orbital grid."""
+
+    SINGLE = 'single'
+    DYNAMIC = 'dynamic'
 
 
 class Plotter:
@@ -109,6 +117,7 @@ class Plotter:
 
     INITIAL_GRID_SPACING = 0.5
     FINAL_GRID_SPACING = 0.1
+    MIN_DYNAMIC_RADIAL_POINTS = 2
 
     def __init__(
         self,
@@ -122,6 +131,14 @@ class Plotter:
         self.on_screen = True
         self.only_molecule = only_molecule
         self.selection_screen: _OrbitalSelectionScreen | None = None
+        self.grid_mode = GridMode(getattr(config.grid, 'mode', GridMode.SINGLE.value))
+
+        dynamic_type_value = getattr(config.grid, 'dynamic_type', GridType.CARTESIAN.value)
+        try:
+            self.dynamic_grid_type = GridType(dynamic_type_value)
+        except ValueError:
+            logger.warning('Invalid dynamic grid type %s; defaulting to cartesian.', dynamic_type_value)
+            self.dynamic_grid_type = GridType.CARTESIAN
 
         self.tk_root = tk_root
         self._no_prev_tk_root = self.tk_root is None
@@ -650,8 +667,45 @@ class Plotter:
 
         self.grid_type_radio_var = tk.StringVar()
         self.grid_type_radio_var.set(self.tabulator._grid_type.value)  # noqa: SLF001
+        self.grid_mode_var = tk.StringVar(value=self.grid_mode.value)
+        self.dynamic_grid_type_var = tk.StringVar(value=self.dynamic_grid_type.value)
 
-        ttk.Label(settings_frame, text='Spherical grid:').grid(row=1, column=0, padx=5, pady=5)
+        ttk.Label(settings_frame, text='Grid mode:').grid(row=1, column=0, padx=5, pady=5, sticky='w')
+        single_mode_button = ttk.Radiobutton(
+            settings_frame,
+            text='Single grid',
+            variable=self.grid_mode_var,
+            value=GridMode.SINGLE.value,
+            command=self.on_grid_mode_change,
+        )
+        dynamic_mode_button = ttk.Radiobutton(
+            settings_frame,
+            text='Dynamic grid',
+            variable=self.grid_mode_var,
+            value=GridMode.DYNAMIC.value,
+            command=self.on_grid_mode_change,
+        )
+        single_mode_button.grid(row=1, column=1, padx=5, pady=5, sticky='w')
+        dynamic_mode_button.grid(row=1, column=2, padx=5, pady=5, sticky='w')
+
+        self.dynamic_grid_frame = ttk.LabelFrame(settings_frame, text='Dynamic grid options')
+        ttk.Label(self.dynamic_grid_frame, text='Coordinate system:').grid(row=0, column=0, padx=5, pady=5, sticky='w')
+        dynamic_sph_button = ttk.Radiobutton(
+            self.dynamic_grid_frame,
+            text='Spherical',
+            variable=self.dynamic_grid_type_var,
+            value=GridType.SPHERICAL.value,
+        )
+        dynamic_cart_button = ttk.Radiobutton(
+            self.dynamic_grid_frame,
+            text='Cartesian',
+            variable=self.dynamic_grid_type_var,
+            value=GridType.CARTESIAN.value,
+        )
+        dynamic_sph_button.grid(row=0, column=1, padx=5, pady=5, sticky='w')
+        dynamic_cart_button.grid(row=0, column=2, padx=5, pady=5, sticky='w')
+
+        ttk.Label(settings_frame, text='Spherical grid:').grid(row=3, column=0, padx=5, pady=5)
         sph_grid_type_button = ttk.Radiobutton(
             settings_frame,
             variable=self.grid_type_radio_var,
@@ -659,7 +713,7 @@ class Plotter:
             command=self.place_grid_params_frame,
         )
 
-        ttk.Label(settings_frame, text='Cartesian grid:').grid(row=1, column=2, padx=5, pady=5)
+        ttk.Label(settings_frame, text='Cartesian grid:').grid(row=3, column=2, padx=5, pady=5)
         cart_grid_type_button = ttk.Radiobutton(
             settings_frame,
             variable=self.grid_type_radio_var,
@@ -667,21 +721,34 @@ class Plotter:
             command=self.place_grid_params_frame,
         )
 
-        sph_grid_type_button.grid(row=1, column=1, padx=5, pady=5)
-        cart_grid_type_button.grid(row=1, column=3, padx=5, pady=5)
+        sph_grid_type_button.grid(row=3, column=1, padx=5, pady=5)
+        cart_grid_type_button.grid(row=3, column=3, padx=5, pady=5)
 
         self.sph_grid_params_frame = self.sph_grid_params_frame_widgets(settings_frame)
         self.cart_grid_params_frame = self.cart_grid_params_frame_widgets(settings_frame)
 
+        self.update_dynamic_options_visibility()
         self.place_grid_params_frame()
 
         # Reset button
         reset_button = ttk.Button(settings_frame, text='Reset', command=self.reset_grid_settings)
-        reset_button.grid(row=8, column=0, padx=5, pady=5, columnspan=5)
+        reset_button.grid(row=12, column=0, padx=5, pady=5, columnspan=5)
 
         # Apply settings button
         apply_button = ttk.Button(settings_frame, text='Apply', command=self.apply_grid_settings)
-        apply_button.grid(row=9, column=0, padx=5, pady=5, columnspan=5)
+        apply_button.grid(row=13, column=0, padx=5, pady=5, columnspan=5)
+
+    def on_grid_mode_change(self) -> None:
+        """Update UI when the user toggles between single and dynamic grid modes."""
+        self.update_dynamic_options_visibility()
+        self.place_grid_params_frame()
+
+    def update_dynamic_options_visibility(self) -> None:
+        """Show or hide the dynamic grid options frame based on the current mode."""
+        if self.grid_mode_var.get() == GridMode.DYNAMIC.value:
+            self.dynamic_grid_frame.grid(row=2, column=0, columnspan=5, padx=5, pady=5, sticky='ew')
+        else:
+            self.dynamic_grid_frame.grid_forget()
 
     def mo_settings_screen(self) -> None:
         """Open the molecular orbital settings window."""
@@ -1039,15 +1106,16 @@ class Plotter:
 
     def place_grid_params_frame(self) -> None:
         """Render the parameter frame that matches the selected grid type."""
+        params_row = 4
         if self.grid_type_radio_var.get() == GridType.SPHERICAL.value:
             self.grid_settings_window.geometry(self.SPHERICAL_GRID_SETTINGS_WINDOW_SIZE)
             self.cart_grid_params_frame.grid_forget()
-            self.sph_grid_params_frame.grid(row=2, column=0, padx=5, pady=5, rowspan=6, columnspan=4)
+            self.sph_grid_params_frame.grid(row=params_row, column=0, padx=5, pady=5, rowspan=6, columnspan=4)
             self.sph_grid_params_frame_setup()
         else:
             self.grid_settings_window.geometry(self.CARTESIAN_GRID_SETTINGS_WINDOW_SIZE)
             self.sph_grid_params_frame.grid_forget()
-            self.cart_grid_params_frame.grid(row=2, column=0, padx=5, pady=5, rowspan=6, columnspan=4)
+            self.cart_grid_params_frame.grid(row=params_row, column=0, padx=5, pady=5, rowspan=6, columnspan=4)
             self.cart_grid_params_frame_setup()
 
     def sph_grid_params_frame_widgets(self, master: ttk.Frame) -> ttk.Frame:
@@ -1222,6 +1290,8 @@ class Plotter:
 
     def reset_grid_settings(self) -> None:
         """Restore grid settings widgets back to configuration defaults."""
+        self.grid_mode_var.set(config.grid.mode)
+        self.dynamic_grid_type_var.set(getattr(config.grid, 'dynamic_type', GridType.CARTESIAN.value))
         self.grid_type_radio_var.set(config.grid.default_type)
 
         self.radius_entry.delete(0, tk.END)
@@ -1239,6 +1309,7 @@ class Plotter:
         self.phi_points_entry.delete(0, tk.END)
         self.phi_points_entry.insert(0, str(config.grid.spherical.num_phi_points))
 
+        self.update_dynamic_options_visibility()
         self.place_grid_params_frame()
 
     def reset_mo_settings(self) -> None:
@@ -1330,6 +1401,17 @@ class Plotter:
 
     def apply_grid_settings(self) -> None:
         """Validate UI inputs and apply the chosen grid parameters."""
+        selected_mode = GridMode(self.grid_mode_var.get())
+        if selected_mode != self.grid_mode:
+            logger.info('Switching grid mode to %s.', selected_mode.value)
+            self.grid_mode = selected_mode
+
+        if selected_mode == GridMode.DYNAMIC:
+            new_dynamic_type = GridType(self.dynamic_grid_type_var.get())
+            if new_dynamic_type != self.dynamic_grid_type:
+                logger.info('Dynamic grid coordinate system set to %s.', new_dynamic_type.value)
+                self.dynamic_grid_type = new_dynamic_type
+
         if self.grid_type_radio_var.get() == GridType.SPHERICAL.value:
             radius = float(self.radius_entry.get())
             if radius <= 0:
@@ -1539,8 +1621,11 @@ class Plotter:
 
         assert isinstance(contour_mesh, pv.PolyData)
 
-        refined_contour_mesh = self.refine_countour_mesh(contour_mesh, orb_ind)
-        logger.debug('Refined contour mesh has %d points.', refined_contour_mesh.n_points)
+        if self.grid_mode == GridMode.DYNAMIC:
+            refined_contour_mesh = self.refine_countour_mesh(contour_mesh, orb_ind)
+            logger.debug('Refined contour mesh has %d points.', refined_contour_mesh.n_points)
+        else:
+            refined_contour_mesh = contour_mesh
 
         self.orb_actor = self.pv_plotter.add_mesh(
             refined_contour_mesh,
@@ -1708,8 +1793,13 @@ class Plotter:
 
         self.orb_mesh = self._create_mo_mesh()
 
-    def create_grid_from_bounds(self, bounds: NDArray[np.floating], mo_ind: int) -> pv.StructuredGrid:
-        """Create a Cartesian grid mesh from given bounds.
+    def create_grid_from_bounds(
+        self,
+        bounds: NDArray[np.floating],
+        mo_ind: int,
+        grid_type: GridType,
+    ) -> pv.StructuredGrid:
+        """Create a grid mesh from given bounds.
 
         Parameters
         ----------
@@ -1720,35 +1810,65 @@ class Plotter:
         mo_ind : int
             Index of the molecular orbital to use for grid spacing determination.
 
+        grid_type : GridType
+            Coordinate system to use for the refined grid.
+
         Returns
         -------
         pv.StructuredGrid
-            The generated Cartesian grid mesh.
+            The generated grid mesh.
         """
         x_min, x_max, y_min, y_max, z_min, z_max = bounds
 
-        x = np.arange(
-            x_min - self.INITIAL_GRID_SPACING,
-            x_max + self.INITIAL_GRID_SPACING + self.FINAL_GRID_SPACING,
-            self.FINAL_GRID_SPACING,
-        )
-        y = np.arange(
-            y_min - self.INITIAL_GRID_SPACING,
-            y_max + self.INITIAL_GRID_SPACING + self.FINAL_GRID_SPACING,
-            self.FINAL_GRID_SPACING,
-        )
-        z = np.arange(
-            z_min - self.INITIAL_GRID_SPACING,
-            z_max + self.INITIAL_GRID_SPACING + self.FINAL_GRID_SPACING,
-            self.FINAL_GRID_SPACING,
-        )
-
-        xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
-        grid_points = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
-
         mesh = pv.StructuredGrid()
+
+        if grid_type == GridType.CARTESIAN:
+            x = np.arange(
+                x_min - self.INITIAL_GRID_SPACING,
+                x_max + self.INITIAL_GRID_SPACING + self.FINAL_GRID_SPACING,
+                self.FINAL_GRID_SPACING,
+            )
+            y = np.arange(
+                y_min - self.INITIAL_GRID_SPACING,
+                y_max + self.INITIAL_GRID_SPACING + self.FINAL_GRID_SPACING,
+                self.FINAL_GRID_SPACING,
+            )
+            z = np.arange(
+                z_min - self.INITIAL_GRID_SPACING,
+                z_max + self.INITIAL_GRID_SPACING + self.FINAL_GRID_SPACING,
+                self.FINAL_GRID_SPACING,
+            )
+
+            xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
+            grid_points = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
+            mesh.dimensions = (len(z), len(y), len(x))
+        elif grid_type == GridType.SPHERICAL:
+            x_bounds = np.array([x_min, x_max], dtype=float)
+            y_bounds = np.array([y_min, y_max], dtype=float)
+            z_bounds = np.array([z_min, z_max], dtype=float)
+            corners = np.array(np.meshgrid(x_bounds, y_bounds, z_bounds, indexing='ij')).reshape(3, -1).T
+            center = np.array([(x_min + x_max) / 2, (y_min + y_max) / 2, (z_min + z_max) / 2])
+            radius = np.linalg.norm(corners - center, axis=1).max()
+            radius = max(radius + self.INITIAL_GRID_SPACING, self.FINAL_GRID_SPACING)
+
+            r = np.arange(0, radius + self.FINAL_GRID_SPACING, self.FINAL_GRID_SPACING)
+            if r.size < self.MIN_DYNAMIC_RADIAL_POINTS:
+                r = np.array([0.0, self.FINAL_GRID_SPACING])
+
+            theta = np.linspace(0, np.pi, config.grid.spherical.num_theta_points)
+            phi = np.linspace(0, 2 * np.pi, config.grid.spherical.num_phi_points)
+
+            rr, tt, pp = np.meshgrid(r, theta, phi, indexing='ij')
+            xx, yy, zz = Tabulator._spherical_to_cartesian(rr, tt, pp)  # noqa: SLF001
+            xx += center[0]
+            yy += center[1]
+            zz += center[2]
+            grid_points = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
+            mesh.dimensions = (len(phi), len(theta), len(r))
+        else:
+            raise ValueError(f'Unsupported grid type {grid_type} for dynamic refinement.')
+
         mesh.points = grid_points
-        mesh.dimensions = (len(z), len(y), len(x))
         mesh['orbital'] = self.tabulator.tabulate_mos(mo_ind, grid_points)
 
         return mesh
@@ -1774,7 +1894,7 @@ class Plotter:
 
         refined_blocks = []
         for block in blocks:
-            refined_grid = self.create_grid_from_bounds(block.bounds, mo_ind)
+            refined_grid = self.create_grid_from_bounds(block.bounds, mo_ind, self.dynamic_grid_type)
 
             refined_contour = refined_grid.contour([-self.contour, self.contour])
             refined_blocks.append(refined_contour)

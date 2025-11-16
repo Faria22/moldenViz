@@ -67,6 +67,11 @@ class GridConfig(BaseModel):
     min_radius: int = Field(5, gt=0, description='Minimum radius')
     max_radius_multiplier: int = Field(2, gt=0, description='Max radius multiplier')
     default_type: Literal['spherical', 'cartesian'] = Field('spherical', description='Default grid type')
+    mode: Literal['single', 'dynamic'] = Field('single', description='Grid generation mode')
+    dynamic_type: Literal['spherical', 'cartesian'] = Field(
+        'cartesian',
+        description='Coordinate system used for dynamic refinement',
+    )
     spherical: SphericalGridConfig = Field(default_factory=SphericalGridConfig)
     cartesian: CartesianGridConfig = Field(default_factory=CartesianGridConfig)
 
@@ -430,6 +435,9 @@ class Config:
             'grid': {
                 'min_radius': self.config.grid.min_radius,
                 'max_radius_multiplier': self.config.grid.max_radius_multiplier,
+                'default_type': self.config.grid.default_type,
+                'mode': self.config.grid.mode,
+                'dynamic_type': self.config.grid.dynamic_type,
                 'spherical': {
                     'num_r_points': self.config.grid.spherical.num_r_points,
                     'num_theta_points': self.config.grid.spherical.num_theta_points,

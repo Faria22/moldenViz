@@ -50,6 +50,9 @@ def test_save_current_config_preserves_values(tmp_path: Path, monkeypatch: pytes
     config.config.mo.contour = MO_CONTOUR
     config.config.mo.opacity = MO_OPACITY
     config.config.grid.min_radius = GRID_MIN_RADIUS
+    config.config.grid.mode = 'dynamic'
+    config.config.grid.dynamic_type = 'spherical'
+    config.config.grid.default_type = 'cartesian'
     config.config.molecule.bond.max_length = BOND_MAX_LENGTH
 
     # Save the config
@@ -63,6 +66,9 @@ def test_save_current_config_preserves_values(tmp_path: Path, monkeypatch: pytes
     assert saved_config['MO']['contour'] == MO_CONTOUR
     assert saved_config['MO']['opacity'] == MO_OPACITY
     assert saved_config['grid']['min_radius'] == GRID_MIN_RADIUS
+    assert saved_config['grid']['mode'] == 'dynamic'
+    assert saved_config['grid']['dynamic_type'] == 'spherical'
+    assert saved_config['grid']['default_type'] == 'cartesian'
     assert saved_config['molecule']['bond']['max_length'] == BOND_MAX_LENGTH
 
 

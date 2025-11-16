@@ -123,6 +123,16 @@ def test_tabulate_mos(mo_inds: int | array_like_type | None) -> None:
         assert mo_data.shape == (125, len(mo_inds))
 
 
+def test_tabulate_mos_with_custom_grid() -> None:
+    """Test that tabulating MOs on a custom grid respects the provided points."""
+    tab = Tabulator(str(MOLDEN_PATH))
+    custom_grid = np.array([[0.0, 0.0, 0.0], [0.2, -0.1, 0.1]], dtype=float)
+
+    mo_data = tab.tabulate_mos(0, grid=custom_grid)
+
+    assert mo_data.shape == (custom_grid.shape[0],)
+
+
 @pytest.mark.parametrize('mo_inds', [-1, range(0), range(-1, 1), [0, -1], [1, 2, 3, -1], [0, 178]])
 def test_invalid_mo_inds(mo_inds: int | array_like_type | None) -> None:
     """Test that tabulate_mos raises ValueError for invalid mo_inds."""
