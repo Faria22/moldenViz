@@ -200,9 +200,20 @@ class DummySelectionScreen:
         self.plotter = plotter
         self.current_mo_ind = -1
         self.destroyed = False
+        self._loading = False
+        self.loading_events: list[tuple[bool, str]] = []
+        self.last_loading_message = 'Tabulating orbitals...'
 
     def update_nav_button_states(self) -> None:  # pragma: no cover - noop stub
         pass
+
+    def set_loading_state(self, loading: bool, message: str = 'Tabulating orbitals...') -> None:
+        self._loading = loading
+        self.last_loading_message = message
+        self.loading_events.append((loading, message))
+
+    def on_gtos_ready(self) -> None:
+        self.set_loading_state(False)
 
     def destroy(self) -> None:  # pragma: no cover - noop stub
         self.destroyed = True
@@ -458,6 +469,7 @@ class FakeTabulator:
         self.grid = np.zeros((1, 3))
         self.original_axes = None
         self.gto_data = object()
+        self._gtos = np.zeros((1, 1))
         self._parser = SimpleNamespace(
             atoms=[SimpleNamespace(symbol='H', coords=(0.0, 0.0, 0.0))],
             mos=[SimpleNamespace(sym='s', spin='alpha', occ=2.0, energy=-0.5)],
@@ -470,6 +482,7 @@ class FakeTabulator:
         r: np.ndarray,
         theta: np.ndarray,
         phi: np.ndarray,
+        tabulate_gtos: bool = True,
     ) -> None:
         rr, tt, pp = np.meshgrid(r, theta, phi, indexing='ij')
         xx, yy, zz = Tabulator._spherical_to_cartesian(rr, tt, pp)  # noqa: SLF001
@@ -477,24 +490,34 @@ class FakeTabulator:
         self._grid_type = GridType.SPHERICAL
         self._grid_dimensions = (len(r), len(theta), len(phi))
         self.original_axes = (r, theta, phi)
+        if tabulate_gtos:
+            self._gtos = np.zeros((self.grid.shape[0], 1))
 
     def cartesian_grid(
         self,
         x: np.ndarray,
         y: np.ndarray,
         z: np.ndarray,
+        tabulate_gtos: bool = True,
     ) -> None:
         xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
         self.grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
         self._grid_type = GridType.CARTESIAN
         self._grid_dimensions = (len(x), len(y), len(z))
         self.original_axes = (x, y, z)
+        if tabulate_gtos:
+            self._gtos = np.zeros((self.grid.shape[0], 1))
 
     def tabulate_mos(self, _orb_ind: int) -> np.ndarray:
         return np.arange(self.grid.shape[0], dtype=float)
 
     def export(self, path: str, mo_index: int | None) -> None:
         self.export_calls.append((path, mo_index))
+
+    def tabulate_gtos(self) -> np.ndarray:
+        gtos = np.ones((self.grid.shape[0], 1))
+        self._gtos = gtos
+        return gtos
 
 
 def seed_tabulator_with_cartesian_grid(tabulator: FakeTabulator) -> None:
@@ -508,13 +531,25 @@ class RecordingTabulator(FakeTabulator):
         self.spherical_calls: list[tuple[np.ndarray, np.ndarray, np.ndarray]] = []
         self.cartesian_calls: list[tuple[np.ndarray, np.ndarray, np.ndarray]] = []
 
-    def spherical_grid(self, r: np.ndarray, theta: np.ndarray, phi: np.ndarray) -> None:
+    def spherical_grid(
+        self,
+        r: np.ndarray,
+        theta: np.ndarray,
+        phi: np.ndarray,
+        tabulate_gtos: bool = True,
+    ) -> None:
         self.spherical_calls.append((r, theta, phi))
-        super().spherical_grid(r, theta, phi)
+        super().spherical_grid(r, theta, phi, tabulate_gtos=tabulate_gtos)
 
-    def cartesian_grid(self, x: np.ndarray, y: np.ndarray, z: np.ndarray) -> None:
+    def cartesian_grid(
+        self,
+        x: np.ndarray,
+        y: np.ndarray,
+        z: np.ndarray,
+        tabulate_gtos: bool = True,
+    ) -> None:
         self.cartesian_calls.append((x, y, z))
-        super().cartesian_grid(x, y, z)
+        super().cartesian_grid(x, y, z, tabulate_gtos=tabulate_gtos)
 
 
 class RootRecorder:
@@ -556,6 +591,9 @@ class SelectionPlotter:
         self.plot_calls.append(idx)
         if self.selection_screen is not None:
             self.selection_screen.current_mo_ind = idx
+
+    def _cancel_gto_future(self) -> None:  # pragma: no cover - stubbed out
+        pass
 
 
 @pytest.fixture
@@ -1831,6 +1869,7 @@ def selection_screen_ui(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     plotter_module._OrbitalsTreeview.__bases__ = (SimpleTreeview,)  # noqa: SLF001
     monkeypatch.setattr(plotter_module.ttk, 'Frame', SimpleWidget)
     monkeypatch.setattr(plotter_module.ttk, 'Button', SimpleWidget)
+    monkeypatch.setattr(plotter_module.ttk, 'Label', SimpleWidget)
     yield
     plotter_module._OrbitalSelectionScreen.__bases__ = original_screen_bases  # noqa: SLF001
     plotter_module._OrbitalsTreeview.__bases__ = original_tree_bases  # noqa: SLF001
@@ -1897,6 +1936,7 @@ def test_orbitals_treeview_populate_and_select(selection_screen_ui: None) -> Non
         current_mo_ind=-1,
         plot_orbital=record_plot,
         update_nav_button_states=record_update,
+        _loading=False,
     )
 
     tree = plotter_module._OrbitalsTreeview(selection_screen)  # noqa: SLF001
