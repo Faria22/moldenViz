@@ -13,27 +13,9 @@ import numpy as np
 import pytest
 from matplotlib import colors as mcolors
 
+from moldenViz import Tabulator
 
-class _ModuleProxy:
-    def __init__(self) -> None:
-        self._module: Any | None = None
-
-    def _load(self) -> Any:
-        if self._module is None:
-            self._module = pytest.importorskip('moldenViz.plotter')
-        return self._module
-
-    def __getattr__(self, item: str) -> Any:
-        return getattr(self._load(), item)
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        if name == '_module':
-            super().__setattr__(name, value)
-        else:
-            setattr(self._load(), name, value)
-
-
-plotter_module = _ModuleProxy()
+plotter_module = pytest.importorskip('moldenViz.plotter')
 
 
 class _GridTypeProxy:
@@ -490,7 +472,7 @@ class FakeTabulator:
         phi: np.ndarray,
     ) -> None:
         rr, tt, pp = np.meshgrid(r, theta, phi, indexing='ij')
-        xx, yy, zz = plotter_module._spherical_to_cartesian(rr, tt, pp)  # noqa: SLF001
+        xx, yy, zz = Tabulator._spherical_to_cartesian(rr, tt, pp)  # noqa: SLF001
         self.grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
         self._grid_type = GridType.SPHERICAL
         self._grid_dimensions = (len(r), len(theta), len(phi))
