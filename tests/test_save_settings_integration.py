@@ -5,21 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
-class _ModuleProxy:
-    def __init__(self) -> None:
-        self._module: Any | None = None
-
-    def _load(self) -> Any:
-        if self._module is None:
-            self._module = pytest.importorskip('moldenViz.plotter')
-        return self._module
-
-    def __getattr__(self, item: str) -> Any:
-        return getattr(self._load(), item)
-
-
-plotter_module = _ModuleProxy()
+plotter_module = pytest.importorskip('moldenViz.plotter')
 
 
 def test_save_settings_method_exists_in_plotter() -> None:
