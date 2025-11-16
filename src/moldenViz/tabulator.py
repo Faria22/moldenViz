@@ -177,7 +177,13 @@ class Tabulator:
             Tuple containing spherical coordinates ``(r, theta, phi)``.
         """
         r = np.sqrt(x * x + y * y + z * z)
-        theta = np.arccos(z / r)
+        safe_r = np.clip(r, np.nextafter(0.0, 1.0), None)
+        safe_ratio = np.clip(
+            z / safe_r,
+            np.nextafter(-1.0, 0.0),
+            np.nextafter(1.0, 0.0),
+        )
+        theta = np.arccos(safe_ratio)
         phi = np.arctan2(y, x)
         return r, theta, phi
 
