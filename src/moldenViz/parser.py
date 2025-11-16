@@ -109,6 +109,10 @@ class _Shell:
         self.gtos = gtos
 
         self.norm = 0.0
+        self.gto_norms = np.empty(len(gtos), dtype=float)
+        self.gto_exps = np.array([gto.exp for gto in gtos], dtype=float)
+        self.gto_coeffs = np.array([gto.coeff for gto in gtos], dtype=float)
+        self.prefactor = np.empty(len(gtos), dtype=float)
 
     def normalize(self) -> None:
         """Normalize the shell.
@@ -118,10 +122,9 @@ class _Shell:
         Uses the normalization factor from Jiyun Kuang and C D Lin 1997
         J. Phys. B: At. Mol. Opt. Phys. 30 2529, equations 18 and 20.
         """
-        # See (Jiyun Kuang and C D Lin 1997 J. Phys. B: At. Mol. Opt. Phys. 30 2529)
-        # equation 18 and 20 for the normalization factor
-        for gto in self.gtos:
+        for idx, gto in enumerate(self.gtos):
             gto.normalize(self.l)
+            self.gto_norms[idx] = gto.norm
 
         overlap = 0.0
         for i_gto in self.gtos:
@@ -133,6 +136,7 @@ class _Shell:
                 )
 
         self.norm = 1 / np.sqrt(overlap)
+        self.prefactor = self.norm * self.gto_norms * self.gto_coeffs
 
 
 class Parser:

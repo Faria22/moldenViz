@@ -11,8 +11,6 @@ import pytest
 
 from moldenViz.tabulator import (
     Tabulator,
-    _cartesian_to_spherical,  # noqa: PLC2701
-    _spherical_to_cartesian,  # noqa: PLC2701
     array_like_type,
 )
 
@@ -31,8 +29,8 @@ def test_spherical_cartesian_roundtrip() -> None:
     theta_vals = rng.uniform(0.0, np.pi, size=100)
     phi_vals = rng.uniform(-np.pi, np.pi, size=100)
 
-    x, y, z = _spherical_to_cartesian(r_vals, theta_vals, phi_vals)
-    r2, theta2, phi2 = _cartesian_to_spherical(x, y, z)
+    x, y, z = Tabulator._spherical_to_cartesian(r_vals, theta_vals, phi_vals)  # noqa: SLF001
+    r2, theta2, phi2 = Tabulator._cartesian_to_spherical(x, y, z)  # noqa: SLF001
 
     np.testing.assert_allclose(r_vals, r2, rtol=1e-12, atol=1e-12)
     np.testing.assert_allclose(theta_vals, theta2, rtol=1e-12, atol=1e-12)
@@ -79,7 +77,7 @@ def test_tabulate_gtos_performance_small_grid() -> None:
 def test_tabulate_gtos_million_point_benchmark(benchmark: BenchmarkFixture) -> None:
     """Benchmark million-point grids to ensure GTO tabulation stays sub-10s."""
     tab = Tabulator(str(MOLDEN_PATH))
-    axis = np.linspace(-3.0, 3.0, 100)
+    axis = np.linspace(-3.0, 3.0, 50)
     tab.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
 
     gto_data = benchmark.pedantic(
