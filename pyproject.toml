@@ -62,7 +62,12 @@ lint = "ruff check {args:src tests}"
 typecheck = "basedpyright {args:src tests}"
 test = "pytest --benchmark-skip"
 bench = "pytest --benchmark-only"
-cov = "pytest --cov=moldenViz --benchmark-skip"
+cov = [
+    "coverage erase",
+    "coverage run -m pytest --benchmark-skip",
+    "coverage combine",
+    "coverage report -m",
+]
 all = ["lint", "typecheck", "test"]
 
 [tool.basedpyright]

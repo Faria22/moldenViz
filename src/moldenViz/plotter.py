@@ -1349,6 +1349,7 @@ class Plotter:
     def reset_grid_settings(self) -> None:
         """Restore grid settings widgets back to configuration defaults."""
         self.grid_type_radio_var.set(config.grid.default_type)
+        self.place_grid_params_frame()
 
         self.radius_entry.delete(0, tk.END)
         self.radius_entry.insert(
@@ -1364,8 +1365,6 @@ class Plotter:
 
         self.phi_points_entry.delete(0, tk.END)
         self.phi_points_entry.insert(0, str(config.grid.spherical.num_phi_points))
-
-        self.place_grid_params_frame()
 
     def reset_mo_settings(self) -> None:
         """Restore MO settings widgets back to configuration defaults."""
