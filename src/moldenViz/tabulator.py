@@ -577,7 +577,7 @@ class Tabulator:
         if lmax < 0:
             raise ValueError('lmax must be a non-negative integer.')
 
-        plms = s_plm(lmax, lmax, Tabulator.check_bounds(np.cos(theta)), norm=True)[0]
+        plms = s_plm(lmax, lmax, Tabulator.check_bounds(np.cos(theta)), norm=True)[0] / np.sqrt(2 * np.pi)
 
         xlms = np.empty_like(plms, dtype=float)
         xlms[:, 0, :] = plms[:, 0, :]
