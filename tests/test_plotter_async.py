@@ -182,6 +182,7 @@ def test_plotter_defers_gto_tabulation(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(plotter_module.Tabulator, 'cartesian_grid', fake_cartesian)
     monkeypatch.setattr(plotter_module.Tabulator, 'tabulate_gtos', fake_tabulate_gtos)
+    monkeypatch.setattr(plotter_module.config.grid, 'default_type', 'cartesian', raising=False)
 
     plotter: plotter_module.Plotter | None = None
     try:
