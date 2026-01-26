@@ -7,7 +7,7 @@ name = "moldenViz"
 dynamic = ["version"]
 description = ''
 readme = "README.md"
-requires-python = ">=3.10,<3.14"
+requires-python = ">=3.10"
 license = "MIT"
 keywords = []
 authors = [{ name = "Faria22", email = "fariafelipe22@hotmail.com" }]
@@ -23,8 +23,8 @@ classifiers = [
 ]
 dependencies = [
     "numpy>=2.2",
-    "pyvista>=0.46",
-    "pyvistaqt>=0.11",
+    "pyvista",
+    "pyvistaqt",
     "scipy>=1.15",
     "toml>=0.10",
     "pydantic>=2.12.0",

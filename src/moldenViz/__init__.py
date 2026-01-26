@@ -12,8 +12,6 @@ __all__ = ['Parser', 'Plotter', 'Tabulator']
 
 if TYPE_CHECKING:  # pragma: no cover - type checking helper
     from .plotter import Plotter as Plotter
-else:
-    Plotter: Any | None = None
 
 
 def __getattr__(name: str) -> Any:

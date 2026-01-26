@@ -472,15 +472,15 @@ class Tabulator:
         logger.info('Exporting data to %s (format: %s).', destination, filetype or 'unknown')
 
         if filetype == '.vtk':
-            self._export_vtk(destination, mo_index)
+            self.export_vtk(destination, mo_index)
         elif filetype == '.cube':
             if mo_index is None:
                 raise ValueError('Cube exports require a molecular orbital index.')
-            self._export_cube(destination, mo_index)
+            self.export_cube(destination, mo_index)
         else:
             raise ValueError("Unsupported export format. Use '.vtk' or '.cube'.")
 
-    def _export_vtk(self, destination: Path, mo_index: int | None = None) -> None:
+    def export_vtk(self, destination: Path, mo_index: int | None = None) -> None:
         """Write orbital data to a VTK multiblock dataset."""
         # Import lazily so tabulator-only workflows do not require PyVista/VTK at import time.
         import pyvista as pv  # noqa: PLC0415
@@ -504,7 +504,7 @@ class Tabulator:
 
         struct_grid.save(str(destination))
 
-    def _export_cube(self, destination: Path, mo_index: int) -> None:
+    def export_cube(self, destination: Path, mo_index: int) -> None:
         """Write a single molecular orbital to a Gaussian cube file."""
         cube_values_per_line = 6
         if self._grid_type != GridType.CARTESIAN or self.original_axes is None:
