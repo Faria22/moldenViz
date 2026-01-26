@@ -177,12 +177,13 @@ class Tabulator:
             Tuple containing spherical coordinates ``(r, theta, phi)``.
         """
         r = np.sqrt(x * x + y * y + z * z)
-        safe_r = np.clip(r, np.nextafter(0.0, 1.0), None)
-        safe_ratio = np.clip(
-            z / safe_r,
-            np.nextafter(-1.0, 0.0),
-            np.nextafter(1.0, 0.0),
-        )
+
+        eps = np.finfo(float).eps
+        safe_r = np.clip(r, eps, None)
+        if np.isclose(safe_r, 0.0).all():
+            return r, np.zeros_like(r), np.zeros_like(r)
+
+        safe_ratio = Tabulator._check_bounds(z / safe_r)
         theta = np.arccos(safe_ratio)
         phi = np.arctan2(y, x)
         return r, theta, phi
@@ -583,7 +584,7 @@ class Tabulator:
         if lmax < 0:
             raise ValueError('lmax must be a non-negative integer.')
 
-        plms = s_plm(lmax, lmax, Tabulator.check_bounds(np.cos(theta)), norm=True)[0] / np.sqrt(2 * np.pi)
+        plms = s_plm(lmax, lmax, Tabulator._check_bounds(np.cos(theta)), norm=True)[0] / np.sqrt(2 * np.pi)
 
         xlms = np.empty_like(plms, dtype=float)
         xlms[:, 0, :] = plms[:, 0, :]
@@ -596,7 +597,7 @@ class Tabulator:
         return xlms
 
     @staticmethod
-    def check_bounds(x: np.ndarray) -> np.ndarray:
+    def _check_bounds(x: np.ndarray) -> np.ndarray:
         """Ensure that x is within the open interval (-1, 1) for scipy's associated Legendre polynomial.
 
         Parameters

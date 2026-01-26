@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 from time import perf_counter
 from typing import TYPE_CHECKING
@@ -25,7 +26,7 @@ MOLDEN_PATH = Path(__file__).with_name('sample_molden.inp')
 def test_spherical_cartesian_roundtrip() -> None:
     """Test roundtrip conversion between spherical and Cartesian coordinates."""
     rng = np.random.default_rng(seed=42)
-    r_vals = rng.uniform(0.1, 10.0, size=100)
+    r_vals = rng.uniform(0, 10.0, size=100)
     theta_vals = rng.uniform(0.0, np.pi, size=100)
     phi_vals = rng.uniform(-np.pi, np.pi, size=100)
 
@@ -35,6 +36,23 @@ def test_spherical_cartesian_roundtrip() -> None:
     np.testing.assert_allclose(r_vals, r2, rtol=1e-12, atol=1e-12)
     np.testing.assert_allclose(theta_vals, theta2, rtol=1e-12, atol=1e-12)
     assert np.allclose(phi_vals, phi2)
+
+
+def test_cartesian_to_spherical_handles_zero_radius() -> None:
+    """Zero-radius points should not emit warnings or NaNs."""
+    x = np.array([0.0])
+    y = np.array([0.0])
+    z = np.array([0.0])
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', RuntimeWarning)
+        r, theta, phi = Tabulator._cartesian_to_spherical(x, y, z)  # noqa: SLF001
+
+    assert np.isfinite(r).all()
+    assert np.isfinite(theta).all()
+    assert np.isfinite(phi).all()
+    np.testing.assert_allclose(r, 0.0)
+    np.testing.assert_allclose(theta, 0.0)
 
 
 def test_tabulate_gtos_requires_grid() -> None:
