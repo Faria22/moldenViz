@@ -24,7 +24,8 @@ except (ImportError, FileNotFoundError, KeyError) as e:
     release = '0.0.0'  # Fallback or error
     version = '0.0'
     logger.warning(
-        f'Warning: Could not read version from __about__.py: {e}\nUsing fallback version.',
+        'Warning: Could not read version from __about__.py: %s Using fallback version.',
+        e,
     )
 
 # -- General configuration ---------------------------------------------------

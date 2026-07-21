@@ -1,15 +1,15 @@
 """Tabulator module for creating grids and tabulating Gaussian-type orbitals (GTOs) from Molden files."""
 
 import logging
+import os
+from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
-from functools import cache
-from math import factorial
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-import pyvista as pv
 from numpy.typing import NDArray
+from scipy.special import assoc_legendre_p_all as s_plm
 
 from .parser import Parser
 
@@ -28,113 +28,6 @@ def _grid_creation_with_only_molecule_error() -> RuntimeError:
 
     """
     return RuntimeError('Grid creation is not allowed when `only_molecule` is set to `True`.')
-
-
-def _spherical_to_cartesian(
-    r: NDArray[np.floating],
-    theta: NDArray[np.floating],
-    phi: NDArray[np.floating],
-) -> tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]:
-    """Convert spherical coordinates to Cartesian coordinates.
-
-    Parameters
-    ----------
-    r : NDArray[np.floating]
-        1D array of radial coordinates.
-    theta : NDArray[np.floating]
-        1D array of polar angles (radians).
-    phi : NDArray[np.floating]
-        1D array of azimuthal angles (radians).
-
-    Returns
-    -------
-    tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]
-        Tuple containing the Cartesian coordinates ``(x, y, z)``.
-    """
-    x = r * np.sin(theta) * np.cos(phi)
-    y = r * np.sin(theta) * np.sin(phi)
-    z = r * np.cos(theta)
-
-    return x, y, z
-
-
-def _cartesian_to_spherical(
-    x: NDArray[np.floating],
-    y: NDArray[np.floating],
-    z: NDArray[np.floating],
-) -> tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]:
-    """Convert Cartesian coordinates to spherical coordinates.
-
-    Parameters
-    ----------
-    x : NDArray[np.floating]
-        1D array of x coordinates.
-    y : NDArray[np.floating]
-        1D array of y coordinates.
-    z : NDArray[np.floating]
-        1D array of z coordinates.
-
-    Returns
-    -------
-    tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]
-        Tuple containing spherical coordinates ``(r, theta, phi)``.
-    """
-    r = np.sqrt(x**2 + y**2 + z**2)
-    theta = np.arccos(z / r)
-    phi = np.arctan2(y, x)
-
-    return r, theta, phi
-
-
-@cache
-def _cached_factorial(n: int) -> int:
-    """Compute factorial with caching for non-negative integers.
-
-    Returns
-    -------
-    int
-        The factorial of n.
-    """
-    return factorial(n)
-
-
-@cache
-def _binomial(r: float, k: int) -> float:
-    """Calculate the generalized binomial coefficient (r over k).
-
-    This function supports real or complex 'r' and non-negative integer 'k'.
-    The formula is: C(r, k) = r * (r-1) * ... * (r-k+1) / k!
-
-    Parameters
-    ----------
-    r : float
-        A real or complex number.
-    k : int
-        A non-negative integer.
-
-    Returns
-    -------
-    float
-        The value of the generalized binomial coefficient as a float or complex number.
-
-    Raises
-    ------
-    ValueError
-        If k is a negative integer.
-    """
-    if not isinstance(k, int) or k < 0:
-        raise ValueError('k must be a non-negative integer.')
-
-    if k == 0:
-        return 1
-    if k == 1:
-        return r
-
-    numerator = 1
-    for i in range(k):
-        numerator *= r - i
-
-    return numerator / _cached_factorial(k)
 
 
 class GridType(Enum):
@@ -252,6 +145,49 @@ class Tabulator:
             raise ValueError(f'{name}-axis must be evenly spaced.')
         return float(diffs[0])
 
+    @staticmethod
+    def _spherical_to_cartesian(
+        r: NDArray[np.floating],
+        theta: NDArray[np.floating],
+        phi: NDArray[np.floating],
+    ) -> tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]:
+        """Convert spherical coordinates to Cartesian coordinates.
+
+        Returns
+        -------
+        tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]
+            Tuple containing the Cartesian coordinates ``(x, y, z)``.
+        """
+        x = r * np.sin(theta) * np.cos(phi)
+        y = r * np.sin(theta) * np.sin(phi)
+        z = r * np.cos(theta)
+        return x, y, z
+
+    @staticmethod
+    def _cartesian_to_spherical(
+        x: NDArray[np.floating],
+        y: NDArray[np.floating],
+        z: NDArray[np.floating],
+    ) -> tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]:
+        """Convert Cartesian coordinates to spherical coordinates.
+
+        Returns
+        -------
+        tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]
+            Tuple containing spherical coordinates ``(r, theta, phi)``.
+        """
+        r = np.sqrt(x * x + y * y + z * z)
+
+        eps = np.finfo(float).eps
+        safe_r = np.clip(r, eps, None)
+        if np.isclose(safe_r, 0.0).all():
+            return r, np.zeros_like(r), np.zeros_like(r)
+
+        safe_ratio = Tabulator._check_bounds(z / safe_r)
+        theta = np.arccos(safe_ratio)
+        phi = np.arctan2(y, x)
+        return r, theta, phi
+
     def _set_grid(
         self,
         x: NDArray[np.floating],
@@ -284,11 +220,19 @@ class Tabulator:
 
         xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
         if grid_type == GridType.SPHERICAL:
-            xx, yy, zz = _spherical_to_cartesian(xx, yy, zz)
+            xx, yy, zz = self._spherical_to_cartesian(xx, yy, zz)
 
         self._grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
         self._grid_type = grid_type
         self._grid_dimensions = (len(x), len(y), len(z))
+        logger.info(
+            'Created %s grid with %d points (%dx%dx%d).',
+            grid_type.value,
+            self._grid.shape[0],
+            len(x),
+            len(y),
+            len(z),
+        )
 
         if tabulate_gtos:
             self._gtos = self.tabulate_gtos()
@@ -314,6 +258,7 @@ class Tabulator:
             Whether to tabulate Gaussian-type orbitals (GTOs) after creating the grid.
             Defaults to True.
         """
+        logger.debug('Setting cartesian grid axes with lengths x=%d, y=%d, z=%d.', len(x), len(y), len(z))
         self._set_grid(x, y, z, GridType.CARTESIAN, tabulate_gtos)
 
     def spherical_grid(
@@ -342,6 +287,7 @@ class Tabulator:
         Grid points are converted to Cartesian coordinates.
 
         """
+        logger.debug('Setting spherical grid axes with lengths r=%d, theta=%d, phi=%d.', len(r), len(theta), len(phi))
         self._set_grid(r, theta, phi, GridType.SPHERICAL, tabulate_gtos)
 
     def tabulate_gtos(self) -> NDArray[np.floating]:
@@ -364,35 +310,67 @@ class Tabulator:
         if not hasattr(self, 'grid'):
             raise RuntimeError('Grid is not defined. Please create a grid before tabulating GTOs.')
 
+        total_points = self._grid.shape[0]
+        total_coeffs = self._parser.mo_coeffs.shape[1]
+        logger.info('Tabulating GTOs on %d grid points.', total_points)
+
         # Having a predefined array makes it faster to fill the data
-        gto_data = np.empty((self._grid.shape[0], self._parser.mo_coeffs.shape[1]))
-        self._atom_gto_slices = []
-        ind = 0
+        gto_data = np.empty((total_points, total_coeffs))
+        atom_tasks: list[tuple[Any, slice]] = []
+        idx_shell_start = 0
+
+        # Calculate the slices for each atom's shells
         for atom in self._parser.atoms:
-            atom_start = ind
-            centered_grid = self._grid - atom.position
-            max_l = atom.shells[-1].l
+            num_gtos_in_shell = sum(2 * shell.l + 1 for shell in atom.shells)
+            atom_slice = slice(idx_shell_start, idx_shell_start + num_gtos_in_shell)
+            atom_tasks.append((atom, atom_slice))
+            idx_shell_start += num_gtos_in_shell
 
-            r, theta, phi = _cartesian_to_spherical(*centered_grid.T)  # pyright: ignore[reportArgumentType]
-            xlms = self._tabulate_xlms(theta, phi, max_l)
-
-            for shell in atom.shells:
-                l = shell.l
-                m_inds = np.arange(-l, l + 1)
-                gto_inds = ind + l + m_inds
-
-                radial = shell.norm * r**l * sum(gto.norm * gto.coeff * np.exp(-gto.exp * r**2) for gto in shell.gtos)
-
-                gto_data[:, gto_inds] = radial[:, None] * xlms[l, m_inds, ...].T
-
-                ind += 2 * l + 1
-
-            self._atom_gto_slices.append(slice(atom_start, ind))
+        max_workers = min(len(atom_tasks), os.cpu_count() or 1)
+        if max_workers <= 1:
+            for atom, atom_slice in atom_tasks:
+                self._tabulate_atom(atom, atom_slice, gto_data)
+        else:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = [
+                    executor.submit(self._tabulate_atom, atom, atom_slice, gto_data) for atom, atom_slice in atom_tasks
+                ]
+                for future in futures:
+                    future.result()
 
         logger.debug('GTO data shape: %s', gto_data.shape)
 
         self._gtos = gto_data
         return gto_data
+
+    def _tabulate_atom(self, atom: Any, atom_slice: slice, gto_data: NDArray[np.floating]) -> None:
+        """Tabulate all shells for a single atom into the shared GTO array."""
+        centered_grid = self._grid - atom.position
+        max_l = atom.shells[-1].l
+        total_points = self._grid.shape[0]
+
+        r, theta, phi = self._cartesian_to_spherical(*centered_grid.T)  # pyright: ignore[reportArgumentType]
+
+        num_r_pows = max(max_l + 1, 3)  # Ensure we compute up to r^2
+        r_pows = np.ones((num_r_pows, total_points), dtype=float)
+        if num_r_pows > 1:
+            r_pows[1:] = np.cumprod(np.broadcast_to(r, (num_r_pows - 1, total_points)), axis=0)
+        r_sq = r_pows[2]
+
+        xlms = self._tabulate_xlms(theta, phi, max_l)
+        atom_block = gto_data[:, atom_slice]
+        block_cursor = 0
+
+        for shell in atom.shells:
+            l = shell.l
+            num_m = 2 * l + 1
+            m_inds = np.arange(-l, l + 1)
+            inner_slice = slice(block_cursor, block_cursor + num_m)
+
+            radial = r_pows[l] * (shell.prefactor @ np.exp(-shell.gto_exps[:, None] * r_sq[None, :]))
+
+            atom_block[:, inner_slice] = radial[:, None] * xlms[l, m_inds, ...].T
+            block_cursor += num_m
 
     def tabulate_mos(self, mo_inds: int | array_like_type | None = None) -> NDArray[np.floating]:
         """Tabulate molecular orbitals (MOs) on the current grid.
@@ -426,6 +404,9 @@ class Tabulator:
 
         if mo_inds is None:
             mo_inds = list(range(len(self._parser.mos)))
+
+        num_requested = 1 if isinstance(mo_inds, int) else len(mo_inds)
+        logger.info('Tabulating %d molecular orbital(s).', num_requested)
 
         if isinstance(mo_inds, range):
             mo_inds = list(mo_inds)
@@ -488,23 +469,28 @@ class Tabulator:
 
         destination = Path(path)
         filetype = destination.suffix
+        logger.info('Exporting data to %s (format: %s).', destination, filetype or 'unknown')
 
         if filetype == '.vtk':
-            self._export_vtk(destination, mo_index)
+            self.export_vtk(destination, mo_index)
         elif filetype == '.cube':
             if mo_index is None:
                 raise ValueError('Cube exports require a molecular orbital index.')
-            self._export_cube(destination, mo_index)
+            self.export_cube(destination, mo_index)
         else:
             raise ValueError("Unsupported export format. Use '.vtk' or '.cube'.")
 
-    def _export_vtk(self, destination: Path, mo_index: int | None = None) -> None:
+    def export_vtk(self, destination: Path, mo_index: int | None = None) -> None:
         """Write orbital data to a VTK multiblock dataset."""
+        # Import lazily so tabulator-only workflows do not require PyVista/VTK at import time.
+        import pyvista as pv  # noqa: PLC0415
+
         if not hasattr(self, 'gtos'):
             self.tabulate_gtos()
 
         mo_data = self.tabulate_mos(mo_index)
         dims = self._grid_dimensions[::-1]
+        logger.debug('Writing VTK file %s with grid dimensions %s.', destination, dims)
 
         struct_grid = pv.StructuredGrid()
         struct_grid.points = self._grid.copy()
@@ -516,15 +502,16 @@ class Tabulator:
         else:
             struct_grid.point_data[f'mo_{mo_index}'] = mo_data
 
-        struct_grid.save(destination)
+        struct_grid.save(str(destination))
 
-    def _export_cube(self, destination: Path, mo_index: int) -> None:
+    def export_cube(self, destination: Path, mo_index: int) -> None:
         """Write a single molecular orbital to a Gaussian cube file."""
         cube_values_per_line = 6
         if self._grid_type != GridType.CARTESIAN or self.original_axes is None:
             raise RuntimeError('Cube exports are only supported for Cartesian grids.')
 
         mo_values = self.tabulate_mos(mo_index)
+        logger.debug('Writing cube file %s for MO %d.', destination, mo_index)
 
         x, y, z = self.original_axes
         dx = self._axis_spacing(x, 'x')
@@ -597,57 +584,32 @@ class Tabulator:
         if lmax < 0:
             raise ValueError('lmax must be a non-negative integer.')
 
-        plms = Tabulator._tabulate_plms(np.cos(theta), lmax)
+        plms = s_plm(lmax, lmax, Tabulator._check_bounds(np.cos(theta)), norm=True)[0] / np.sqrt(2 * np.pi)
 
-        xlms = np.empty((lmax + 1, 2 * lmax + 1, theta.size), dtype=float)
+        xlms = np.empty_like(plms, dtype=float)
         xlms[:, 0, :] = plms[:, 0, :]
 
         for m in range(1, lmax + 1):
-            xlms[:, -m, :] = np.sqrt(2) * plms[:, m, :] * np.sin(m * phi)
-            xlms[:, m, :] = np.sqrt(2) * plms[:, m, :] * np.cos(m * phi)
+            factor = -1 if (m % 2) else 1  # Condon-Shortley phase
+            xlms[:, -m, :] = factor * np.sqrt(2) * plms[:, m, :] * np.sin(m * phi)
+            xlms[:, m, :] = factor * np.sqrt(2) * plms[:, m, :] * np.cos(m * phi)
 
         return xlms
 
     @staticmethod
-    def _tabulate_plms(x: NDArray[np.floating], lmax: int) -> NDArray[np.floating]:
-        """Tabulate normalized associated Legendre polynomials (without Condon-Shortley phase).
-
-        Returns a 3D array with axes `(l, m, index)` where:
-            The first axis enumerates ``l`` in ``[0, lmax]``.
-            The second axis enumerates ``m`` in ``[0, lmax]``.
-            The third axis spans the samples of ``x``.
-
-        Using closed form outlined here:
-        https://en.m.wikipedia.org/wiki/Associated_Legendre_polynomials#Closed_Form
+    def _check_bounds(x: np.ndarray) -> np.ndarray:
+        """Ensure that x is within the open interval (-1, 1) for scipy's associated Legendre polynomial.
 
         Parameters
         ----------
-        x : NDArray[np.floating]
-            Array of x values.
-        lmax : int
-            Maximum angular momentum quantum number.
+        x : np.ndarray
+            Input array of x values.
 
         Returns
         -------
-        NDArray[np.floating]
-            Tabulated associated Legendre polynomials.
+        np.ndarray
+            Clipped array with values in the open interval (-1, 1).
         """
-        plms = np.empty((lmax + 1, lmax + 1, x.size), dtype=float)
-
-        for l in range(lmax + 1):
-            for m in range(l + 1):
-                plms[l, m, :] = (
-                    np.sqrt((2 * l + 1) * _cached_factorial(l - m) / _cached_factorial(l + m) / 4 / np.pi)
-                    * 2**l
-                    * (1 - x**2) ** (m / 2)
-                    * sum(
-                        _cached_factorial(k)
-                        * x ** (k - m)
-                        * _binomial(l, k)
-                        * _binomial((l + k - 1) / 2, l)
-                        / _cached_factorial(k - m)
-                        for k in range(m, l + 1)
-                    )
-                )
-
-        return plms
+        min_x = np.nextafter(-1.0, 0.0)
+        max_x = np.nextafter(1.0, 0.0)
+        return np.clip(x, min_x, max_x)

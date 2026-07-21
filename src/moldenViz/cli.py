@@ -1,0 +1,131 @@
+"""CLI entrance point."""
+
+from __future__ import annotations
+
+import argparse
+import logging
+from functools import lru_cache
+from importlib import import_module
+from typing import TYPE_CHECKING, Any
+
+from .__about__ import __version__
+from .examples.get_example_files import all_examples
+
+if TYPE_CHECKING:  # pragma: no cover - typing helper
+    from collections.abc import Callable
+else:
+    Callable = Any  # type: ignore[assignment]
+
+logger = logging.getLogger(__name__)
+
+COLORS = {
+    'ERROR': '\033[38;5;196m',  # Bright Red
+    'WARNING': '\033[38;5;208m',  # Bright Orange
+    'INFO': '\033[38;5;34m',  # Bright Green
+    'DEBUG': '\033[38;5;27m',  # Bright Blue
+    'RESET': '\033[0m',  # Reset to default color
+}
+
+
+@lru_cache(maxsize=1)
+def _resolve_plotter() -> Callable[..., Any]:
+    """Return the Plotter class, importing it lazily to avoid heavy deps.
+
+    Returns
+    -------
+    Callable[..., Any]
+        The Plotter class used to launch the UI.
+
+    Raises
+    ------
+    RuntimeError
+        If GUI dependencies are unavailable.
+    """
+    try:
+        module = import_module('moldenViz.plotter')
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            'Plotter UI dependencies are missing. Install moldenViz with GUI extras to run the CLI.',
+        ) from exc
+
+    return module.Plotter
+
+
+class ColorFormatter(logging.Formatter):
+    """Apply ANSI colors to log level prefixes."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        """Format the log record with colors based on its level.
+
+        Parameters
+        ----------
+        record : logging.LogRecord
+            The log record to format.
+
+        Returns
+        -------
+        str
+            The formatted log message with ANSI color codes.
+        """
+        message = super().format(record)
+        color = COLORS.get(record.levelname)
+        if not color:
+            return message
+        return f'{color}{message}{COLORS["RESET"]}'
+
+
+def main() -> None:
+    """Entry point for the moldenViz command-line interface.
+
+    Parses command line arguments and launches the plotter with the specified
+    molden file or example molecule. Supports options to plot only the molecule
+    structure without molecular orbitals.
+    """
+    parser = argparse.ArgumentParser(prog='moldenViz')
+    parser.add_argument('-V', '--version', action='version', version=f'%(prog)s {__version__}')
+    source = parser.add_mutually_exclusive_group(required=True)
+
+    source.add_argument('file', nargs='?', default=None, help='Optional molden file path', type=str)
+    parser.add_argument('-m', '--only_molecule', action='store_true', help='Only plots the molecule')
+    source.add_argument(
+        '-e',
+        '--example',
+        type=str,
+        metavar='molecule',
+        choices=all_examples.keys(),
+        help='Load example %(metavar)s. Options are: %(choices)s',
+    )
+
+    verbosity_group = parser.add_argument_group('verbosity')
+    verbosity = verbosity_group.add_mutually_exclusive_group()
+    verbosity.add_argument('-v', '--verbose', action='store_true', help='Increase logging verbosity to INFO')
+    verbosity.add_argument('-d', '--debug', action='store_true', help='Enable debug logging')
+    verbosity.add_argument('-q', '--quiet', action='store_true', help='Reduce logging output to errors only')
+
+    args = parser.parse_args()
+
+    if args.debug:
+        level = logging.DEBUG
+    elif args.verbose:
+        level = logging.INFO
+    elif args.quiet:
+        level = logging.ERROR
+    else:
+        level = logging.WARNING
+
+    handler = logging.StreamHandler()
+    handler.setFormatter(ColorFormatter('%(levelname)s %(name)s: %(message)s'))
+    logging.basicConfig(level=level, handlers=[handler], force=True)
+
+    logger.debug('Parsed CLI arguments: %s', vars(args))
+
+    source_path = args.file or all_examples[args.example]
+    source_label = args.file or f'example {args.example}'
+    logger.info('Launching plotter for %s', source_label)
+
+    plotter_cls = _resolve_plotter()
+    plotter_cls(source_path, only_molecule=args.only_molecule)
+
+
+if __name__ == '__main__':
+    main()

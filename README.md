@@ -22,6 +22,9 @@ pip install moldenViz
   moldenViz -e benzene
   ```
 
+- Review the [CLI guide](docs/source/cli-guide.rst) for version checks, verbosity toggles, and other flags you can pass to
+  ``moldenViz``.
+
 - Use the Python API for scripted workflows:
 
   ```python

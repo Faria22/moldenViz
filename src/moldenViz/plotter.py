@@ -1,7 +1,9 @@
 """Plotter module for creating plots of the molecule and it's orbitals."""
 
 import logging
+import time
 import tkinter as tk
+from concurrent.futures import Future, ThreadPoolExecutor
 from tkinter import filedialog, messagebox, ttk
 
 import matplotlib.colors as mcolors
@@ -16,11 +18,31 @@ from shiboken6 import isValid
 from ._config_module import Config
 from ._plotting_objects import Molecule
 from .parser import _MolecularOrbital
-from .tabulator import GridType, Tabulator, _cartesian_to_spherical, _spherical_to_cartesian
+from .tabulator import GridType, Tabulator
+
+
+def _describe_source(source: str | list[str]) -> str:
+    """Return a human readable description of the data source.
+
+    Parameters
+    ----------
+    source : str | list[str]
+        Path to a Molden file or the raw lines read from one.
+
+    Returns
+    -------
+    str
+        Description suitable for logging output.
+    """
+    if isinstance(source, str):
+        return source
+    return f'{len(source)} molden lines'
+
 
 logger = logging.getLogger(__name__)
 
 config = Config()
+_GTO_EXECUTOR = ThreadPoolExecutor(max_workers=1)
 
 
 class Plotter:
@@ -95,25 +117,35 @@ class Plotter:
         tabulator: Tabulator | None = None,
         tk_root: tk.Tk | None = None,
     ) -> None:
+        logger.info('Initialising Plotter (only_molecule=%s)', only_molecule)
+
         self.on_screen = True
         self.only_molecule = only_molecule
         self.selection_screen: _OrbitalSelectionScreen | None = None
+        self._gto_future: Future[NDArray[np.floating]] | None = None
+        self._gtos_ready = only_molecule
+        self._gto_start_time: float | None = None
+        self._active_gto_job_id: int | None = None
+        self._gto_job_counter = 0
 
         self.tk_root = tk_root
         self._no_prev_tk_root = self.tk_root is None
         if self.tk_root is None:
             self.tk_root = tk.Tk()
             self.tk_root.withdraw()  # Hides window
+            logger.debug('Created internal Tk root window for Plotter UI.')
 
         self.pv_plotter = BackgroundPlotter(editor=False)
         self.pv_plotter.set_background(config.background_color)
         self.pv_plotter.show_axes()
+        logger.debug('Configured PyVista plotter background colour to %s', config.background_color)
 
         self._add_orbital_menus_to_pv_plotter()
         self._connect_pv_plotter_close_signal()
         self._override_clear_all_button()
 
         if tabulator:
+            logger.info('Using provided Tabulator instance with grid type %s', tabulator._grid_type.value)  # noqa: SLF001
             if not hasattr(tabulator, 'grid'):
                 raise ValueError('Tabulator does not have grid attribute.')
 
@@ -131,15 +163,23 @@ class Plotter:
 
             self.tabulator = tabulator
         else:
+            logger.info('Creating Tabulator for source %s', _describe_source(source))
             self.tabulator = Tabulator(source, only_molecule=only_molecule)
+        self._gtos_ready = self.only_molecule or hasattr(self.tabulator, '_gtos')
 
         self.molecule: Molecule
         self.molecule_opacity = config.molecule.opacity
         self.load_molecule(config)
 
-        # It no tabulator was passed, create default grid
+        # If no tabulator was passed, create default grid
         if not only_molecule and not tabulator:
             if config.grid.default_type == 'spherical':
+                logger.info(
+                    'Generating default spherical grid with %dx%dx%d samples.',
+                    config.grid.spherical.num_r_points,
+                    config.grid.spherical.num_theta_points,
+                    config.grid.spherical.num_phi_points,
+                )
                 self.tabulator.spherical_grid(
                     np.linspace(
                         0,
@@ -148,19 +188,32 @@ class Plotter:
                     ),
                     np.linspace(0, np.pi, config.grid.spherical.num_theta_points),
                     np.linspace(0, 2 * np.pi, config.grid.spherical.num_phi_points),
+                    tabulate_gtos=False,
                 )
             else:  # cartesian
                 r = max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius)
+                logger.info(
+                    'Generating default cartesian grid spanning ±%.2f with %dx%dx%d samples.',
+                    r,
+                    config.grid.cartesian.num_x_points,
+                    config.grid.cartesian.num_y_points,
+                    config.grid.cartesian.num_z_points,
+                )
                 self.tabulator.cartesian_grid(
                     np.linspace(-r, r, config.grid.cartesian.num_x_points),
                     np.linspace(-r, r, config.grid.cartesian.num_y_points),
                     np.linspace(-r, r, config.grid.cartesian.num_z_points),
+                    tabulate_gtos=False,
                 )
+            self._gtos_ready = False
+            self._schedule_gto_tabulation()
 
         # If we want to have the molecular orbitals, we need to initiate Tk before Qt
         # That is why we have this weird if statement separated this way
         if only_molecule:
+            logger.info('Running in molecule-only mode; skipping orbital mesh creation.')
             if self._no_prev_tk_root:
+                logger.debug('Entering Tk main loop for molecule-only display.')
                 self.tk_root.mainloop()
             return
 
@@ -180,9 +233,23 @@ class Plotter:
 
         if not self.only_molecule:
             self.selection_screen = _OrbitalSelectionScreen(self)
+            logger.debug('Orbital selection screen initialised.')
+            if not self._gtos_ready:
+                self.selection_screen.set_loading_state(True)
 
         if self._no_prev_tk_root:
+            logger.debug('Entering Tk main loop for full Plotter UI.')
             self.tk_root.mainloop()
+
+    def wait_for_gtos(self, timeout: float | None = None) -> None:
+        """Block until the background GTO tabulation finishes."""
+        if self._gtos_ready:
+            return
+        if self._gto_future is None:
+            raise RuntimeError('GTO tabulation has not been scheduled.')
+        gtos = self._gto_future.result(timeout=timeout)
+        if not self._gtos_ready:
+            self._apply_gtos_ready(gtos)
 
     @staticmethod
     def custom_cmap_from_colors(colors: list[str]) -> LinearSegmentedColormap:
@@ -200,9 +267,92 @@ class Plotter:
         """
         return LinearSegmentedColormap.from_list('custom_mo', colors)
 
+    def _schedule_gto_tabulation(self) -> None:
+        """Submit background GTO tabulation work."""
+        if self.only_molecule or self._gtos_ready or self._gto_future is not None:
+            return
+        logger.info('Starting background GTO tabulation...')
+        self._gto_start_time = time.perf_counter()
+        self._gto_job_counter += 1
+        job_id = self._gto_job_counter
+        self._active_gto_job_id = job_id
+        self._gto_future = _GTO_EXECUTOR.submit(self.tabulator.tabulate_gtos)
+        self._gto_future.add_done_callback(lambda fut, job_id=job_id: self._on_gtos_ready(fut, job_id))
+
+    def _on_gtos_ready(self, future: Future[NDArray[np.floating]], job_id: int) -> None:
+        """Handle completion of a background tabulation future."""
+
+        def _finish_on_main_thread() -> None:
+            if self._active_gto_job_id != job_id:
+                return
+            self._active_gto_job_id = None
+            if self._gtos_ready:
+                self._gto_future = None
+                return
+            if future.cancelled():
+                logger.info('Background GTO tabulation cancelled.')
+                self._gto_future = None
+                self._gto_start_time = None
+                return
+            try:
+                gtos = future.result()
+            except Exception as exc:  # pragma: no cover - defensive logging
+                self._gto_future = None
+                self._gto_start_time = None
+                logger.exception('Background GTO tabulation failed.')
+                messagebox.showerror('Orbital Tabulation Failed', f'Failed to tabulate orbitals:\n\n{exc!s}')
+                return
+            self._apply_gtos_ready(gtos)
+
+        if self.tk_root is not None:
+            self.tk_root.after_idle(_finish_on_main_thread)
+        else:
+            _finish_on_main_thread()
+
+    def _apply_gtos_ready(self, gtos: NDArray[np.floating]) -> None:
+        """Store computed GTOs and update UI state."""
+        self.tabulator._gtos = gtos  # noqa: SLF001
+        self._gtos_ready = True
+        self._gto_future = None
+        self._active_gto_job_id = None
+        if self._gto_start_time is not None:
+            elapsed = time.perf_counter() - self._gto_start_time
+            logger.info('GTO tabulation completed in %.2fs.', elapsed)
+            self._gto_start_time = None
+        self.orb_mesh = self._create_mo_mesh()
+        if self.selection_screen:
+            self.selection_screen.on_gtos_ready()
+            if self.selection_screen.current_mo_ind >= 0:
+                self.plot_orbital(self.selection_screen.current_mo_ind)
+
+    def _ensure_gtos_ready(self) -> bool:
+        """Return True if GTO data are ready for orbital operations.
+
+        Returns
+        -------
+        bool
+            True when orbital plots can be rendered immediately.
+        """
+        if self._gtos_ready:
+            return True
+        logger.debug('Ignoring orbital request while GTOs are loading.')
+        return False
+
+    def _cancel_gto_future(self) -> None:
+        """Cancel any pending GTO computation."""
+        if self._gto_future is None:
+            return
+        if not self._gto_future.done():
+            logger.info('Cancelling pending GTO tabulation job.')
+            self._gto_future.cancel()
+        self._gto_future = None
+        self._gto_start_time = None
+        self._active_gto_job_id = None
+
     def load_molecule(self, config: Config) -> None:
         """Reload the molecule from the parser data."""
         self.molecule = Molecule(self.tabulator._parser.atoms, config)  # noqa: SLF001
+        logger.info('Loaded molecule with %d atoms.', len(self.molecule.atoms))
 
         for actor in self.molecule_actors if hasattr(self, 'molecule_actors') else []:
             self.pv_plotter.remove_actor(actor)
@@ -211,6 +361,7 @@ class Plotter:
             self.pv_plotter,
             self.molecule_opacity,
         )
+        logger.debug('Added %d molecule actors to the scene.', len(self.molecule_actors))
 
     def _override_clear_all_button(self) -> None:
         """Override the default "Clear All" action in the PyVista plotter's View menu."""
@@ -292,6 +443,7 @@ class Plotter:
 
         file_format = format_var.get()
         scope = scope_var.get()
+        logger.info('Export requested: format=%s, scope=%s.', file_format, scope)
 
         # Validate selection
         if scope == 'current' and self.selection_screen.current_mo_ind < 0:
@@ -329,13 +481,17 @@ class Plotter:
             mo_index = self.selection_screen.current_mo_ind if scope == 'current' else None
             self.tabulator.export(file_path, mo_index=mo_index)
             messagebox.showinfo('Export Successful', f'Orbital(s) exported successfully to:\n{file_path}')
+            logger.info('Export completed successfully to %s.', file_path)
             export_window.destroy()
         except (RuntimeError, ValueError) as e:
+            logger.exception('Export failed during orbital export.')
             messagebox.showerror('Export Failed', f'Failed to export orbital(s):\n\n{e!s}')
 
     def export_orbitals_dialog(self) -> None:
         """Open a dialog to configure and export molecular orbitals."""
         assert self.selection_screen is not None
+        if not self._ensure_gtos_ready():
+            return
 
         export_window = tk.Toplevel(self.tk_root)
         export_window.title('Export Orbitals')
@@ -705,12 +861,14 @@ class Plotter:
             for child in widget.winfo_children():
                 if isinstance(child, ttk.Label) and 'Molecular Orbital Opacity:' in child.cget('text'):
                     child.config(text=f'Molecular Orbital Opacity: {opacity:.2f}')
+        logger.info('Set molecular orbital opacity to %.2f.', opacity)
 
     def apply_mo_contour(self) -> None:
         """Apply contour changes immediately."""
         try:
             new_contour = float(self.contour_entry.get().strip())
             self.contour = new_contour
+            logger.info('Set molecular orbital contour to %.2f.', new_contour)
             # Replot the current orbital with the new contour
             idx = self._get_current_mo_index()
             if idx >= 0:
@@ -820,6 +978,7 @@ class Plotter:
             for child in widget.winfo_children():
                 if isinstance(child, ttk.Label) and 'Molecule Opacity:' in child.cget('text'):
                     child.config(text=f'Molecule Opacity: {opacity:.2f}')
+        logger.info('Set molecule opacity to %.2f.', opacity)
 
     def apply_background_color(self) -> None:
         """Apply background color changes immediately."""
@@ -827,6 +986,7 @@ class Plotter:
             color = self.background_color_entry.get().strip()
             if mcolors.is_color_like(color):
                 self.pv_plotter.set_background(color)
+                logger.info('Set background color to %s.', color)
             else:
                 messagebox.showerror('Invalid Input', f'"{color}" is not a valid color.')
         except (ValueError, RuntimeError) as e:
@@ -1132,7 +1292,7 @@ class Plotter:
         num_r, num_theta, num_phi = self.tabulator._grid_dimensions  # noqa: SLF001
 
         # The last point of the grid for sure has the largest r
-        r, _, _ = _cartesian_to_spherical(*self.tabulator.grid[-1, :])  # pyright: ignore[reportArgumentType]
+        r, _, _ = Tabulator._cartesian_to_spherical(*self.tabulator.grid[-1, :])  # noqa: SLF001
 
         self.radius_entry.insert(0, str(r))
         self.radius_points_entry.insert(0, str(num_r))
@@ -1189,6 +1349,7 @@ class Plotter:
     def reset_grid_settings(self) -> None:
         """Restore grid settings widgets back to configuration defaults."""
         self.grid_type_radio_var.set(config.grid.default_type)
+        self.place_grid_params_frame()
 
         self.radius_entry.delete(0, tk.END)
         self.radius_entry.insert(
@@ -1204,8 +1365,6 @@ class Plotter:
 
         self.phi_points_entry.delete(0, tk.END)
         self.phi_points_entry.insert(0, str(config.grid.spherical.num_phi_points))
-
-        self.place_grid_params_frame()
 
     def reset_mo_settings(self) -> None:
         """Restore MO settings widgets back to configuration defaults."""
@@ -1315,10 +1474,17 @@ class Plotter:
             phi = np.linspace(0, 2 * np.pi, num_phi_points)
 
             rr, tt, pp = np.meshgrid(r, theta, phi, indexing='ij')
-            xx, yy, zz = _spherical_to_cartesian(rr, tt, pp)
+            xx, yy, zz = Tabulator._spherical_to_cartesian(rr, tt, pp)  # noqa: SLF001
 
             new_grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
             if not np.array_equal(new_grid, self.tabulator.grid):
+                logger.info(
+                    'Applying spherical grid: radius=%.3f (r=%d theta=%d phi=%d points).',
+                    radius,
+                    num_r_points,
+                    num_theta_points,
+                    num_phi_points,
+                )
                 self.update_mesh(r, theta, phi, GridType.SPHERICAL)
 
         else:
@@ -1346,6 +1512,19 @@ class Plotter:
 
             new_grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
             if not np.array_equal(new_grid, self.tabulator.grid):
+                logger.info(
+                    'Applying cartesian grid: x=[%.2f, %.2f] (%d pts), y=[%.2f, %.2f] (%d pts), '
+                    'z=[%.2f, %.2f] (%d pts).',
+                    x_min,
+                    x_max,
+                    x_num,
+                    y_min,
+                    y_max,
+                    y_num,
+                    z_min,
+                    z_max,
+                    z_num,
+                )
                 self.update_mesh(x, y, z, GridType.CARTESIAN)
 
         # Replot the current orbital with the new grid
@@ -1355,13 +1534,13 @@ class Plotter:
 
     def apply_molecule_settings(self) -> None:
         """Validate UI inputs and apply the chosen molecule rendering parameters."""
-        redraw_molecule = False
+        changes: list[str] = []
 
         try:
             bond_max_length = float(self.bond_max_length_entry.get())
             if bond_max_length != config.molecule.bond.max_length:
                 config.molecule.bond.max_length = bond_max_length
-                redraw_molecule = True
+                changes.append(f'bond_max_length={bond_max_length:.2f}')
         except ValueError:
             messagebox.showerror('Invalid Input', 'Bond Max Length must be a valid number.')
             return
@@ -1370,13 +1549,16 @@ class Plotter:
             bond_radius = float(self.bond_radius_entry.get())
             if bond_radius != config.molecule.bond.radius:
                 config.molecule.bond.radius = bond_radius
-                redraw_molecule = True
+                changes.append(f'bond_radius={bond_radius:.2f}')
         except ValueError:
             messagebox.showerror('Invalid Input', 'Bond Radius must be a valid number.')
             return
 
-        if redraw_molecule:
+        if changes:
+            logger.info('Applying molecule settings: %s.', ', '.join(changes))
             self.load_molecule(config)
+        else:
+            logger.debug('Molecule settings unchanged; skipping reload.')
 
     def apply_color_settings(self) -> None:
         """Apply both MO and bond color settings."""
@@ -1396,6 +1578,7 @@ class Plotter:
             self.cmap = mo_color_scheme
             config.mo.color_scheme = mo_color_scheme
             config.mo.custom_colors = []
+            logger.info('Applied MO color scheme: %s.', mo_color_scheme)
 
             idx = self._get_current_mo_index()
             if idx >= 0:
@@ -1416,6 +1599,7 @@ class Plotter:
             config.mo.custom_colors = custom_colors
             config.mo.color_scheme = 'custom'
             self.cmap = self.custom_cmap_from_colors(custom_colors)
+            logger.info('Applied custom MO colors: negative=%s, positive=%s.', custom_colors[0], custom_colors[1])
 
             idx = self._get_current_mo_index()
             if idx >= 0:
@@ -1423,20 +1607,23 @@ class Plotter:
 
     def apply_bond_color_settings(self) -> None:
         """Validate UI inputs and apply the chosen color settings."""
-        redraw_molecule = False
+        changes: list[str] = []
 
         bond_color_type = self.bond_color_type_var.get().strip()
         if bond_color_type != config.molecule.bond.color_type:
             config.molecule.bond.color_type = bond_color_type
-            redraw_molecule = True
+            changes.append(f'color_type={bond_color_type}')
 
         bond_color = self.bond_color_entry.get().strip()
         if self.bond_color_type_var.get() == 'uniform' and bond_color != config.molecule.bond.color:
             config.molecule.bond.color = bond_color
-            redraw_molecule = True
+            changes.append(f'color={bond_color}')
 
-        if redraw_molecule:
+        if changes:
+            logger.info('Applying bond color settings: %s.', ', '.join(changes))
             self.load_molecule(config)
+        else:
+            logger.debug('Bond color settings unchanged; skipping reload.')
 
     @staticmethod
     def save_settings() -> None:
@@ -1449,6 +1636,8 @@ class Plotter:
 
     def plot_orbital(self, orb_ind: int) -> None:
         """Render the selected orbital isosurface in the PyVista plotter."""
+        if not self._ensure_gtos_ready():
+            return
         if self.orb_actor:
             self.pv_plotter.remove_actor(self.orb_actor)
             self.orb_actor = None
@@ -1458,7 +1647,18 @@ class Plotter:
         if orb_ind == -1:
             if self.selection_screen:
                 self.selection_screen.update_nav_button_states()
+            logger.info('Clearing molecular orbital from scene.')
             return
+
+        mo = self.tabulator._parser.mos[orb_ind]  # noqa: SLF001
+        logger.info(
+            'Displaying molecular orbital #%d (%s, spin=%s, occ=%s, energy=%.6f au).',
+            orb_ind + 1,
+            mo.sym,
+            mo.spin,
+            mo.occ,
+            mo.energy,
+        )
 
         self.orb_mesh['orbital'] = self.tabulator.tabulate_mos(orb_ind)
 
@@ -1482,6 +1682,7 @@ class Plotter:
             """Handle PyVista plotter close event by closing the selection screen and quitting."""
             if self.on_screen:
                 self.on_screen = False
+                self._cancel_gto_future()
                 if self.selection_screen and self.selection_screen.winfo_exists():
                     self.selection_screen.destroy()
                 if self.tk_root and self._no_prev_tk_root:
@@ -1613,6 +1814,10 @@ class Plotter:
         ValueError
             If ``grid_type`` is not supported.
         """
+        self._cancel_gto_future()
+        self._gtos_ready = False
+        if self.selection_screen:
+            self.selection_screen.set_loading_state(True, 'Updating grid...')
         if grid_type == GridType.CARTESIAN:
             self.tabulator.cartesian_grid(i_points, j_points, k_points)
         elif grid_type == GridType.SPHERICAL:
@@ -1620,7 +1825,20 @@ class Plotter:
         else:
             raise ValueError('The plotter only supports spherical and cartesian grids.')
 
+        dimensions = 'x'.join(str(val) for val in self.tabulator._grid_dimensions)  # noqa: SLF001
+        logger.info(
+            'Rebuilt %s grid with %d points (dimensions %s).',
+            grid_type.value,
+            self.tabulator.grid.shape[0],
+            dimensions,
+        )
+
         self.orb_mesh = self._create_mo_mesh()
+        self._gtos_ready = True
+        if self.selection_screen:
+            self.selection_screen.on_gtos_ready()
+            if self.selection_screen.current_mo_ind >= 0:
+                self.plot_orbital(self.selection_screen.current_mo_ind)
 
 
 class _OrbitalSelectionScreen(tk.Toplevel):
@@ -1636,8 +1854,6 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         ----------
         plotter : Plotter
             Active plotter that supplies molecular orbital data.
-        tk_master : tk.Tk
-            Tk root or parent window that owns this dialog.
         """
         super().__init__(plotter.tk_root)
         self.title('Orbitals')
@@ -1647,6 +1863,8 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
         self.plotter = plotter
         self.current_mo_ind = -1  # Start with no orbital shown
+        self._loading = False
+        self._loading_label = ttk.Label(self, text='Tabulating orbitals...', anchor=tk.W)
 
         # Initialize export window attributes
         self._export_window = None
@@ -1671,6 +1889,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
     def on_close(self) -> None:
         """Close the selection dialog and release GUI resources."""
         self.plotter.on_screen = False
+        self.plotter._cancel_gto_future()  # noqa: SLF001
         self.plotter.pv_plotter.close()
         self.destroy()
         if self.plotter.tk_root and self.plotter._no_prev_tk_root:  # noqa: SLF001
@@ -1687,6 +1906,8 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
     def next_plot(self) -> None:
         """Advance to the next molecular orbital."""
+        if self._loading:
+            return
         max_index = len(self.plotter.tabulator._parser.mos) - 1  # noqa: SLF001
         if max_index < 0:
             return
@@ -1698,14 +1919,41 @@ class _OrbitalSelectionScreen(tk.Toplevel):
 
     def prev_plot(self) -> None:
         """Return to the previous molecular orbital."""
+        if self._loading:
+            return
         if self.current_mo_ind <= 0:
             return
         new_index = self.current_mo_ind - 1
         self.plotter.plot_orbital(new_index)
         self.orb_tv.highlight_orbital(self.current_mo_ind)
 
+    def set_loading_state(self, loading: bool, message: str = 'Tabulating orbitals...') -> None:
+        """Toggle the inline loading label shown under the navigation buttons."""
+        if loading:
+            self._loading_label.config(text=message)
+        if loading == self._loading:
+            return
+        self._loading = loading
+        if loading:
+            self._loading_label.pack(before=self.orb_tv, fill=tk.X, padx=10, pady=(0, 5))
+            self.prev_button.config(state=tk.DISABLED)
+            self.next_button.config(state=tk.DISABLED)
+            self.orb_tv.configure(selectmode='none')
+        else:
+            self._loading_label.pack_forget()
+            self.orb_tv.configure(selectmode='browse')
+            self.update_nav_button_states()
+
+    def on_gtos_ready(self) -> None:
+        """Handle the plotter callback when GTOs become available."""
+        self.set_loading_state(False)
+
     def update_nav_button_states(self) -> None:
         """Synchronize navigation button state with the current orbital index."""
+        if self._loading:
+            self.prev_button.config(state=tk.DISABLED)
+            self.next_button.config(state=tk.DISABLED)
+            return
         total = len(self.plotter.tabulator._parser.mos)  # noqa: SLF001
         can_go_prev = self.current_mo_ind > 0
         can_go_next = total > 0 and self.current_mo_ind < total - 1
@@ -1733,6 +1981,8 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         orb_ind : int
             Index of the orbital to display; ``-1`` clears the current mesh.
         """
+        if self._loading:
+            return
         self.plotter.plot_orbital(orb_ind)
         self.current_mo_ind = orb_ind
 
@@ -1749,7 +1999,7 @@ class _OrbitalsTreeview(ttk.Treeview):
         columns = ['Index', 'Symmetry', 'Occupation', 'Energy [au]']
         widths = [20, 50, 50, 120]
 
-        super().__init__(selection_screen, columns=columns, show='headings', height=20)
+        super().__init__(selection_screen, columns=columns, show='headings', height=20, selectmode='browse')
 
         for col, w in zip(columns, widths, strict=False):
             self.heading(col, text=col)
@@ -1809,6 +2059,8 @@ class _OrbitalsTreeview(ttk.Treeview):
         _event : tk.Event
             Tkinter event object (unused).
         """
+        if self.selection_screen._loading:  # noqa: SLF001
+            return
         selected_item = self.selection()
         self.selection_remove(selected_item)
         if selected_item:

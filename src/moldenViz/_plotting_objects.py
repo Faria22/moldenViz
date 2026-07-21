@@ -235,13 +235,14 @@ class Molecule:
         mask = np.triu(np.ones_like(distances, dtype=bool), k=1)  # Ensure boolean mask
         indices = np.where((distances < self.config.molecule.bond.max_length) & mask)  # Apply mask
 
-        for atom_a_ind, atom_b_ind in zip(indices[0], indices[1], strict=False):
-            bond = Bond(self.atoms[atom_a_ind], self.atoms[atom_b_ind], self.config)
-            self.atoms[atom_a_ind].bonds.append(bond)
-            self.atoms[atom_b_ind].bonds.append(bond)
+        if self.config.molecule.bond.show:
+            for atom_a_ind, atom_b_ind in zip(indices[0], indices[1], strict=False):
+                bond = Bond(self.atoms[atom_a_ind], self.atoms[atom_b_ind], self.config)
+                self.atoms[atom_a_ind].bonds.append(bond)
+                self.atoms[atom_b_ind].bonds.append(bond)
 
-        for atom in self.atoms:
-            atom.remove_extra_bonds()
+            for atom in self.atoms:
+                atom.remove_extra_bonds()
 
     def add_meshes(self, plotter: pv.Plotter, opacity: float = config.molecule.opacity) -> tuple[list[pv.Actor], ...]:
         """Add all molecule meshes (atoms and bonds) to the PyVista plotter.
@@ -270,8 +271,9 @@ class Molecule:
                         opacity=opacity,
                     ),
                 )
+
             for bond in atom.bonds:
-                if bond.plotted or bond.mesh is None or not self.config.molecule.bond.show:
+                if bond.plotted or bond.mesh is None:
                     continue
 
                 bond.trim_ends()
