@@ -72,6 +72,24 @@ def test_tabulate_gtos_cached_values_cover_all_coeffs() -> None:
     assert gto_data.shape == (expected_points, expected_coeffs)
     assert np.all(np.isfinite(gto_data))
     assert tab.gtos is gto_data  # Cached array should match the return value
+    assert tab.has_gtos
+
+
+def test_clear_gtos_releases_cache_and_reports_missing_data() -> None:
+    """Manual cache eviction should retain the grid and expose a clear state."""
+    tab = Tabulator(str(MOLDEN_PATH))
+    axis = np.linspace(-1.0, 1.0, 2)
+    tab.cartesian_grid(axis, axis, axis)
+    grid = tab.grid
+
+    tab.clear_gtos()
+
+    assert not tab.has_gtos
+    assert tab.grid is grid
+    with pytest.raises(RuntimeError, match=r'Call tabulate_gtos\(\) first'):
+        _ = tab.gtos
+
+    tab.clear_gtos()
 
 
 def test_tabulate_gtos_performance_small_grid() -> None:
@@ -138,7 +156,7 @@ def test_set_grid_is_the_explicit_arbitrary_grid_mutator() -> None:
     assert tab.grid_type is GridType.UNKNOWN
     assert tab.grid_dimensions == (0, 0, 0)
     assert tab.grid_axes is None
-    assert not hasattr(tab, 'gtos')
+    assert not tab.has_gtos
 
 
 def test_grid_property_is_read_only() -> None:

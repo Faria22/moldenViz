@@ -120,7 +120,7 @@ class Plotter(_PlotterUI):
             if not hasattr(tabulator, 'grid'):
                 raise ValueError('Tabulator does not have grid attribute.')
 
-            if not hasattr(tabulator, 'gtos') and not only_molecule:
+            if not tabulator.has_gtos and not only_molecule:
                 raise ValueError('Tabulator does not have tabulated GTOs.')
 
             if tabulator.grid_type == GridType.UNKNOWN:
@@ -130,7 +130,7 @@ class Plotter(_PlotterUI):
         else:
             logger.info('Creating Tabulator for source %s', _describe_source(source))
             self.tabulator = Tabulator(source, only_molecule=only_molecule)
-        self._gtos_ready = self._only_molecule or hasattr(self.tabulator, '_gtos')
+        self._gtos_ready = self._only_molecule or self.tabulator.has_gtos
 
         self._molecule: Molecule
         self._molecule_opacity = config.molecule.opacity

@@ -33,6 +33,14 @@ Skip molecular orbital parsing when you only need the structure:
 
    parser = Parser('molden.inp', only_molecule=True)
 
+Choose whether molecular orbitals are sorted by energy or retain their order
+in the source file:
+
+.. code-block:: python
+
+   energy_ordered = Parser('molden.inp', mo_order='energy')
+   file_ordered = Parser('molden.inp', mo_order='file')
+
 Example Molecules
 -----------------
 

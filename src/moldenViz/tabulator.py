@@ -56,7 +56,10 @@ class Tabulator:
     grid : NDArray[np.floating]
         The grid points where GTOs and MOs are tabulated.
     gtos : NDArray[np.floating]
-        The tabulated Gaussian-type orbitals (GTOs) on the grid.
+        The cached Gaussian-type orbitals (GTOs) on the grid. Access raises
+        ``RuntimeError`` when no cache is available.
+    has_gtos : bool
+        Whether GTO values are currently cached.
     """
 
     def __init__(
@@ -72,7 +75,6 @@ class Tabulator:
         self._grid: NDArray[np.floating]
         self._grid_type = GridType.UNKNOWN
         self._grid_dimensions: tuple[int, int, int] = (0, 0, 0)
-        self._gtos: NDArray[np.floating]
 
         # Used for when exporting to cube format
         self._grid_axes: tuple[NDArray[np.floating], ...] | None = None
@@ -120,13 +122,30 @@ class Tabulator:
         self._grid_type = GridType.UNKNOWN
         self._grid_dimensions = (0, 0, 0)
         self._grid_axes = None
-        if hasattr(self, '_gtos'):
-            del self._gtos
+        self.clear_gtos()
+
+    @property
+    def has_gtos(self) -> bool:
+        """Whether Gaussian-type orbitals are currently cached."""
+        return hasattr(self, '_gtos')
 
     @property
     def gtos(self) -> NDArray[np.floating]:
-        """The tabulated Gaussian-type orbitals (GTOs) on the grid."""
+        """The tabulated Gaussian-type orbitals (GTOs) on the grid.
+
+        Raises
+        ------
+        RuntimeError
+            If GTOs have not been tabulated or the cache was cleared.
+        """
+        if not self.has_gtos:
+            raise RuntimeError('GTOs are not available. Call tabulate_gtos() first.')
         return self._gtos
+
+    def clear_gtos(self) -> None:
+        """Release any cached Gaussian-type orbital values."""
+        if self.has_gtos:
+            del self._gtos
 
     @property
     def grid_type(self) -> GridType:
@@ -411,7 +430,7 @@ class Tabulator:
         """
         if not hasattr(self, '_grid'):
             raise RuntimeError('Grid is not defined. Please create a grid before tabulating MOs.')
-        if not hasattr(self, 'gtos'):
+        if not self.has_gtos:
             raise RuntimeError('GTOs are not tabulated. Please tabulate GTOs before tabulating MOs.')
 
         if mo_inds is None:
@@ -497,7 +516,7 @@ class Tabulator:
         # Import lazily so tabulator-only workflows do not require PyVista/VTK at import time.
         import pyvista as pv  # ruff:ignore[import-outside-top-level]
 
-        if not hasattr(self, 'gtos'):
+        if not self.has_gtos:
             self.tabulate_gtos()
 
         mo_data = self.tabulate_mos(mo_index)

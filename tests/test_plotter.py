@@ -489,6 +489,10 @@ class FakeTabulator:
     def gtos(self) -> np.ndarray:
         return self._gtos
 
+    @property
+    def has_gtos(self) -> bool:
+        return hasattr(self, '_gtos')
+
     def spherical_grid(
         self,
         r: np.ndarray,
@@ -796,6 +800,7 @@ def test_plotter_rejects_unknown_grid_type(plotter_env: Any) -> None:
         grid=np.zeros((1, 3)),
         grid_type=GridType.UNKNOWN,
         gtos=object(),
+        has_gtos=True,
         grid_axes=None,
     )
     with pytest.raises(ValueError, match='only supports spherical and cartesian'):

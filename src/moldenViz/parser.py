@@ -2,6 +2,7 @@
 
 import logging
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 from numpy.typing import NDArray
@@ -25,6 +26,9 @@ class Parser:
     only_molecule : bool, optional
         Only parse the atoms and skip molecular orbitals.
         Default is `False`.
+    mo_order : {'energy', 'file'}, optional
+        Order molecular orbitals by ascending energy or preserve their order
+        in the Molden file. Default is ``'energy'``.
 
     Attributes
     ----------
@@ -45,14 +49,20 @@ class Parser:
     ------
     TypeError
         If the source is not a valid molden file path, or molden file lines.
+    ValueError
+        If ``mo_order`` is not ``'energy'`` or ``'file'``.
     """
 
     def __init__(
         self,
         source: str | list[str],
         only_molecule: bool = False,
+        mo_order: Literal['energy', 'file'] = 'energy',
     ) -> None:
         """Initialize the Parser with either a filename or molden lines."""
+        if mo_order not in {'energy', 'file'}:
+            raise ValueError("'mo_order' must be either 'energy' or 'file'.")
+
         if isinstance(source, str):
             with Path(source).open('r') as file:
                 self._molden_lines = file.readlines()
@@ -77,7 +87,7 @@ class Parser:
             return
 
         self.shells = self._parse_shells()
-        self.mos, self.mo_coeffs = self._parse_mos()
+        self.mos, self.mo_coeffs = self._parse_mos(sort=mo_order == 'energy')
 
     def _check_molden_format(self) -> None:
         """Check if the provided molden lines conform to the expected format.

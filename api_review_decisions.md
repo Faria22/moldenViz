@@ -31,7 +31,7 @@ API-030 | Change: Rename `Parser.divide_molden_lines()` to `_divide_molden_lines
 API-031 | Change: Rename `Parser.get_atoms()` to `_parse_atoms()`. | Approve: [x] | Disapprove: [ ] | Comment:
 API-032 | Change: Rename `Parser.get_shells()` to `_parse_shells()`. | Approve: [x] | Disapprove: [ ] | Comment:
 API-033 | Change: Rename `Parser.get_mos()` to `_parse_mos()`. | Approve: [x] | Disapprove: [ ] | Comment:
-API-034 | Change: If unsorted molecular orbitals are needed publicly, expose that choice as a `Parser` constructor option instead of requiring a second call to `get_mos(sort=False)`. | Approve: [ ] | Disapprove: [ ] | Comment: I'm not sure on this, will need to expand on it later. Feel free to create an issue or discussion board on github on this.
+API-034 | Change: Add `Parser(..., mo_order='energy' | 'file')`, defaulting to `'energy'`, so callers can preserve source-file orbital order without calling a private parser method. | Approve: [x] | Disapprove: [ ] | Comment: Clarified after review; explicit string values are preferred over a boolean sorting flag.
 API-035 | Change: Keep `Parser._gto_order()` private. | Approve: [x] | Disapprove: [ ] | Comment:
 API-036 | Change: Rename public-looking `Parser.molden_lines` storage to `_molden_lines`. | Approve: [x] | Disapprove: [ ] | Comment:
 API-037 | Change: Remove `ANGSTROM_TO_BOHR` from the `Parser` class and keep the conversion constant private. | Approve: [ ] | Disapprove: [x] | Comment: Should stay public (look at API-038)
@@ -46,7 +46,7 @@ API-045 | Change: Remove the public `Tabulator.grid` setter and deleter. | Appro
 API-046 | Change: Add a deliberate public `Tabulator.set_grid(...)` method only if arbitrary user-supplied grids are meant to be supported. | Approve: [x] | Disapprove: [ ] | Comment:
 API-047 | Change: Keep `Tabulator.gtos` as a public read-only property. | Approve: [x] | Disapprove: [ ] | Comment:
 API-048 | Change: Remove the public `Tabulator.gtos` deleter. | Approve: [x] | Disapprove: [ ] | Comment:
-API-049 | Change: Add `Tabulator.clear_gtos()` only if manual cache invalidation is meant to be supported. | Approve: [ ] | Disapprove: [ ] | Comment: sno sure on this, will have to expand later.
+API-049 | Change: Add `Tabulator.clear_gtos()` with read-only `has_gtos`; accessing `gtos` without cached data raises a documented `RuntimeError`. | Approve: [x] | Disapprove: [ ] | Comment: Clarified after review; this provides coherent manual cache eviction for large GTO arrays.
 API-050 | Change: Add a public read-only `Tabulator.grid_type: GridType` property. | Approve: [x] | Disapprove: [ ] | Comment:
 API-051 | Change: Add a public read-only `Tabulator.grid_dimensions: tuple[int, int, int]` property. | Approve: [x] | Disapprove: [ ] | Comment: Approval mark was corrected from the proposal text.
 API-052 | Change: Replace public `Tabulator.original_axes` with a read-only `grid_axes` property. | Approve: [x] | Disapprove: [ ] | Comment:

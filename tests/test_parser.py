@@ -75,6 +75,32 @@ def test_mo_energies_are_sorted(parser_obj: Parser) -> None:
     assert np.all(np.diff(energies) >= 0.0)
 
 
+def test_mo_order_can_preserve_file_order() -> None:
+    """The public constructor option should control molecular-orbital order."""
+    lines = MOLDEN_PATH.read_text().splitlines(True)
+    mo_start = next(index for index, line in enumerate(lines) if line.strip() == '[MO]')
+    prefix = lines[: mo_start + 1]
+    mo_lines = lines[mo_start + 1 :]
+    block_starts = [index for index, line in enumerate(mo_lines) if line.strip().startswith('Sym=')]
+    block_length = block_starts[1] - block_starts[0]
+    blocks = [mo_lines[start : start + block_length] for start in block_starts]
+    reversed_lines = prefix + [line for block in reversed(blocks) for line in block]
+
+    original_file_ordered = Parser(lines, mo_order='file')
+    file_ordered = Parser(reversed_lines, mo_order='file')
+    energy_ordered = Parser(reversed_lines, mo_order='energy')
+
+    file_energies = [mo.energy for mo in file_ordered.mos]
+    assert file_energies == list(reversed([mo.energy for mo in original_file_ordered.mos]))
+    assert [mo.energy for mo in energy_ordered.mos] == sorted(file_energies)
+
+
+def test_invalid_mo_order_is_rejected() -> None:
+    """Only the documented molecular-orbital order values are accepted."""
+    with pytest.raises(ValueError, match='mo_order'):
+        Parser(str(MOLDEN_PATH), mo_order='input')  # type: ignore[arg-type]
+
+
 @pytest.mark.parametrize('source', [None, 1, 1.0, {}, set()])
 def test_parser_invalid_input_type(source: Any) -> None:
     """

@@ -42,7 +42,7 @@ Tabulator
 ---------
 
 .. autoclass:: moldenViz.tabulator.Tabulator
-   :members: grid, gtos, grid_type, grid_dimensions, grid_axes, set_grid, cartesian_grid, spherical_grid, tabulate_gtos, tabulate_mos, export, export_vtk, export_cube
+   :members: grid, gtos, has_gtos, grid_type, grid_dimensions, grid_axes, set_grid, clear_gtos, cartesian_grid, spherical_grid, tabulate_gtos, tabulate_mos, export, export_vtk, export_cube
    :member-order: bysource
    :show-inheritance:
 
