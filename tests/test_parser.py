@@ -9,8 +9,8 @@ import pytest
 import moldenViz.parser as parser_module
 
 Parser = parser_module.Parser
-_GTO = parser_module._GTO  # noqa: SLF001
-_Shell = parser_module._Shell  # noqa: SLF001
+_GTO = parser_module._GTO  # ruff:ignore[private-member-access]
+_Shell = parser_module._Shell  # ruff:ignore[private-member-access]
 
 # ----------------------------------------------------------------------
 # utilities
@@ -35,7 +35,7 @@ def parser_obj() -> Parser:
 # ----------------------------------------------------------------------
 def test_section_indices_order(parser_obj: Parser) -> None:
     """Check if section indices are in the correct order."""
-    assert parser_obj._atom_ind < parser_obj._gto_ind < parser_obj._mo_ind  # noqa: SLF001
+    assert parser_obj._atom_ind < parser_obj._gto_ind < parser_obj._mo_ind  # ruff:ignore[private-member-access]
 
 
 def test_gaussian_normalization_positive() -> None:
@@ -50,7 +50,7 @@ def test_gaussian_normalization_positive() -> None:
 
 def test_atomic_orbital_permutation(parser_obj: Parser) -> None:
     """Check if the permutation of atomic orbitals is a valid one."""
-    order = parser_obj._gto_order()  # noqa: SLF001
+    order = parser_obj._gto_order()  # ruff:ignore[private-member-access]
     assert sorted(order) == list(range(len(order)))
 
 

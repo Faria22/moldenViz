@@ -16,7 +16,7 @@ def test_save_settings_method_exists_in_plotter() -> None:
     assert callable(plotter_class.save_settings)
 
 
-@patch('moldenViz.plotter.messagebox')
+@patch('moldenViz.plotter_ui.messagebox')
 @patch('moldenViz.plotter.config')
 def test_save_settings_success(mock_config: Any, mock_messagebox: Any) -> None:
     """Test that save_settings calls config.save_current_config and shows success message."""
@@ -36,7 +36,7 @@ def test_save_settings_success(mock_config: Any, mock_messagebox: Any) -> None:
     assert 'Configuration saved successfully' in args[1]
 
 
-@patch('moldenViz.plotter.messagebox')
+@patch('moldenViz.plotter_ui.messagebox')
 @patch('moldenViz.plotter.config')
 def test_save_settings_handles_oserror(mock_config: Any, mock_messagebox: Any) -> None:
     """Test that save_settings handles OSError gracefully."""
@@ -54,7 +54,7 @@ def test_save_settings_handles_oserror(mock_config: Any, mock_messagebox: Any) -
     assert 'Permission denied' in args[1]
 
 
-@patch('moldenViz.plotter.messagebox')
+@patch('moldenViz.plotter_ui.messagebox')
 @patch('moldenViz.plotter.config')
 def test_save_settings_handles_valueerror(mock_config: Any, mock_messagebox: Any) -> None:
     """Test that save_settings handles ValueError gracefully."""

@@ -190,19 +190,19 @@ def test_plotter_defers_gto_tabulation(monkeypatch: pytest.MonkeyPatch) -> None:
 
         assert cartesian_args['tabulate_gtos'] is False
         assert start_event.wait(timeout=1.0)
-        assert plotter._gto_future is not None  # noqa: SLF001
-        assert not plotter._gto_future.done()  # noqa: SLF001
+        assert plotter._gto_future is not None  # ruff:ignore[private-member-access]
+        assert not plotter._gto_future.done()  # ruff:ignore[private-member-access]
         assert plotter.selection_screen is not None
         assert isinstance(plotter.selection_screen, FakeSelectionScreen)
         assert plotter.selection_screen.loading_states == [True]
         assert plotter.selection_screen.messages == ['Tabulating orbitals...']
     finally:
         finish_event.set()
-        if plotter is not None and plotter._gto_future is not None and not plotter._gtos_ready:  # noqa: SLF001
+        if plotter is not None and plotter._gto_future is not None and not plotter._gtos_ready:  # ruff:ignore[private-member-access]
             plotter.wait_for_gtos()
 
     assert plotter is not None
-    assert plotter._gtos_ready is True  # noqa: SLF001
+    assert plotter._gtos_ready is True  # ruff:ignore[private-member-access]
     assert plotter.selection_screen is not None
     assert isinstance(plotter.selection_screen, FakeSelectionScreen)
     assert plotter.selection_screen.loading_states[-1] is False
@@ -220,9 +220,9 @@ def test_wait_for_gtos_populates_data(monkeypatch: pytest.MonkeyPatch) -> None:
     plotter = plotter_module.Plotter(_sample_molden(), tk_root=_fake_tk_root())
     plotter.wait_for_gtos()
 
-    assert plotter._gtos_ready is True  # noqa: SLF001
+    assert plotter._gtos_ready is True  # ruff:ignore[private-member-access]
     assert plotter.selection_screen is not None
     assert isinstance(plotter.selection_screen, FakeSelectionScreen)
     assert plotter.selection_screen.loading_states == [True, False]
     np.testing.assert_array_equal(plotter.tabulator.gtos, np.full((2, 1), 7.0))
-    assert plotter._gto_future is None  # noqa: SLF001
+    assert plotter._gto_future is None  # ruff:ignore[private-member-access]

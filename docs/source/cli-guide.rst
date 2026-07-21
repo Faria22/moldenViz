@@ -47,6 +47,15 @@ Render molecular orbitals from a Molden file:
 
    moldenViz path/to/file.molden
 
+This launches the interactive viewer with both the molecule structure and orbital visualization:
+
+The interactive window allows you to:
+
+* Select and view different molecular orbitals
+* Adjust visualization parameters (contour, opacity, colors)
+* Switch between spherical and cartesian grids
+* Export orbital data or visualization images
+
 Show only the molecular structure (skip orbital surfaces):
 
 .. code-block:: bash
@@ -61,6 +70,8 @@ Use one of the shipped example molecules when you just want to explore the plott
 .. code-block:: bash
 
    moldenViz -e co
+
+Available examples include: ``co``, ``o2``, ``co2``, ``h2o``, ``benzene``, ``prismane``, ``pyridine``, ``furan``, ``acrolein``
 
 Tips
 ----

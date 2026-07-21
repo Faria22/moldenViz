@@ -1,5 +1,5 @@
 """Tests covering Plotter behaviours called out by plotter_coverage_gaps.md."""
-# ruff: noqa: D101, D102, D103
+# ruff:file-ignore[undocumented-public-class, undocumented-public-method, undocumented-public-function]
 
 from __future__ import annotations
 
@@ -16,6 +16,14 @@ from matplotlib import colors as mcolors
 from moldenViz import Tabulator
 
 plotter_module = pytest.importorskip('moldenViz.plotter')
+plotter_ui_module = pytest.importorskip('moldenViz.plotter_ui')
+
+
+def test_ui_helpers_are_defined_in_companion_module() -> None:
+    """Keep the Tk and Qt helpers out of the core plotter module."""
+    assert plotter_module.Plotter.grid_settings_screen.__module__ == plotter_ui_module.__name__
+    assert plotter_module._OrbitalSelectionScreen.__module__ == plotter_ui_module.__name__  # ruff:ignore[private-member-access]
+    assert plotter_module._OrbitalsTreeview.__module__ == plotter_ui_module.__name__  # ruff:ignore[private-member-access]
 
 
 class _GridTypeProxy:
@@ -45,13 +53,13 @@ class DummyActor:
         self.visible = True
         self.opacity = 1.0
 
-    def SetVisibility(self, value: bool) -> None:  # noqa: N802
+    def SetVisibility(self, value: bool) -> None:  # ruff:ignore[invalid-function-name]
         self.visible = bool(value)
 
-    def GetVisibility(self) -> bool:  # noqa: N802
+    def GetVisibility(self) -> bool:  # ruff:ignore[invalid-function-name]
         return self.visible
 
-    def GetProperty(self) -> SimpleNamespace:  # noqa: N802
+    def GetProperty(self) -> SimpleNamespace:  # ruff:ignore[invalid-function-name]
         return SimpleNamespace(SetOpacity=lambda val: setattr(self, 'opacity', val))
 
 
@@ -59,7 +67,7 @@ class DummyMenuBar:
     def __init__(self) -> None:
         self.menus: list = []
 
-    def addMenu(self, menu: object) -> None:  # noqa: N802 - Qt naming
+    def addMenu(self, menu: object) -> None:  # ruff:ignore[invalid-function-name] - Qt naming
         self.menus.append(menu)
 
     @staticmethod
@@ -85,10 +93,10 @@ class DummyMenuWithActions:
         self.title = title
         self._actions: list[DummyMenuAction] = []
 
-    def addAction(self, action: DummyMenuAction) -> None:  # noqa: N802 - match Qt API
+    def addAction(self, action: DummyMenuAction) -> None:  # ruff:ignore[invalid-function-name] - match Qt API
         self._actions.append(action)
 
-    def addSeparator(self) -> None:  # noqa: N802 - match Qt API
+    def addSeparator(self) -> None:  # ruff:ignore[invalid-function-name] - match Qt API
         self._actions.append(DummyMenuAction('---'))
 
     def actions(self) -> list[DummyMenuAction]:
@@ -139,7 +147,7 @@ class MenuAwareMainMenu:
         self.view_menu.addAction(self.clear_action)
         self._view_action = DummyMenuAction('View', menu=self.view_menu)
 
-    def addMenu(self, menu: Any) -> None:  # noqa: N802 - match Qt API
+    def addMenu(self, menu: Any) -> None:  # ruff:ignore[invalid-function-name] - match Qt API
         self.menus.append(menu)
 
     def actions(self) -> list[DummyMenuAction]:
@@ -167,10 +175,10 @@ class FakeQMenu:
         self._actions: list[FakeQAction] = []
         self.separators = 0
 
-    def addAction(self, action: FakeQAction) -> None:  # noqa: N802 - match Qt API
+    def addAction(self, action: FakeQAction) -> None:  # ruff:ignore[invalid-function-name] - match Qt API
         self._actions.append(action)
 
-    def addSeparator(self) -> None:  # noqa: N802 - match Qt API
+    def addSeparator(self) -> None:  # ruff:ignore[invalid-function-name] - match Qt API
         self.separators += 1
 
     def actions(self) -> list[FakeQAction]:
@@ -182,7 +190,7 @@ class DummyMolecule:
         self.atoms = atoms
         self.max_radius = 1.0
 
-    def add_meshes(  # noqa: PLR6301
+    def add_meshes(  # ruff:ignore[no-self-use]
         self,
         _plotter: DummyBackgroundPlotter,
         opacity: float,
@@ -485,7 +493,7 @@ class FakeTabulator:
         tabulate_gtos: bool = True,
     ) -> None:
         rr, tt, pp = np.meshgrid(r, theta, phi, indexing='ij')
-        xx, yy, zz = Tabulator._spherical_to_cartesian(rr, tt, pp)  # noqa: SLF001
+        xx, yy, zz = Tabulator._spherical_to_cartesian(rr, tt, pp)  # ruff:ignore[private-member-access]
         self.grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
         self._grid_type = GridType.SPHERICAL
         self._grid_dimensions = (len(r), len(theta), len(phi))
@@ -577,7 +585,7 @@ class SelectionPlotter:
         self.tk_root = RootRecorder()
         self._no_prev_tk_root = True
         self.tabulator = FakeTabulator()
-        self.tabulator._parser.mos = [  # noqa: SLF001
+        self.tabulator._parser.mos = [  # ruff:ignore[private-member-access]
             SimpleNamespace(sym='s', spin='alpha', occ=2.0, energy=-0.5),
             SimpleNamespace(sym='p', spin='alpha', occ=1.0, energy=-0.1),
             SimpleNamespace(sym='d', spin='beta', occ=0.0, energy=0.2),
@@ -638,8 +646,8 @@ def plotter_env(monkeypatch: pytest.MonkeyPatch) -> Any:
 
 
 def test_describe_source_reports_list_length() -> None:
-    assert plotter_module._describe_source('sample.molden') == 'sample.molden'  # noqa: SLF001
-    assert plotter_module._describe_source(['a', 'b', 'c']) == '3 molden lines'  # noqa: SLF001
+    assert plotter_module._describe_source('sample.molden') == 'sample.molden'  # ruff:ignore[private-member-access]
+    assert plotter_module._describe_source(['a', 'b', 'c']) == '3 molden lines'  # ruff:ignore[private-member-access]
 
 
 def test_custom_cmap_from_colors_uses_endpoints() -> None:
@@ -652,7 +660,7 @@ def test_custom_cmap_from_colors_uses_endpoints() -> None:
 
 def test_settings_parent_prefers_selection_screen(plotter_env: Any) -> None:
     plotter = plotter_env.make_plotter()
-    assert plotter._settings_parent() is plotter.selection_screen  # noqa: SLF001
+    assert plotter._settings_parent() is plotter.selection_screen  # ruff:ignore[private-member-access]
 
 
 def test_settings_parent_requires_root(plotter_env: Any) -> None:
@@ -660,17 +668,17 @@ def test_settings_parent_requires_root(plotter_env: Any) -> None:
     plotter.selection_screen = None
     plotter.tk_root = None
     with pytest.raises(RuntimeError):
-        plotter._settings_parent()  # noqa: SLF001
+        plotter._settings_parent()  # ruff:ignore[private-member-access]
 
 
 def test_get_current_mo_index_tracks_selection(plotter_env: Any) -> None:
     plotter = plotter_env.make_plotter()
     target_index = 4
     plotter.selection_screen.current_mo_ind = target_index
-    assert plotter._get_current_mo_index() == target_index  # noqa: SLF001
+    assert plotter._get_current_mo_index() == target_index  # ruff:ignore[private-member-access]
     plotter.selection_screen = None
     missing_index = -1
-    assert plotter._get_current_mo_index() == missing_index  # noqa: SLF001
+    assert plotter._get_current_mo_index() == missing_index  # ruff:ignore[private-member-access]
 
 
 def test_do_export_with_all_scope_calls_tabulator(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
@@ -692,7 +700,7 @@ def test_do_export_with_all_scope_calls_tabulator(monkeypatch: pytest.MonkeyPatc
         lambda *_args, **_kwargs: pytest.fail('showerror called'),
     )
 
-    plotter._do_export(export_window, DummyVar('vtk'), DummyVar('all'))  # noqa: SLF001
+    plotter._do_export(export_window, DummyVar('vtk'), DummyVar('all'))  # ruff:ignore[private-member-access]
 
     assert plotter.tabulator.export_calls == [('/tmp/export.vtk', None)]
     assert export_window.destroyed
@@ -715,7 +723,7 @@ def test_do_export_requires_selected_orbital(monkeypatch: pytest.MonkeyPatch, pl
         lambda **_kwargs: pytest.fail('Dialog should not open'),
     )
 
-    plotter._do_export(DummyWindow(), DummyVar('vtk'), DummyVar('current'))  # noqa: SLF001
+    plotter._do_export(DummyWindow(), DummyVar('vtk'), DummyVar('current'))  # ruff:ignore[private-member-access]
     assert errors
     assert 'No orbital' in errors[0][1]
 
@@ -736,7 +744,7 @@ def test_do_export_rejects_cube_all(monkeypatch: pytest.MonkeyPatch, plotter_env
         lambda **_kwargs: pytest.fail('Dialog should not open'),
     )
 
-    plotter._do_export(DummyWindow(), DummyVar('cube'), DummyVar('all'))  # noqa: SLF001
+    plotter._do_export(DummyWindow(), DummyVar('cube'), DummyVar('all'))  # ruff:ignore[private-member-access]
     assert errors
     assert 'Cube format' in errors[0][1]
 
@@ -750,7 +758,7 @@ def test_do_export_uses_current_index(monkeypatch: pytest.MonkeyPatch, plotter_e
     monkeypatch.setattr(plotter_module.messagebox, 'showinfo', lambda *_args, **_kwargs: None)
     monkeypatch.setattr(plotter_module.messagebox, 'showerror', lambda *_args, **_kwargs: None)
 
-    plotter._do_export(export_window, DummyVar('vtk'), DummyVar('current'))  # noqa: SLF001
+    plotter._do_export(export_window, DummyVar('vtk'), DummyVar('current'))  # ruff:ignore[private-member-access]
     assert plotter.tabulator.export_calls == [('/tmp/single.vtk', 3)]
 
 
@@ -769,7 +777,7 @@ def test_do_export_handles_errors(monkeypatch: pytest.MonkeyPatch, plotter_env: 
     monkeypatch.setattr(plotter_module.messagebox, 'showerror', lambda title, msg: errors.append((title, msg)))
     monkeypatch.setattr(plotter_module.messagebox, 'showinfo', lambda *_args, **_kwargs: None)
 
-    plotter._do_export(export_window, DummyVar('vtk'), DummyVar('current'))  # noqa: SLF001
+    plotter._do_export(export_window, DummyVar('vtk'), DummyVar('current'))  # ruff:ignore[private-member-access]
     assert errors
 
 
@@ -805,9 +813,9 @@ def test_export_orbitals_dialog_sets_attributes(monkeypatch: pytest.MonkeyPatch,
 
     plotter.export_orbitals_dialog()
 
-    assert isinstance(plotter._export_window, SimpleToplevel)  # noqa: SLF001
-    assert plotter._export_current_orb_radio is not None  # noqa: SLF001
-    assert plotter._export_all_orb_radio is not None  # noqa: SLF001
+    assert isinstance(plotter._export_window, SimpleToplevel)  # ruff:ignore[private-member-access]
+    assert plotter._export_current_orb_radio is not None  # ruff:ignore[private-member-access]
+    assert plotter._export_all_orb_radio is not None  # ruff:ignore[private-member-access]
 
 
 def test_export_image_dialog_builds_controls(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
@@ -895,9 +903,9 @@ def test_plotter_builds_menus_and_overrides_clear(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(plotter_module, '_OrbitalSelectionScreen', DummySelectionScreen)
     monkeypatch.setattr(plotter_module.pv, 'StructuredGrid', DummyStructuredGrid)
     monkeypatch.setattr(plotter_module.pv, 'pyvista_ndarray', lambda arr: arr)
-    monkeypatch.setattr(plotter_module, 'QMenu', FakeQMenu)
-    monkeypatch.setattr(plotter_module, 'QAction', FakeQAction)
-    monkeypatch.setattr(plotter_module, 'isValid', lambda _action: True)
+    monkeypatch.setattr(plotter_ui_module, 'QMenu', FakeQMenu)
+    monkeypatch.setattr(plotter_ui_module, 'QAction', FakeQAction)
+    monkeypatch.setattr(plotter_ui_module, 'isValid', lambda _action: True)
 
     plotter = plotter_module.Plotter('dummy', tk_root=DummyTk())
 
@@ -905,7 +913,7 @@ def test_plotter_builds_menus_and_overrides_clear(monkeypatch: pytest.MonkeyPatc
     assert [menu.title for menu in main_menu.menus] == ['Settings', 'Export']
     settings_action_texts = [action.text() for action in main_menu.menus[0].actions()]
     assert {'Grid Settings', 'MO Settings', 'Molecule Settings'} <= set(settings_action_texts)
-    assert main_menu.clear_action.triggered.callbacks[-1] == plotter._clear_all  # noqa: SLF001
+    assert main_menu.clear_action.triggered.callbacks[-1] == plotter._clear_all  # ruff:ignore[private-member-access]
 
 
 def test_plotter_validates_axis_spacing(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
@@ -1459,7 +1467,7 @@ def test_clear_all_hides_actors_and_resets_selection(plotter_env: Any) -> None:
     plotter.selection_screen.current_mo_ind = 3
     plotter.orb_actor = DummyActor()
 
-    plotter._clear_all()  # noqa: SLF001
+    plotter._clear_all()  # ruff:ignore[private-member-access]
 
     assert plotter.orb_actor is None
     assert plotter.selection_screen.current_mo_ind == -1
@@ -1622,7 +1630,7 @@ def test_do_image_export_vector(monkeypatch: pytest.MonkeyPatch, plotter_env: An
         lambda *_args, **_kwargs: pytest.fail('Unexpected error'),
     )
 
-    plotter._do_image_export(window, format_var, transparent_var)  # noqa: SLF001
+    plotter._do_image_export(window, format_var, transparent_var)  # ruff:ignore[private-member-access]
 
     assert plotter.pv_plotter.saved_graphic == '/tmp/export.svg'
     assert window.destroyed
@@ -1639,7 +1647,7 @@ def test_do_image_export_png_respects_transparency(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(plotter_module.messagebox, 'showinfo', lambda *_args, **_kwargs: None)
     monkeypatch.setattr(plotter_module.messagebox, 'showerror', lambda *_args, **_kwargs: None)
 
-    plotter._do_image_export(window, format_var, transparent_var)  # noqa: SLF001
+    plotter._do_image_export(window, format_var, transparent_var)  # ruff:ignore[private-member-access]
 
     assert plotter.pv_plotter.screenshot_calls == [('/tmp/export.png', True)]
 
@@ -1661,7 +1669,7 @@ def test_do_image_export_handles_failures(monkeypatch: pytest.MonkeyPatch, plott
     monkeypatch.setattr(plotter_module.messagebox, 'showerror', lambda title, msg: errors.append((title, msg)))
     monkeypatch.setattr(plotter_module.messagebox, 'showinfo', lambda *_args, **_kwargs: None)
 
-    plotter._do_image_export(window, format_var, transparent_var)  # noqa: SLF001
+    plotter._do_image_export(window, format_var, transparent_var)  # ruff:ignore[private-member-access]
     assert errors
     assert 'Failed to export image' in errors[0][1]
 
@@ -1674,7 +1682,7 @@ def test_do_image_export_cancel(monkeypatch: pytest.MonkeyPatch, plotter_env: An
 
     monkeypatch.setattr(plotter_module.filedialog, 'asksaveasfilename', lambda **_kwargs: '')
 
-    plotter._do_image_export(window, format_var, transparent_var)  # noqa: SLF001
+    plotter._do_image_export(window, format_var, transparent_var)  # ruff:ignore[private-member-access]
     assert not plotter.pv_plotter.screenshot_calls
 
 
@@ -1761,7 +1769,7 @@ def test_update_mesh_handles_spherical_grid(plotter_env: Any) -> None:
     r = np.linspace(0.0, 1.0, 2)
 
     plotter.update_mesh(r, r, r, GridType.SPHERICAL)
-    assert plotter.tabulator._grid_type == GridType.SPHERICAL  # noqa: SLF001
+    assert plotter.tabulator._grid_type == GridType.SPHERICAL  # ruff:ignore[private-member-access]
 
 
 def test_toggle_molecule_balances_atom_and_bond_visibility(plotter_env: Any) -> None:
@@ -1863,35 +1871,35 @@ def install_fake_tk_widgets(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def selection_screen_ui(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    original_screen_bases = plotter_module._OrbitalSelectionScreen.__bases__  # noqa: SLF001
-    original_tree_bases = plotter_module._OrbitalsTreeview.__bases__  # noqa: SLF001
-    plotter_module._OrbitalSelectionScreen.__bases__ = (SimpleToplevel,)  # noqa: SLF001
-    plotter_module._OrbitalsTreeview.__bases__ = (SimpleTreeview,)  # noqa: SLF001
+    original_screen_bases = plotter_module._OrbitalSelectionScreen.__bases__  # ruff:ignore[private-member-access]
+    original_tree_bases = plotter_module._OrbitalsTreeview.__bases__  # ruff:ignore[private-member-access]
+    plotter_module._OrbitalSelectionScreen.__bases__ = (SimpleToplevel,)  # ruff:ignore[private-member-access]
+    plotter_module._OrbitalsTreeview.__bases__ = (SimpleTreeview,)  # ruff:ignore[private-member-access]
     monkeypatch.setattr(plotter_module.ttk, 'Frame', SimpleWidget)
     monkeypatch.setattr(plotter_module.ttk, 'Button', SimpleWidget)
     monkeypatch.setattr(plotter_module.ttk, 'Label', SimpleWidget)
     yield
-    plotter_module._OrbitalSelectionScreen.__bases__ = original_screen_bases  # noqa: SLF001
-    plotter_module._OrbitalsTreeview.__bases__ = original_tree_bases  # noqa: SLF001
+    plotter_module._OrbitalSelectionScreen.__bases__ = original_screen_bases  # ruff:ignore[private-member-access]
+    plotter_module._OrbitalsTreeview.__bases__ = original_tree_bases  # ruff:ignore[private-member-access]
 
 
 def test_orbital_selection_screen_navigation_and_close(selection_screen_ui: None) -> None:
     _ = selection_screen_ui
     plotter = SelectionPlotter()
-    screen = plotter_module._OrbitalSelectionScreen(plotter)  # noqa: SLF001
+    screen = plotter_module._OrbitalSelectionScreen(plotter)  # ruff:ignore[private-member-access]
     plotter.selection_screen = screen
 
-    screen._export_current_orb_radio = SimpleWidget()  # noqa: SLF001
+    screen._export_current_orb_radio = SimpleWidget()  # ruff:ignore[private-member-access]
     screen.update_nav_button_states()
     assert screen.prev_button.kwargs['state'] == plotter_module.tk.DISABLED
     assert screen.next_button.kwargs['state'] == plotter_module.tk.NORMAL
-    assert 'None' in screen._export_current_orb_radio.kwargs['text']  # noqa: SLF001
-    assert screen._export_current_orb_radio.kwargs['state'] == plotter_module.tk.DISABLED  # noqa: SLF001
+    assert 'None' in screen._export_current_orb_radio.kwargs['text']  # ruff:ignore[private-member-access]
+    assert screen._export_current_orb_radio.kwargs['state'] == plotter_module.tk.DISABLED  # ruff:ignore[private-member-access]
 
     screen.current_mo_ind = 0
     screen.update_nav_button_states()
     assert screen.next_button.kwargs['state'] == plotter_module.tk.NORMAL
-    assert '#1' in screen._export_current_orb_radio.kwargs['text']  # noqa: SLF001
+    assert '#1' in screen._export_current_orb_radio.kwargs['text']  # ruff:ignore[private-member-access]
 
     screen.current_mo_ind = -1
     screen.next_plot()
@@ -1904,7 +1912,7 @@ def test_orbital_selection_screen_navigation_and_close(selection_screen_ui: None
     screen.prev_plot()  # Should be no-op when at the start
     assert plotter.plot_calls[-1] == 0
 
-    plotter.tabulator._parser.mos = []  # type: ignore[attr-defined]  # noqa: SLF001
+    plotter.tabulator._parser.mos = []  # type: ignore[attr-defined]  # ruff:ignore[private-member-access]
     before = plotter.plot_calls.copy()
     screen.current_mo_ind = -1
     screen.next_plot()
@@ -1939,7 +1947,7 @@ def test_orbitals_treeview_populate_and_select(selection_screen_ui: None) -> Non
         _loading=False,
     )
 
-    tree = plotter_module._OrbitalsTreeview(selection_screen)  # noqa: SLF001
+    tree = plotter_module._OrbitalsTreeview(selection_screen)  # ruff:ignore[private-member-access]
     mos = [
         SimpleNamespace(sym='s', occ=2.0, energy=-0.5),
         SimpleNamespace(sym='s', occ=1.0, energy=-0.3),
@@ -1948,12 +1956,12 @@ def test_orbitals_treeview_populate_and_select(selection_screen_ui: None) -> Non
     tree.populate_tree(mos)
     expected_children = 3
     assert len(tree.get_children()) == expected_children
-    assert tree._items[1]['values'][1].startswith('s.')  # noqa: SLF001
+    assert tree._items[1]['values'][1].startswith('s.')  # ruff:ignore[private-member-access]
 
     tree.current_mo_ind = 1
     tree.highlight_orbital(2)
-    assert tree._items[1]['tags'] == ('!hightlight',)  # noqa: SLF001
-    assert tree._items[2]['tags'] == ('highlight',)  # noqa: SLF001
+    assert tree._items[1]['tags'] == ('!hightlight',)  # ruff:ignore[private-member-access]
+    assert tree._items[2]['tags'] == ('highlight',)  # ruff:ignore[private-member-access]
     expected_seen = 2
     assert tree.seen == expected_seen
 

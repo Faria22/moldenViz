@@ -349,7 +349,7 @@ class Config:
         for k, v in atom_types_data.items():
             try:
                 atom_types[int(k)] = AtomType(**v)
-            except Exception as e:  # noqa: PERF203
+            except Exception as e:  # ruff:ignore[try-except-in-loop]
                 raise ValueError(f'Invalid atom type data for atomic number {k}: {e}') from e
 
         for atomic_number_str, atom_properties in atoms_custom_config.items():
