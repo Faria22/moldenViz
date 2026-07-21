@@ -16,6 +16,14 @@ from matplotlib import colors as mcolors
 from moldenViz import Tabulator
 
 plotter_module = pytest.importorskip('moldenViz.plotter')
+plotter_ui_module = pytest.importorskip('moldenViz.plotter_ui')
+
+
+def test_ui_helpers_are_defined_in_companion_module() -> None:
+    """Keep the Tk and Qt helpers out of the core plotter module."""
+    assert plotter_module.Plotter.grid_settings_screen.__module__ == plotter_ui_module.__name__
+    assert plotter_module._OrbitalSelectionScreen.__module__ == plotter_ui_module.__name__  # ruff:ignore[private-member-access]
+    assert plotter_module._OrbitalsTreeview.__module__ == plotter_ui_module.__name__  # ruff:ignore[private-member-access]
 
 
 class _GridTypeProxy:
@@ -895,9 +903,9 @@ def test_plotter_builds_menus_and_overrides_clear(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(plotter_module, '_OrbitalSelectionScreen', DummySelectionScreen)
     monkeypatch.setattr(plotter_module.pv, 'StructuredGrid', DummyStructuredGrid)
     monkeypatch.setattr(plotter_module.pv, 'pyvista_ndarray', lambda arr: arr)
-    monkeypatch.setattr(plotter_module, 'QMenu', FakeQMenu)
-    monkeypatch.setattr(plotter_module, 'QAction', FakeQAction)
-    monkeypatch.setattr(plotter_module, 'isValid', lambda _action: True)
+    monkeypatch.setattr(plotter_ui_module, 'QMenu', FakeQMenu)
+    monkeypatch.setattr(plotter_ui_module, 'QAction', FakeQAction)
+    monkeypatch.setattr(plotter_ui_module, 'isValid', lambda _action: True)
 
     plotter = plotter_module.Plotter('dummy', tk_root=DummyTk())
 

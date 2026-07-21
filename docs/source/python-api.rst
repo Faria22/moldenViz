@@ -50,6 +50,19 @@ The ``Plotter`` class renders atoms, bonds, and (optionally) orbital isosurfaces
    # Plot only the molecular structure
    Plotter('molden.inp', only_molecule=True)
 
+Interactive Controls
+~~~~~~~~~~~~~~~~~~~~
+
+The plotter window provides several interactive controls:
+
+* **Orbital Selection**: Navigate through molecular orbitals using the control panel
+* **Contour Adjustment**: Modify isosurface contour levels in real-time
+* **Opacity Control**: Adjust transparency of orbital surfaces and molecule
+* **Grid Settings**: Change grid resolution and type (spherical/cartesian)
+* **Export Options**: Access data and image export through the menu bar
+
+When ``Plotter`` creates its own grid, it tabulates Gaussian-type orbitals in the background so the molecule window can appear first. Orbital controls become usable when that work finishes; failures are reported in the GUI instead of leaving the viewer silently unavailable.
+
 Exporting from the GUI
 ~~~~~~~~~~~~~~~~~~~~~~
 
@@ -67,7 +80,7 @@ When using the ``Plotter`` GUI, you can export data or images from the PyVista p
 1. Select **Data** from the Export menu
 2. Choose your export format:
 
-   - **VTK (.vtk)**: Exports single orbital or all orbitals in a multi-block VTK file
+   - **VTK (.vtk)**: Exports one orbital or all orbitals as point-data arrays on a structured grid
    - **Gaussian Cube (.cube)**: Exports a single orbital (cube format does not support multiple orbitals)
 
 3. Select orbital scope:
@@ -160,7 +173,7 @@ The cartesian grid keeps spacing uniform—ideal for Gaussian cube exports—whi
 Exporting Volumetric Data (v1.1+)
 ---------------------------------
 
-You can export orbitals without opening the GUI. Create a grid, tabulate orbitals, and call the new export helpers:
+You can export orbitals without opening the GUI. Create a grid, tabulate orbitals, and call the export method:
 
 .. code-block:: python
 
@@ -174,9 +187,43 @@ You can export orbitals without opening the GUI. Create a grid, tabulate orbital
        z=np.linspace(-8, 8, 120),
    )
 
-   # Export orbitals 15 and 16 to VTK and cube files
-   tab.export('exports/orbital_{mo}.vtk', mo_index=15)
-   tab.export('exports/orbital_{mo}.cube', mo_index=15)
+   from pathlib import Path
+
+   export_dir = Path('exports')
+   export_dir.mkdir(exist_ok=True)
+
+   # Export orbitals 15 and 16 to separate VTK and cube files
+   for mo_index in (15, 16):
+       tab.export(export_dir / f'orbital_{mo_index}.vtk', mo_index=mo_index)
+       tab.export(export_dir / f'orbital_{mo_index}.cube', mo_index=mo_index)
+
+The format-specific ``export_vtk`` and ``export_cube`` methods are also public when you need to call a writer directly. ``export`` is usually simpler because it selects the writer from the destination suffix.
+
+**Export Format Comparison**
+
+The table below compares VTK and Gaussian cube export formats:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 35 35
+
+   * - Feature
+     - VTK Format
+     - Gaussian Cube
+   * - Multiple orbitals
+     - ✓ (one point-data array per orbital)
+     - ✗ (single only)
+   * - Grid type
+     - Spherical or Cartesian
+     - Cartesian only
+   * - Software support
+     - ParaView, VisIt
+     - Most quantum chemistry viewers
+   * - File size
+     - Compact (binary available)
+     - Larger (text format)
+
+**Batch Export Workflow**
 
 To reuse tabulation results in a notebook without re-computation:
 
