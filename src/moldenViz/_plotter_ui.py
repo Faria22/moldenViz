@@ -1,4 +1,4 @@
-"""Tk and Qt user-interface helpers for moldenViz.plotter."""
+"""Private Tk and Qt user-interface helpers for :mod:`moldenViz.plotter`."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from ._config_module import Config
 from .tabulator import GridType, Tabulator
 
 if TYPE_CHECKING:
-    from .parser import _MolecularOrbital
+    from .models import MolecularOrbital
     from .plotter import Plotter
 
 
@@ -53,33 +53,33 @@ class _PlotterUI:
     """Mixin implementing menus, dialogs, and settings for Plotter."""
 
     if TYPE_CHECKING:
-        CARTESIAN_GRID_SETTINGS_WINDOW_SIZE: str
-        SPHERICAL_GRID_SETTINGS_WINDOW_SIZE: str
-        molecule: Any
-        molecule_actors: list[Any]
-        only_molecule: bool
-        orb_actor: Any | None
-        pv_plotter: Any
-        selection_screen: Any | None
+        _CARTESIAN_GRID_SETTINGS_WINDOW_SIZE: str
+        _SPHERICAL_GRID_SETTINGS_WINDOW_SIZE: str
+        _molecule: Any
+        _molecule_actors: list[Any]
+        _only_molecule: bool
+        _orb_actor: Any | None
+        _pv_plotter: Any
+        _selection_screen: Any | None
         tabulator: Tabulator
-        tk_root: Any
+        _tk_root: Any
 
         def _clear_all(self) -> None: ...
         def _ensure_gtos_ready(self) -> bool: ...
         def are_atoms_visible(self) -> bool: ...
         def are_bonds_visible(self) -> bool: ...
-        def custom_cmap_from_colors(self, colors: list[str]) -> Any: ...
-        def load_molecule(self, config: Config) -> None: ...
+        def _custom_cmap_from_colors(self, colors: list[str]) -> Any: ...
+        def _load_molecule(self, config: Config) -> None: ...
         def plot_orbital(self, orb_ind: int) -> None: ...
         def toggle_atoms(self) -> None: ...
         def toggle_bonds(self) -> None: ...
         def toggle_molecule(self) -> None: ...
-        def update_mesh(self, i_points: Any, j_points: Any, k_points: Any, grid_type: GridType) -> None: ...
+        def _update_mesh(self, i_points: Any, j_points: Any, k_points: Any, grid_type: GridType) -> None: ...
 
     def _override_clear_all_button(self) -> None:
         """Override the default "Clear All" action in the PyVista plotter's View menu."""
         view_menu = None
-        main_menu = self.pv_plotter.main_menu
+        main_menu = self._pv_plotter.main_menu
         if main_menu is None:
             raise RuntimeError('PyVista plotter does not have a main menu.')
 
@@ -101,47 +101,47 @@ class _PlotterUI:
     def _add_orbital_menus_to_pv_plotter(self) -> None:
         """Add Settings and Export menus to the PyVista plotter's main menu."""
         # Create Settings menu with dropdown
-        settings_menu = QMenu('Settings', self.pv_plotter.app_window)
+        settings_menu = QMenu('Settings', self._pv_plotter.app_window)
 
         # Add Settings submenu items
-        if not self.only_molecule:
-            grid_settings_action = QAction('Grid Settings', self.pv_plotter.app_window)
-            grid_settings_action.triggered.connect(self.grid_settings_screen)
+        if not self._only_molecule:
+            grid_settings_action = QAction('Grid Settings', self._pv_plotter.app_window)
+            grid_settings_action.triggered.connect(self._grid_settings_screen)
             settings_menu.addAction(grid_settings_action)
 
-            mo_settings_action = QAction('MO Settings', self.pv_plotter.app_window)
-            mo_settings_action.triggered.connect(self.mo_settings_screen)
+            mo_settings_action = QAction('MO Settings', self._pv_plotter.app_window)
+            mo_settings_action.triggered.connect(self._mo_settings_screen)
             settings_menu.addAction(mo_settings_action)
 
-        molecule_settings_action = QAction('Molecule Settings', self.pv_plotter.app_window)
-        molecule_settings_action.triggered.connect(self.molecule_settings_screen)
+        molecule_settings_action = QAction('Molecule Settings', self._pv_plotter.app_window)
+        molecule_settings_action.triggered.connect(self._molecule_settings_screen)
         settings_menu.addAction(molecule_settings_action)
 
-        color_settings_action = QAction('Color Settings', self.pv_plotter.app_window)
-        color_settings_action.triggered.connect(self.color_settings_screen)
+        color_settings_action = QAction('Color Settings', self._pv_plotter.app_window)
+        color_settings_action.triggered.connect(self._color_settings_screen)
         settings_menu.addAction(color_settings_action)
 
         settings_menu.addSeparator()
 
-        save_settings_action = QAction('Save Settings', self.pv_plotter.app_window)
-        save_settings_action.triggered.connect(self.save_settings)
+        save_settings_action = QAction('Save Settings', self._pv_plotter.app_window)
+        save_settings_action.triggered.connect(self._save_settings)
         settings_menu.addAction(save_settings_action)
 
         # Create Export menu with dropdown
-        export_menu = QMenu('Export', self.pv_plotter.app_window)
+        export_menu = QMenu('Export', self._pv_plotter.app_window)
 
         # Add Export submenu items
-        if not self.only_molecule:
-            export_data_action = QAction('Data', self.pv_plotter.app_window)
-            export_data_action.triggered.connect(self.export_orbitals_dialog)
+        if not self._only_molecule:
+            export_data_action = QAction('Data', self._pv_plotter.app_window)
+            export_data_action.triggered.connect(self._export_orbitals_dialog)
             export_menu.addAction(export_data_action)
 
-        export_image_action = QAction('Image', self.pv_plotter.app_window)
-        export_image_action.triggered.connect(self.export_image_dialog)
+        export_image_action = QAction('Image', self._pv_plotter.app_window)
+        export_image_action.triggered.connect(self._export_image_dialog)
         export_menu.addAction(export_image_action)
 
         # Add menus to main menu bar
-        main_menu = self.pv_plotter.main_menu
+        main_menu = self._pv_plotter.main_menu
         if main_menu is None:
             raise RuntimeError('PyVista plotter does not have a main menu.')
         main_menu.addMenu(settings_menu)
@@ -159,14 +159,14 @@ class _PlotterUI:
         scope_var : tk.StringVar
             Variable holding the selected scope ('current' or 'all').
         """
-        assert self.selection_screen is not None
+        assert self._selection_screen is not None
 
         file_format = format_var.get()
         scope = scope_var.get()
         logger.info('Export requested: format=%s, scope=%s.', file_format, scope)
 
         # Validate selection
-        if scope == 'current' and self.selection_screen.current_mo_ind < 0:
+        if scope == 'current' and self._selection_screen.current_mo_ind < 0:
             messagebox.showerror('Export Error', 'No orbital is currently selected.')
             return
 
@@ -181,7 +181,7 @@ class _PlotterUI:
         # Determine file extension and default name
         ext = '.vtk' if file_format == 'vtk' else '.cube'
         default_name = (
-            f'orbitals_all{ext}' if scope == 'all' else f'orbital_{self.selection_screen.current_mo_ind}{ext}'
+            f'orbitals_all{ext}' if scope == 'all' else f'orbital_{self._selection_screen.current_mo_ind}{ext}'
         )
 
         # Show file save dialog
@@ -198,7 +198,7 @@ class _PlotterUI:
 
         # Perform the export
         try:
-            mo_index = self.selection_screen.current_mo_ind if scope == 'current' else None
+            mo_index = self._selection_screen.current_mo_ind if scope == 'current' else None
             self.tabulator.export(file_path, mo_index=mo_index)
             messagebox.showinfo('Export Successful', f'Orbital(s) exported successfully to:\n{file_path}')
             logger.info('Export completed successfully to %s.', file_path)
@@ -207,13 +207,13 @@ class _PlotterUI:
             logger.exception('Export failed during orbital export.')
             messagebox.showerror('Export Failed', f'Failed to export orbital(s):\n\n{e!s}')
 
-    def export_orbitals_dialog(self) -> None:
+    def _export_orbitals_dialog(self) -> None:
         """Open a dialog to configure and export molecular orbitals."""
-        assert self.selection_screen is not None
+        assert self._selection_screen is not None
         if not self._ensure_gtos_ready():
             return
 
-        export_window = tk.Toplevel(self.tk_root)
+        export_window = tk.Toplevel(self._tk_root)
         export_window.title('Export Orbitals')
         export_window.geometry('400x300')
 
@@ -256,7 +256,7 @@ class _PlotterUI:
         scope_var = tk.StringVar(value='current')
         # Use 1-based indexing for display (add 1 to current_mo_ind)
         orbital_display = (
-            self.selection_screen.current_mo_ind + 1 if self.selection_screen.current_mo_ind >= 0 else 'None'
+            self._selection_screen.current_mo_ind + 1 if self._selection_screen.current_mo_ind >= 0 else 'None'
         )
         current_orb_radio = ttk.Radiobutton(
             main_frame,
@@ -265,7 +265,7 @@ class _PlotterUI:
             value='current',
         )
         current_orb_radio.grid(row=4, column=0, columnspan=2, sticky=tk.W, padx=20)
-        if self.selection_screen.current_mo_ind < 0:
+        if self._selection_screen.current_mo_ind < 0:
             current_orb_radio.config(state=tk.DISABLED)
 
         all_orb_radio = ttk.Radiobutton(main_frame, text='All orbitals', variable=scope_var, value='all')
@@ -292,7 +292,7 @@ class _PlotterUI:
         update_scope_options()
 
         # Clean up references when window is closed
-        def on_close() -> None:
+        def _on_close() -> None:
             self._export_window = None
             self._export_current_orb_radio = None
             self._export_all_orb_radio = None
@@ -307,12 +307,12 @@ class _PlotterUI:
             text='Export',
             command=lambda: self._do_export(export_window, format_var, scope_var),
         ).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text='Cancel', command=on_close).pack(side=tk.LEFT, padx=5)
-        export_window.protocol('WM_DELETE_WINDOW', on_close)
+        ttk.Button(button_frame, text='Cancel', command=_on_close).pack(side=tk.LEFT, padx=5)
+        export_window.protocol('WM_DELETE_WINDOW', _on_close)
 
-    def export_image_dialog(self) -> None:
+    def _export_image_dialog(self) -> None:
         """Open a dialog to export the current visualization as an image."""
-        export_window = tk.Toplevel(self.tk_root)
+        export_window = tk.Toplevel(self._tk_root)
         export_window.title('Export Image')
         export_window.geometry('400x250')
 
@@ -460,9 +460,9 @@ class _PlotterUI:
             Whether PNG output should use a transparent background.
         """
         if file_format in {'svg', 'pdf'}:
-            self.pv_plotter.save_graphic(file_path)
+            self._pv_plotter.save_graphic(file_path)
         else:
-            self.pv_plotter.screenshot(
+            self._pv_plotter.screenshot(
                 file_path,
                 transparent_background=transparent if file_format == 'png' else False,
             )
@@ -475,7 +475,7 @@ class _PlotterUI:
         tk.Misc
             The parent widget for settings dialogs.
         """
-        parent = self.selection_screen if self.selection_screen is not None else self.tk_root
+        parent = self._selection_screen if self._selection_screen is not None else self._tk_root
         if parent is None:
             raise RuntimeError('No Tk root available to host settings dialogs.')
         return parent
@@ -489,11 +489,11 @@ class _PlotterUI:
             The index of the currently selected molecular orbital, or -1 if none is selected.
 
         """
-        if self.selection_screen:
-            return self.selection_screen.current_mo_ind
+        if self._selection_screen:
+            return self._selection_screen.current_mo_ind
         return -1
 
-    def grid_settings_screen(self) -> None:
+    def _grid_settings_screen(self) -> None:
         """Open the grid settings window."""
         parent = self._settings_parent()
         self.grid_settings_window = tk.Toplevel(parent)
@@ -506,14 +506,14 @@ class _PlotterUI:
         ttk.Label(settings_frame, text='MO Grid parameters').grid(row=0, column=0, padx=5, pady=5, columnspan=5)
 
         self.grid_type_radio_var = tk.StringVar()
-        self.grid_type_radio_var.set(self.tabulator._grid_type.value)  # ruff:ignore[private-member-access]
+        self.grid_type_radio_var.set(self.tabulator.grid_type.value)
 
         ttk.Label(settings_frame, text='Spherical grid:').grid(row=1, column=0, padx=5, pady=5)
         sph_grid_type_button = ttk.Radiobutton(
             settings_frame,
             variable=self.grid_type_radio_var,
             value=GridType.SPHERICAL.value,
-            command=self.place_grid_params_frame,
+            command=self._place_grid_params_frame,
         )
 
         ttk.Label(settings_frame, text='Cartesian grid:').grid(row=1, column=2, padx=5, pady=5)
@@ -521,26 +521,26 @@ class _PlotterUI:
             settings_frame,
             variable=self.grid_type_radio_var,
             value=GridType.CARTESIAN.value,
-            command=self.place_grid_params_frame,
+            command=self._place_grid_params_frame,
         )
 
         sph_grid_type_button.grid(row=1, column=1, padx=5, pady=5)
         cart_grid_type_button.grid(row=1, column=3, padx=5, pady=5)
 
-        self.sph_grid_params_frame = self.sph_grid_params_frame_widgets(settings_frame)
-        self.cart_grid_params_frame = self.cart_grid_params_frame_widgets(settings_frame)
+        self.sph_grid_params_frame = self._sph_grid_params_frame_widgets(settings_frame)
+        self.cart_grid_params_frame = self._cart_grid_params_frame_widgets(settings_frame)
 
-        self.place_grid_params_frame()
+        self._place_grid_params_frame()
 
         # Reset button
-        reset_button = ttk.Button(settings_frame, text='Reset', command=self.reset_grid_settings)
+        reset_button = ttk.Button(settings_frame, text='Reset', command=self._reset_grid_settings)
         reset_button.grid(row=8, column=0, padx=5, pady=5, columnspan=5)
 
         # Apply settings button
-        apply_button = ttk.Button(settings_frame, text='Apply', command=self.apply_grid_settings)
+        apply_button = ttk.Button(settings_frame, text='Apply', command=self._apply_grid_settings)
         apply_button.grid(row=9, column=0, padx=5, pady=5, columnspan=5)
 
-    def mo_settings_screen(self) -> None:
+    def _mo_settings_screen(self) -> None:
         """Open the molecular orbital settings window."""
         parent = self._settings_parent()
         self.mo_settings_window = tk.Toplevel(parent)
@@ -553,12 +553,12 @@ class _PlotterUI:
         contour_label = ttk.Label(settings_frame, text='Molecular Orbital Contour:')
         contour_label.grid(row=0, column=0, padx=5, pady=5, sticky='w')
         self.contour_entry = ttk.Entry(settings_frame)
-        self.contour_entry.insert(0, str(self.contour))
+        self.contour_entry.insert(0, str(self._contour))
         self.contour_entry.grid(row=1, column=0, padx=5, pady=5, sticky='ew')
 
         # Bind to apply changes on Enter key or focus out
-        self.contour_entry.bind('<Return>', lambda _e: self.apply_mo_contour())
-        self.contour_entry.bind('<FocusOut>', lambda _e: self.apply_mo_contour())
+        self.contour_entry.bind('<Return>', lambda _e: self._apply_mo_contour())
+        self.contour_entry.bind('<FocusOut>', lambda _e: self._apply_mo_contour())
 
         # Opacity
         opacity_label = ttk.Label(settings_frame)
@@ -566,26 +566,26 @@ class _PlotterUI:
         self.opacity_scale = ttk.Scale(
             settings_frame,
             length=200,
-            command=self.on_opacity_change,
+            command=self._on_opacity_change,
         )
-        self.opacity_scale.set(self.opacity)
+        self.opacity_scale.set(self._opacity)
         self.opacity_scale.grid(row=3, column=0, padx=5, pady=5, sticky='ew')
         # Initialize label
-        opacity_label.config(text=f'Molecular Orbital Opacity: {self.opacity:.2f}')
+        opacity_label.config(text=f'Molecular Orbital Opacity: {self._opacity:.2f}')
 
         # Configure grid column weight for proper resizing
         settings_frame.columnconfigure(0, weight=1)
 
         # Reset button
-        reset_button = ttk.Button(settings_frame, text='Reset', command=self.reset_mo_settings)
+        reset_button = ttk.Button(settings_frame, text='Reset', command=self._reset_mo_settings)
         reset_button.grid(row=4, column=0, padx=5, pady=5, sticky='ew')
 
-    def on_opacity_change(self, val: str) -> None:
+    def _on_opacity_change(self, val: str) -> None:
         """Handle opacity slider changes and apply immediately."""
         opacity = round(float(val), 2)
-        self.opacity = opacity
-        if self.orb_actor:
-            self.orb_actor.GetProperty().SetOpacity(opacity)
+        self._opacity = opacity
+        if self._orb_actor:
+            self._orb_actor.GetProperty().SetOpacity(opacity)
 
         # Update label
         for widget in self.mo_settings_window.winfo_children():
@@ -594,11 +594,11 @@ class _PlotterUI:
                     child.config(text=f'Molecular Orbital Opacity: {opacity:.2f}')
         logger.info('Set molecular orbital opacity to %.2f.', opacity)
 
-    def apply_mo_contour(self) -> None:
+    def _apply_mo_contour(self) -> None:
         """Apply contour changes immediately."""
         try:
-            self.contour = float(self.contour_entry.get().strip())
-            logger.info('Set molecular orbital contour to %.2f.', self.contour)
+            self._contour = float(self.contour_entry.get().strip())
+            logger.info('Set molecular orbital contour to %.2f.', self._contour)
             # Replot the current orbital with the new contour
             idx = self._get_current_mo_index()
             if idx >= 0:
@@ -606,7 +606,7 @@ class _PlotterUI:
         except ValueError:
             pass  # Ignore invalid input
 
-    def update_settings_button_states(self) -> None:
+    def _update_settings_button_states(self) -> None:
         """Update the state of the settings buttons based on current plotter state."""
         if hasattr(self, 'show_atoms_var'):
             self.show_atoms_var.set(self.are_atoms_visible())
@@ -616,7 +616,7 @@ class _PlotterUI:
         config.molecule.atom.show = self.are_atoms_visible()
         config.molecule.bond.show = self.are_bonds_visible()
 
-    def molecule_settings_screen(self) -> None:
+    def _molecule_settings_screen(self) -> None:
         """Open the molecule settings window."""
         parent = self._settings_parent()
         self.molecule_settings_window = tk.Toplevel(parent)
@@ -631,12 +631,12 @@ class _PlotterUI:
         self.molecule_opacity_scale = ttk.Scale(
             settings_frame,
             length=100,
-            command=self.on_molecule_opacity_change,
+            command=self._on_molecule_opacity_change,
         )
-        self.molecule_opacity_scale.set(self.molecule_opacity)
+        self.molecule_opacity_scale.set(self._molecule_opacity)
         self.molecule_opacity_scale.grid(row=1, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
         # Initialize label
-        molecule_opacity_label.config(text=f'Molecule Opacity: {self.molecule_opacity:.2f}')
+        molecule_opacity_label.config(text=f'Molecule Opacity: {self._molecule_opacity:.2f}')
 
         # Toggle molecule visibility
         toggle_mol_button = ttk.Button(
@@ -690,18 +690,18 @@ class _PlotterUI:
         settings_frame.columnconfigure(1, weight=1)
 
         # Reset button
-        reset_button = ttk.Button(settings_frame, text='Reset', command=self.reset_molecule_settings)
+        reset_button = ttk.Button(settings_frame, text='Reset', command=self._reset_molecule_settings)
         reset_button.grid(row=13, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
 
         # Apply settings button
-        apply_button = ttk.Button(settings_frame, text='Apply', command=self.apply_molecule_settings)
+        apply_button = ttk.Button(settings_frame, text='Apply', command=self._apply_molecule_settings)
         apply_button.grid(row=14, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
 
-    def on_molecule_opacity_change(self, val: str) -> None:
+    def _on_molecule_opacity_change(self, val: str) -> None:
         """Handle molecule opacity slider changes and apply immediately."""
         opacity = round(float(val), 2)
-        self.molecule_opacity = opacity
-        for actor in self.molecule_actors:
+        self._molecule_opacity = opacity
+        for actor in self._molecule_actors:
             actor.GetProperty().SetOpacity(opacity)
         # Update label
         for widget in self.molecule_settings_window.winfo_children():
@@ -710,7 +710,7 @@ class _PlotterUI:
                     child.config(text=f'Molecule Opacity: {opacity:.2f}')
         logger.info('Set molecule opacity to %.2f.', opacity)
 
-    def apply_background_color(self) -> None:
+    def _apply_background_color(self) -> None:
         """Apply background color changes immediately."""
         try:
             color = self.background_color_entry.get().strip()
@@ -721,12 +721,12 @@ class _PlotterUI:
     def _set_background_color(self, color: str) -> None:
         """Set the background color when the value is valid."""
         if mcolors.is_color_like(color):
-            self.pv_plotter.set_background(color)
+            self._pv_plotter.set_background(color)
             logger.info('Set background color to %s.', color)
         else:
             messagebox.showerror('Invalid Input', f'"{color}" is not a valid color.')
 
-    def on_mo_color_scheme_change(self, _event: tk.Event) -> None:
+    def _on_mo_color_scheme_change(self, _event: tk.Event) -> None:
         """Handle MO color scheme dropdown change to show/hide custom color entries."""
         if self.mo_color_scheme_var.get() == 'custom':
             for widget in self.mo_custom_color_widgets:
@@ -735,7 +735,7 @@ class _PlotterUI:
             for widget in self.mo_custom_color_widgets:
                 widget.grid_remove()
 
-    def on_bond_color_type_change(self) -> None:
+    def _on_bond_color_type_change(self) -> None:
         """Handle bond color type change to show/hide bond color entry."""
         if self.bond_color_type_var.get() == 'uniform':
             self.bond_color_label.grid()
@@ -744,9 +744,9 @@ class _PlotterUI:
             self.bond_color_label.grid_remove()
             self.bond_color_entry.grid_remove()
 
-        self.apply_bond_color_settings()
+        self._apply_bond_color_settings()
 
-    def color_settings_screen(self) -> None:
+    def _color_settings_screen(self) -> None:
         """Open the color settings window."""
         parent = self._settings_parent()
         self.color_settings_window = tk.Toplevel(parent)
@@ -770,13 +770,13 @@ class _PlotterUI:
         self.background_color_entry.insert(0, str(config.background_color))
         self.background_color_entry.grid(row=1, column=1, padx=5, pady=5, sticky='w')
         # Bind to apply changes on Enter key or focus out
-        self.background_color_entry.bind('<Return>', lambda _e: self.apply_background_color())
-        self.background_color_entry.bind('<FocusOut>', lambda _e: self.apply_background_color())
+        self.background_color_entry.bind('<Return>', lambda _e: self._apply_background_color())
+        self.background_color_entry.bind('<FocusOut>', lambda _e: self._apply_background_color())
 
         # Separator
         ttk.Separator(settings_frame, orient='horizontal').grid(row=2, column=0, columnspan=2, sticky='ew', pady=10)
 
-        if not self.only_molecule:
+        if not self._only_molecule:
             # MO Color section
             ttk.Label(settings_frame, text='Molecular Orbital Colors', font=('TkDefaultFont', 10, 'bold')).grid(
                 row=3,
@@ -808,8 +808,8 @@ class _PlotterUI:
                 values=color_schemes,
             )
             self.mo_color_scheme_dropdown.grid(row=4, column=1, padx=5, pady=5, sticky='w')
-            self.mo_color_scheme_dropdown.bind('<<ComboboxSelected>>', self.on_mo_color_scheme_change)
-            self.mo_color_scheme_dropdown.bind('<<ComboboxSelected>>', lambda _e: self.apply_mo_color_settings())
+            self.mo_color_scheme_dropdown.bind('<<ComboboxSelected>>', self._on_mo_color_scheme_change)
+            self.mo_color_scheme_dropdown.bind('<<ComboboxSelected>>', lambda _e: self._apply_mo_color_settings())
 
             # Custom color entries (initially hidden unless 'custom' is selected)
             negative_color_label = ttk.Label(settings_frame, text='Negative Color:')
@@ -862,14 +862,14 @@ class _PlotterUI:
             text='Uniform',
             variable=self.bond_color_type_var,
             value='uniform',
-            command=self.on_bond_color_type_change,
+            command=self._on_bond_color_type_change,
         ).pack(side=tk.LEFT)
         ttk.Radiobutton(
             bond_color_frame,
             text='Split',
             variable=self.bond_color_type_var,
             value='split',
-            command=self.on_bond_color_type_change,
+            command=self._on_bond_color_type_change,
         ).pack(side=tk.LEFT)
 
         # Bond color (for uniform type only)
@@ -878,7 +878,7 @@ class _PlotterUI:
         self.bond_color_entry = ttk.Entry(settings_frame, width=15)
         self.bond_color_entry.insert(0, str(config.molecule.bond.color))
         self.bond_color_entry.grid(row=10, column=1, padx=5, pady=5, sticky='w')
-        self.bond_color_entry.bind('<Return>', lambda _e: self.apply_bond_color_settings())
+        self.bond_color_entry.bind('<Return>', lambda _e: self._apply_bond_color_settings())
 
         # Hide bond color entry if split is selected
         if self.bond_color_type_var.get() == 'split':
@@ -890,27 +890,27 @@ class _PlotterUI:
         settings_frame.columnconfigure(1, weight=1)
 
         # Reset button
-        reset_button = ttk.Button(settings_frame, text='Reset', command=self.reset_color_settings)
+        reset_button = ttk.Button(settings_frame, text='Reset', command=self._reset_color_settings)
         reset_button.grid(row=11, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
 
         # Apply settings button
-        apply_button = ttk.Button(settings_frame, text='Apply', command=self.apply_color_settings)
+        apply_button = ttk.Button(settings_frame, text='Apply', command=self._apply_color_settings)
         apply_button.grid(row=13, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
 
-    def place_grid_params_frame(self) -> None:
+    def _place_grid_params_frame(self) -> None:
         """Render the parameter frame that matches the selected grid type."""
         if self.grid_type_radio_var.get() == GridType.SPHERICAL.value:
-            self.grid_settings_window.geometry(self.SPHERICAL_GRID_SETTINGS_WINDOW_SIZE)
+            self.grid_settings_window.geometry(self._SPHERICAL_GRID_SETTINGS_WINDOW_SIZE)
             self.cart_grid_params_frame.grid_forget()
             self.sph_grid_params_frame.grid(row=2, column=0, padx=5, pady=5, rowspan=6, columnspan=4)
-            self.sph_grid_params_frame_setup()
+            self._sph_grid_params_frame_setup()
         else:
-            self.grid_settings_window.geometry(self.CARTESIAN_GRID_SETTINGS_WINDOW_SIZE)
+            self.grid_settings_window.geometry(self._CARTESIAN_GRID_SETTINGS_WINDOW_SIZE)
             self.sph_grid_params_frame.grid_forget()
             self.cart_grid_params_frame.grid(row=2, column=0, padx=5, pady=5, rowspan=6, columnspan=4)
-            self.cart_grid_params_frame_setup()
+            self._cart_grid_params_frame_setup()
 
-    def sph_grid_params_frame_widgets(self, master: ttk.Frame) -> ttk.Frame:
+    def _sph_grid_params_frame_widgets(self, master: ttk.Frame) -> ttk.Frame:
         """Build widgets that capture spherical grid parameters.
 
         Parameters
@@ -949,7 +949,7 @@ class _PlotterUI:
 
         return grid_params_frame
 
-    def cart_grid_params_frame_widgets(self, master: ttk.Frame) -> ttk.Frame:
+    def _cart_grid_params_frame_widgets(self, master: ttk.Frame) -> ttk.Frame:
         """Build widgets that capture cartesian grid parameters.
 
         Parameters
@@ -1005,7 +1005,7 @@ class _PlotterUI:
 
         return grid_params_frame
 
-    def sph_grid_params_frame_setup(self) -> None:
+    def _sph_grid_params_frame_setup(self) -> None:
         """Populate the spherical grid widgets with defaults or existing values."""
         self.radius_entry.delete(0, tk.END)
         self.radius_points_entry.delete(0, tk.END)
@@ -1013,17 +1013,17 @@ class _PlotterUI:
         self.phi_points_entry.delete(0, tk.END)
 
         # Previous grid was cartesian, so use default values
-        if self.tabulator._grid_type == GridType.CARTESIAN:  # ruff:ignore[private-member-access]
+        if self.tabulator.grid_type == GridType.CARTESIAN:
             self.radius_entry.insert(
                 0,
-                str(max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius)),
+                str(max(config.grid.max_radius_multiplier * self._molecule.max_radius, config.grid.min_radius)),
             )
             self.radius_points_entry.insert(0, str(config.grid.spherical.num_r_points))
             self.theta_points_entry.insert(0, str(config.grid.spherical.num_theta_points))
             self.phi_points_entry.insert(0, str(config.grid.spherical.num_phi_points))
             return
 
-        num_r, num_theta, num_phi = self.tabulator._grid_dimensions  # ruff:ignore[private-member-access]
+        num_r, num_theta, num_phi = self.tabulator.grid_dimensions
 
         # The last point of the grid for sure has the largest r
         r, _, _ = Tabulator._cartesian_to_spherical(*self.tabulator.grid[-1, :])  # ruff:ignore[private-member-access]
@@ -1033,7 +1033,7 @@ class _PlotterUI:
         self.theta_points_entry.insert(0, str(num_theta))
         self.phi_points_entry.insert(0, str(num_phi))
 
-    def cart_grid_params_frame_setup(self) -> None:
+    def _cart_grid_params_frame_setup(self) -> None:
         """Populate the Cartesian grid widgets with defaults or existing values."""
         self.x_min_entry.delete(0, tk.END)
         self.x_max_entry.delete(0, tk.END)
@@ -1048,8 +1048,8 @@ class _PlotterUI:
         self.z_num_points_entry.delete(0, tk.END)
 
         # Previous grid was sphesical, so use adapted default values
-        if self.tabulator._grid_type == GridType.SPHERICAL:  # ruff:ignore[private-member-access]
-            r = max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius)
+        if self.tabulator.grid_type == GridType.SPHERICAL:
+            r = max(config.grid.max_radius_multiplier * self._molecule.max_radius, config.grid.min_radius)
 
             self.x_min_entry.insert(0, str(-r))
             self.y_min_entry.insert(0, str(-r))
@@ -1064,7 +1064,7 @@ class _PlotterUI:
             self.z_num_points_entry.insert(0, str(config.grid.cartesian.num_z_points))
             return
 
-        x_num, y_num, z_num = self.tabulator._grid_dimensions  # ruff:ignore[private-member-access]
+        x_num, y_num, z_num = self.tabulator.grid_dimensions
         x_min, y_min, z_min = self.tabulator.grid[0, :]
         x_max, y_max, z_max = self.tabulator.grid[-1, :]
 
@@ -1080,15 +1080,15 @@ class _PlotterUI:
         self.z_max_entry.insert(0, str(z_max))
         self.z_num_points_entry.insert(0, str(z_num))
 
-    def reset_grid_settings(self) -> None:
+    def _reset_grid_settings(self) -> None:
         """Restore grid settings widgets back to configuration defaults."""
         self.grid_type_radio_var.set(config.grid.default_type)
-        self.place_grid_params_frame()
+        self._place_grid_params_frame()
 
         self.radius_entry.delete(0, tk.END)
         self.radius_entry.insert(
             0,
-            str(max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius)),
+            str(max(config.grid.max_radius_multiplier * self._molecule.max_radius, config.grid.min_radius)),
         )
 
         self.radius_points_entry.delete(0, tk.END)
@@ -1100,16 +1100,16 @@ class _PlotterUI:
         self.phi_points_entry.delete(0, tk.END)
         self.phi_points_entry.insert(0, str(config.grid.spherical.num_phi_points))
 
-    def reset_mo_settings(self) -> None:
+    def _reset_mo_settings(self) -> None:
         """Restore MO settings widgets back to configuration defaults."""
         self.contour_entry.delete(0, tk.END)
         self.contour_entry.insert(0, str(config.mo.contour))
 
         self.opacity_scale.set(config.mo.opacity)
 
-        self.apply_mo_contour()  # Reapply contour with new value
+        self._apply_mo_contour()  # Reapply contour with new value
 
-    def reset_molecule_settings(self) -> None:
+    def _reset_molecule_settings(self) -> None:
         """Restore molecule settings widgets back to configuration defaults."""
         config = Config()  # Reload config to discard unsaved changes
 
@@ -1129,9 +1129,9 @@ class _PlotterUI:
         self.bond_radius_entry.delete(0, tk.END)
         self.bond_radius_entry.insert(0, str(config.molecule.bond.radius))
 
-        self.apply_molecule_settings()  # Reapply molecule settings with new values
+        self._apply_molecule_settings()  # Reapply molecule settings with new values
 
-    def reset_color_settings(self) -> None:
+    def _reset_color_settings(self) -> None:
         """Restore color settings widgets back to configuration defaults."""
         config = Config()  # Reload config to discard unsaved changes
 
@@ -1184,10 +1184,10 @@ class _PlotterUI:
             self.bond_color_label.grid_remove()
             self.bond_color_entry.grid_remove()
 
-        self.apply_background_color()  # Reapply background color with new value
-        self.apply_color_settings()  # Reapply MO and bond color settings with new values
+        self._apply_background_color()  # Reapply background color with new value
+        self._apply_color_settings()  # Reapply MO and bond color settings with new values
 
-    def apply_grid_settings(self) -> None:
+    def _apply_grid_settings(self) -> None:
         """Validate UI inputs and apply the chosen grid parameters."""
         if self.grid_type_radio_var.get() == GridType.SPHERICAL.value:
             radius = float(self.radius_entry.get())
@@ -1219,7 +1219,7 @@ class _PlotterUI:
                     num_theta_points,
                     num_phi_points,
                 )
-                self.update_mesh(r, theta, phi, GridType.SPHERICAL)
+                self._update_mesh(r, theta, phi, GridType.SPHERICAL)
 
         else:
             x_min = float(self.x_min_entry.get())
@@ -1259,14 +1259,14 @@ class _PlotterUI:
                     z_max,
                     z_num,
                 )
-                self.update_mesh(x, y, z, GridType.CARTESIAN)
+                self._update_mesh(x, y, z, GridType.CARTESIAN)
 
         # Replot the current orbital with the new grid
         idx = self._get_current_mo_index()
         if idx >= 0:
             self.plot_orbital(idx)
 
-    def apply_molecule_settings(self) -> None:
+    def _apply_molecule_settings(self) -> None:
         """Validate UI inputs and apply the chosen molecule rendering parameters."""
         changes: list[str] = []
 
@@ -1290,26 +1290,26 @@ class _PlotterUI:
 
         if changes:
             logger.info('Applying molecule settings: %s.', ', '.join(changes))
-            self.load_molecule(config)
+            self._load_molecule(config)
         else:
             logger.debug('Molecule settings unchanged; skipping reload.')
 
-    def apply_color_settings(self) -> None:
+    def _apply_color_settings(self) -> None:
         """Apply both MO and bond color settings."""
-        self.apply_mo_color_settings()
-        self.apply_custom_mo_color_settings()
-        self.apply_bond_color_settings()
+        self._apply_mo_color_settings()
+        self._apply_custom_mo_color_settings()
+        self._apply_bond_color_settings()
 
-    def apply_mo_color_settings(self) -> None:
+    def _apply_mo_color_settings(self) -> None:
         """Validate UI inputs and apply the chosen MO color settings."""
-        self.on_mo_color_scheme_change(tk.Event())  # Update visibility of custom color entries
+        self._on_mo_color_scheme_change(tk.Event())  # Update visibility of custom color entries
 
         mo_color_scheme = self.mo_color_scheme_var.get().strip()
         if mo_color_scheme == 'custom':
             return
 
         if mo_color_scheme != config.mo.color_scheme:
-            self.cmap = mo_color_scheme
+            self._cmap = mo_color_scheme
             config.mo.color_scheme = mo_color_scheme
             config.mo.custom_colors = []
             logger.info('Applied MO color scheme: %s.', mo_color_scheme)
@@ -1318,7 +1318,7 @@ class _PlotterUI:
             if idx >= 0:
                 self.plot_orbital(idx)
 
-    def apply_custom_mo_color_settings(self) -> None:
+    def _apply_custom_mo_color_settings(self) -> None:
         """Validate UI inputs and apply the chosen MO color settings."""
         if self.mo_color_scheme_var.get().strip() != 'custom':
             return
@@ -1332,14 +1332,14 @@ class _PlotterUI:
         if custom_colors != config.mo.custom_colors:
             config.mo.custom_colors = custom_colors
             config.mo.color_scheme = 'custom'
-            self.cmap = self.custom_cmap_from_colors(custom_colors)
+            self._cmap = self._custom_cmap_from_colors(custom_colors)
             logger.info('Applied custom MO colors: negative=%s, positive=%s.', custom_colors[0], custom_colors[1])
 
             idx = self._get_current_mo_index()
             if idx >= 0:
                 self.plot_orbital(idx)
 
-    def apply_bond_color_settings(self) -> None:
+    def _apply_bond_color_settings(self) -> None:
         """Validate UI inputs and apply the chosen color settings."""
         changes: list[str] = []
 
@@ -1355,15 +1355,15 @@ class _PlotterUI:
 
         if changes:
             logger.info('Applying bond color settings: %s.', ', '.join(changes))
-            self.load_molecule(config)
+            self._load_molecule(config)
         else:
             logger.debug('Bond color settings unchanged; skipping reload.')
 
     @staticmethod
-    def save_settings() -> None:
+    def _save_settings() -> None:
         """Save current configuration to the user's custom config file."""
         try:
-            config.save_current_config()
+            config._save_current_config()  # ruff:ignore[private-member-access]
             messagebox.showinfo('Settings Saved', 'Configuration saved successfully to ~/.config/moldenViz/config.toml')
         except (OSError, ValueError) as e:
             messagebox.showerror('Save Error', f'Failed to save configuration: {e!s}')
@@ -1372,8 +1372,8 @@ class _PlotterUI:
 class _OrbitalSelectionScreen(tk.Toplevel):
     """Modal dialog that lets users browse and configure molecular orbitals."""
 
-    SPHERICAL_GRID_SETTINGS_WINDOW_SIZE = '400x350'
-    CARTESIAN_GRID_SETTINGS_WINDOW_SIZE = '650x400'
+    _SPHERICAL_GRID_SETTINGS_WINDOW_SIZE = '400x350'
+    _CARTESIAN_GRID_SETTINGS_WINDOW_SIZE = '650x400'
 
     def __init__(self, plotter: Plotter) -> None:
         """Create the orbital selection dialog for a plotter instance.
@@ -1383,11 +1383,11 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         plotter : Plotter
             Active plotter that supplies molecular orbital data.
         """
-        super().__init__(plotter.tk_root)
+        super().__init__(plotter._tk_root)  # ruff:ignore[private-member-access]
         self.title('Orbitals')
         self.geometry('350x500')
 
-        self.protocols()
+        self._protocols()
 
         self.plotter = plotter
         self.current_mo_ind = -1  # Start with no orbital shown
@@ -1402,37 +1402,37 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         nav_frame = ttk.Frame(self)
         nav_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        self.prev_button = ttk.Button(nav_frame, text='<< Previous', command=self.prev_plot)
+        self.prev_button = ttk.Button(nav_frame, text='<< Previous', command=self._prev_plot)
         self.prev_button.pack(side=tk.LEFT, padx=5, pady=10)
 
-        self.next_button = ttk.Button(nav_frame, text='Next >>', command=self.next_plot)
+        self.next_button = ttk.Button(nav_frame, text='Next >>', command=self._next_plot)
         self.next_button.pack(side=tk.RIGHT, padx=5, pady=10)
 
-        self.update_nav_button_states()  # Update buttons for initial state
+        self._update_nav_button_states()  # Update buttons for initial state
 
         self.orb_tv = _OrbitalsTreeview(self)
-        self.orb_tv.populate_tree(self.plotter.tabulator._parser.mos)  # ruff:ignore[private-member-access]
+        self.orb_tv._populate_tree(self.plotter.tabulator._parser.mos)  # ruff:ignore[private-member-access]
         self.orb_tv.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-    def on_close(self) -> None:
+    def _on_close(self) -> None:
         """Close the selection dialog and release GUI resources."""
-        self.plotter.on_screen = False
+        self.plotter._on_screen = False  # ruff:ignore[private-member-access]
         self.plotter._cancel_gto_future()  # ruff:ignore[private-member-access]
-        self.plotter.pv_plotter.close()
+        self.plotter._pv_plotter.close()  # ruff:ignore[private-member-access]
         self.destroy()
-        if self.plotter.tk_root and self.plotter._no_prev_tk_root:  # ruff:ignore[private-member-access]
-            self.plotter.tk_root.quit()
-            self.plotter.tk_root.destroy()
+        if self.plotter._tk_root and self.plotter._no_prev_tk_root:  # ruff:ignore[private-member-access]
+            self.plotter._tk_root.quit()  # ruff:ignore[private-member-access]
+            self.plotter._tk_root.destroy()  # ruff:ignore[private-member-access]
 
-    def protocols(self) -> None:
+    def _protocols(self) -> None:
         """Attach standard close shortcuts to the dialog window."""
-        self.protocol('WM_DELETE_WINDOW', self.on_close)
-        self.bind('<Command-q>', lambda _event: self.on_close())
-        self.bind('<Command-w>', lambda _event: self.on_close())
-        self.bind('<Control-q>', lambda _event: self.on_close())
-        self.bind('<Control-w>', lambda _event: self.on_close())
+        self.protocol('WM_DELETE_WINDOW', self._on_close)
+        self.bind('<Command-q>', lambda _event: self._on_close())
+        self.bind('<Command-w>', lambda _event: self._on_close())
+        self.bind('<Control-q>', lambda _event: self._on_close())
+        self.bind('<Control-w>', lambda _event: self._on_close())
 
-    def next_plot(self) -> None:
+    def _next_plot(self) -> None:
         """Advance to the next molecular orbital."""
         if self._loading:
             return
@@ -1443,9 +1443,9 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         new_index = 0 if current < 0 else min(current + 1, max_index)
         self.plotter.plot_orbital(new_index)
         if self.current_mo_ind >= 0:
-            self.orb_tv.highlight_orbital(self.current_mo_ind)
+            self.orb_tv._highlight_orbital(self.current_mo_ind)  # ruff:ignore[private-member-access]
 
-    def prev_plot(self) -> None:
+    def _prev_plot(self) -> None:
         """Return to the previous molecular orbital."""
         if self._loading:
             return
@@ -1453,9 +1453,9 @@ class _OrbitalSelectionScreen(tk.Toplevel):
             return
         new_index = self.current_mo_ind - 1
         self.plotter.plot_orbital(new_index)
-        self.orb_tv.highlight_orbital(self.current_mo_ind)
+        self.orb_tv._highlight_orbital(self.current_mo_ind)  # ruff:ignore[private-member-access]
 
-    def set_loading_state(self, loading: bool, message: str = 'Tabulating orbitals...') -> None:
+    def _set_loading_state(self, loading: bool, message: str = 'Tabulating orbitals...') -> None:
         """Toggle the inline loading label shown under the navigation buttons."""
         if loading:
             self._loading_label.config(text=message)
@@ -1470,13 +1470,13 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         else:
             self._loading_label.pack_forget()
             self.orb_tv.configure(selectmode='browse')
-            self.update_nav_button_states()
+            self._update_nav_button_states()
 
-    def on_gtos_ready(self) -> None:
+    def _on_gtos_ready(self) -> None:
         """Handle the plotter callback when GTOs become available."""
-        self.set_loading_state(False)
+        self._set_loading_state(False)
 
-    def update_nav_button_states(self) -> None:
+    def _update_nav_button_states(self) -> None:
         """Synchronize navigation button state with the current orbital index."""
         if self._loading:
             self.prev_button.config(state=tk.DISABLED)
@@ -1501,7 +1501,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
             else:
                 self._export_current_orb_radio.config(state=tk.NORMAL)
 
-    def plot_orbital(self, orb_ind: int) -> None:
+    def _plot_orbital(self, orb_ind: int) -> None:
         """Render the selected orbital isosurface in the PyVista plotter.
 
         Parameters
@@ -1533,16 +1533,16 @@ class _OrbitalsTreeview(ttk.Treeview):
             self.heading(col, text=col)
             self.column(col, width=w)
 
-        self.selection_screen = selection_screen
+        self._selection_screen = selection_screen
 
         self.current_mo_ind = -1  # Start with no orbital shown
 
         # Configure tag
         self.tag_configure('highlight', background='lightblue')
 
-        self.bind('<<TreeviewSelect>>', self.on_select)
+        self.bind('<<TreeviewSelect>>', self._on_select)
 
-    def highlight_orbital(self, orb_ind: int) -> None:
+    def _highlight_orbital(self, orb_ind: int) -> None:
         """Highlight the given orbital within the tree view.
 
         Parameters
@@ -1557,20 +1557,20 @@ class _OrbitalsTreeview(ttk.Treeview):
         self.item(orb_ind, tags=('highlight',))
         self.see(orb_ind)  # Scroll to the selected item
 
-    def erase(self) -> None:
+    def _erase(self) -> None:
         """Remove all orbital entries from the tree view."""
         for item in self.get_children():
             self.delete(item)
 
-    def populate_tree(self, mos: list[_MolecularOrbital]) -> None:
+    def _populate_tree(self, mos: list[MolecularOrbital]) -> None:
         """Populate the tree view with molecular orbital metadata.
 
         Parameters
         ----------
-        mos : list[_MolecularOrbital]
+        mos : list[MolecularOrbital]
             Orbitals sourced from the parser.
         """
-        self.erase()
+        self._erase()
 
         # Counts the number of MOs with a given symmetry
         mo_syms = list({mo.sym for mo in mos})
@@ -1579,7 +1579,7 @@ class _OrbitalsTreeview(ttk.Treeview):
             mo_sym_count[mo.sym] += 1
             self.insert('', 'end', iid=ind, values=(ind + 1, f'{mo.sym}.{mo_sym_count[mo.sym]}', mo.occ, mo.energy))
 
-    def on_select(self, _event: tk.Event) -> None:
+    def _on_select(self, _event: tk.Event) -> None:
         """Handle user selection events raised by the tree view.
 
         Parameters
@@ -1587,13 +1587,13 @@ class _OrbitalsTreeview(ttk.Treeview):
         _event : tk.Event
             Tkinter event object (unused).
         """
-        if self.selection_screen._loading:  # ruff:ignore[private-member-access]
+        if self._selection_screen._loading:  # ruff:ignore[private-member-access]
             return
         selected_item = self.selection()
         self.selection_remove(selected_item)
         if selected_item:
             orb_ind = int(selected_item[0])
-            self.highlight_orbital(orb_ind)
-            self.selection_screen.current_mo_ind = orb_ind
-            self.selection_screen.plot_orbital(orb_ind)
-            self.selection_screen.update_nav_button_states()
+            self._highlight_orbital(orb_ind)
+            self._selection_screen.current_mo_ind = orb_ind
+            self._selection_screen._plot_orbital(orb_ind)  # ruff:ignore[private-member-access]
+            self._selection_screen._update_nav_button_states()  # ruff:ignore[private-member-access]

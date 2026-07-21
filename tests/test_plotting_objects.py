@@ -1,6 +1,6 @@
 """Tests for molecular plotting objects."""
 
-# ruff:file-ignore[import-private-name]
+# ruff:file-ignore[import-private-name, private-member-access]
 
 from typing import cast
 
@@ -44,7 +44,7 @@ def test_trim_ends_shortens_issue_58_geometry_without_boolean_operation(
 
     monkeypatch.setattr(pv.PolyData, 'boolean_difference', fail_boolean)
 
-    bond.trim_ends()
+    bond._trim_ends()
 
     assert isinstance(bond.mesh, pv.PolyData)
     axis = np.array([1.0, 0.0, 0.0])
@@ -64,7 +64,7 @@ def test_trim_ends_preserves_split_bond_colors_and_surface_endpoints() -> None:
     atom_b = Atom(9, np.array([0.0, 0.0, 2.0]))
     bond = Bond(atom_a, atom_b, config)
 
-    bond.trim_ends()
+    bond._trim_ends()
 
     assert isinstance(bond.mesh, list)
     assert bond.color == [atom_a.atom_type.color, atom_b.atom_type.color]
@@ -88,7 +88,7 @@ def test_trim_ends_discards_bond_contained_by_overlapping_atoms(
     atom_b = Atom(7, np.array([0.5, 0.0, 0.0]))
     bond = Bond(atom_a, atom_b)
 
-    bond.trim_ends()
+    bond._trim_ends()
 
     assert bond.mesh is None
     assert 'Bond is entirely contained' in caplog.text

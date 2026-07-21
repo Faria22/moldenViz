@@ -17,11 +17,29 @@ Read a Molden file and access its atoms and orbitals:
    atoms = parser.atoms
    mos = parser.mos
 
+The returned objects use public model types, so they can also be imported for
+annotations or construction:
+
+.. code-block:: python
+
+   from moldenViz import Atom, AtomType, GaussianPrimitive, MolecularOrbital, Shell
+
+Use ``moldenViz.parser.BOHR_PER_ANGSTROM`` when converting Angstrom coordinates
+to the Bohr units used by parsed atom positions.
+
 Skip molecular orbital parsing when you only need the structure:
 
 .. code-block:: python
 
    parser = Parser('molden.inp', only_molecule=True)
+
+Choose whether molecular orbitals are sorted by energy or retain their order
+in the source file:
+
+.. code-block:: python
+
+   energy_ordered = Parser('molden.inp', mo_order='energy')
+   file_ordered = Parser('molden.inp', mo_order='file')
 
 Example Molecules
 -----------------
@@ -130,6 +148,14 @@ Use ``Tabulator`` to build grids and evaluate molecular orbitals:
        y=np.linspace(-2, 2, 20),
        z=np.linspace(-2, 2, 20)
    )
+
+Inspect structured-grid metadata through the read-only ``grid_type``,
+``grid_dimensions``, and ``grid_axes`` properties. To supply an arbitrary point
+grid, use ``set_grid``; direct assignment to ``grid`` is not supported:
+
+.. code-block:: python
+
+   tab.set_grid(np.array([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]))
 
 Tabulate specific molecular orbitals or ranges:
 

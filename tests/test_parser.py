@@ -7,10 +7,9 @@ import numpy as np
 import pytest
 
 import moldenViz.parser as parser_module
+from moldenViz import GaussianPrimitive, Shell
 
 Parser = parser_module.Parser
-_GTO = parser_module._GTO  # ruff:ignore[private-member-access]
-_Shell = parser_module._Shell  # ruff:ignore[private-member-access]
 
 # ----------------------------------------------------------------------
 # utilities
@@ -40,12 +39,12 @@ def test_section_indices_order(parser_obj: Parser) -> None:
 
 def test_gaussian_normalization_positive() -> None:
     """Check if Gaussian type orbitals and shells are normalized correctly."""
-    gto = _GTO(0.8, 0.5)
-    gto.normalize(l=2)
-    shell = _Shell(2, [gto])
-    shell.normalize()
-    assert gto.norm > 0.0
-    assert shell.norm > 0.0
+    gto = GaussianPrimitive(0.8, 0.5)
+    gto._normalize(l=2)  # ruff:ignore[private-member-access]
+    shell = Shell(2, [gto])
+    shell._normalize()  # ruff:ignore[private-member-access]
+    assert gto._norm > 0.0  # ruff:ignore[private-member-access]
+    assert shell._norm > 0.0  # ruff:ignore[private-member-access]
 
 
 def test_atomic_orbital_permutation(parser_obj: Parser) -> None:
@@ -74,6 +73,32 @@ def test_mo_energies_are_sorted(parser_obj: Parser) -> None:
     """Molecular orbital energies must be sorted in ascending order."""
     energies = np.asarray([mo.energy for mo in parser_obj.mos])
     assert np.all(np.diff(energies) >= 0.0)
+
+
+def test_mo_order_can_preserve_file_order() -> None:
+    """The public constructor option should control molecular-orbital order."""
+    lines = MOLDEN_PATH.read_text().splitlines(True)
+    mo_start = next(index for index, line in enumerate(lines) if line.strip() == '[MO]')
+    prefix = lines[: mo_start + 1]
+    mo_lines = lines[mo_start + 1 :]
+    block_starts = [index for index, line in enumerate(mo_lines) if line.strip().startswith('Sym=')]
+    block_length = block_starts[1] - block_starts[0]
+    blocks = [mo_lines[start : start + block_length] for start in block_starts]
+    reversed_lines = prefix + [line for block in reversed(blocks) for line in block]
+
+    original_file_ordered = Parser(lines, mo_order='file')
+    file_ordered = Parser(reversed_lines, mo_order='file')
+    energy_ordered = Parser(reversed_lines, mo_order='energy')
+
+    file_energies = [mo.energy for mo in file_ordered.mos]
+    assert file_energies == list(reversed([mo.energy for mo in original_file_ordered.mos]))
+    assert [mo.energy for mo in energy_ordered.mos] == sorted(file_energies)
+
+
+def test_invalid_mo_order_is_rejected() -> None:
+    """Only the documented molecular-orbital order values are accepted."""
+    with pytest.raises(ValueError, match='mo_order'):
+        Parser(str(MOLDEN_PATH), mo_order='input')  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize('source', [None, 1, 1.0, {}, set()])
@@ -105,3 +130,12 @@ def test_file_vs_lines_consistency(tmp_path: Path) -> None:
     # Quick invariants - if these match, deeper structures are identical
     assert [a.atomic_number for a in p_from_lines.atoms] == [a.atomic_number for a in p_from_file.atoms]
     assert [mo.energy for mo in p_from_lines.mos] == [mo.energy for mo in p_from_file.mos]
+
+
+def test_only_molecule_has_stable_result_attributes() -> None:
+    """Molecule-only parsing should expose empty orbital result containers."""
+    parser = Parser(str(MOLDEN_PATH), only_molecule=True)
+
+    assert parser.shells == []
+    assert parser.mos == []
+    assert parser.mo_coeffs.shape == (0, 0)

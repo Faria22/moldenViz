@@ -1,4 +1,5 @@
 """Tests covering asynchronous GTO tabulation behavior in Plotter."""
+# ruff:file-ignore[private-member-access]
 
 from __future__ import annotations
 
@@ -96,16 +97,16 @@ class FakeSelectionScreen:
         self.loading_states: list[bool] = []
         self.messages: list[str] = []
 
-    def set_loading_state(self, loading: bool, message: str = 'Tabulating orbitals...') -> None:
+    def _set_loading_state(self, loading: bool, message: str = 'Tabulating orbitals...') -> None:
         """Mirror the dialog's loading indicator for assertions."""
         self.loading_states.append(loading)
         self.messages.append(message)
 
-    def on_gtos_ready(self) -> None:
+    def _on_gtos_ready(self) -> None:
         """Transition the dialog back to idle once GTOs arrive."""
-        self.set_loading_state(False)
+        self._set_loading_state(False)
 
-    def update_nav_button_states(self) -> None:  # pragma: no cover - trivial
+    def _update_nav_button_states(self) -> None:  # pragma: no cover - trivial
         """Stub navigation button updates."""
 
     def winfo_exists(self) -> bool:  # pragma: no cover - trivial
@@ -127,17 +128,17 @@ def _configure_plotter_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
     def fake_load_molecule(self: plotter_module.Plotter, _config: object) -> None:
         dummy = SimpleNamespace(max_radius=1.0, atoms=[])
-        self.molecule = cast(Any, dummy)
-        self.molecule_actors = []
-        self.atom_actors = []
-        self.bond_actors = []
+        self._molecule = cast(Any, dummy)
+        self._molecule_actors = []
+        self._atom_actors = []
+        self._bond_actors = []
 
     monkeypatch.setattr(plotter_module, 'BackgroundPlotter', FakeBackgroundPlotter)
     monkeypatch.setattr(plotter_module, '_OrbitalSelectionScreen', FakeSelectionScreen)
     monkeypatch.setattr(plotter_module.Plotter, '_add_orbital_menus_to_pv_plotter', lambda _plotter: None)
     monkeypatch.setattr(plotter_module.Plotter, '_connect_pv_plotter_close_signal', lambda _plotter: None)
     monkeypatch.setattr(plotter_module.Plotter, '_override_clear_all_button', lambda _plotter: None)
-    monkeypatch.setattr(plotter_module.Plotter, 'load_molecule', fake_load_molecule)
+    monkeypatch.setattr(plotter_module.Plotter, '_load_molecule', fake_load_molecule)
     monkeypatch.setattr(plotter_module.Plotter, '_create_mo_mesh', lambda _plotter: DummyMesh())
 
 
@@ -190,22 +191,22 @@ def test_plotter_defers_gto_tabulation(monkeypatch: pytest.MonkeyPatch) -> None:
 
         assert cartesian_args['tabulate_gtos'] is False
         assert start_event.wait(timeout=1.0)
-        assert plotter._gto_future is not None  # ruff:ignore[private-member-access]
-        assert not plotter._gto_future.done()  # ruff:ignore[private-member-access]
-        assert plotter.selection_screen is not None
-        assert isinstance(plotter.selection_screen, FakeSelectionScreen)
-        assert plotter.selection_screen.loading_states == [True]
-        assert plotter.selection_screen.messages == ['Tabulating orbitals...']
+        assert plotter._gto_future is not None
+        assert not plotter._gto_future.done()
+        assert plotter._selection_screen is not None
+        assert isinstance(plotter._selection_screen, FakeSelectionScreen)
+        assert plotter._selection_screen.loading_states == [True]
+        assert plotter._selection_screen.messages == ['Tabulating orbitals...']
     finally:
         finish_event.set()
-        if plotter is not None and plotter._gto_future is not None and not plotter._gtos_ready:  # ruff:ignore[private-member-access]
+        if plotter is not None and plotter._gto_future is not None and not plotter._gtos_ready:
             plotter.wait_for_gtos()
 
     assert plotter is not None
-    assert plotter._gtos_ready is True  # ruff:ignore[private-member-access]
-    assert plotter.selection_screen is not None
-    assert isinstance(plotter.selection_screen, FakeSelectionScreen)
-    assert plotter.selection_screen.loading_states[-1] is False
+    assert plotter._gtos_ready is True
+    assert plotter._selection_screen is not None
+    assert isinstance(plotter._selection_screen, FakeSelectionScreen)
+    assert plotter._selection_screen.loading_states[-1] is False
 
 
 def test_wait_for_gtos_populates_data(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -220,9 +221,9 @@ def test_wait_for_gtos_populates_data(monkeypatch: pytest.MonkeyPatch) -> None:
     plotter = plotter_module.Plotter(_sample_molden(), tk_root=_fake_tk_root())
     plotter.wait_for_gtos()
 
-    assert plotter._gtos_ready is True  # ruff:ignore[private-member-access]
-    assert plotter.selection_screen is not None
-    assert isinstance(plotter.selection_screen, FakeSelectionScreen)
-    assert plotter.selection_screen.loading_states == [True, False]
+    assert plotter._gtos_ready is True
+    assert plotter._selection_screen is not None
+    assert isinstance(plotter._selection_screen, FakeSelectionScreen)
+    assert plotter._selection_screen.loading_states == [True, False]
     np.testing.assert_array_equal(plotter.tabulator.gtos, np.full((2, 1), 7.0))
-    assert plotter._gto_future is None  # ruff:ignore[private-member-access]
+    assert plotter._gto_future is None

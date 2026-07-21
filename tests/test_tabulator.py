@@ -10,10 +10,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pytest
 
-from moldenViz.tabulator import (
-    Tabulator,
-    array_like_type,
-)
+from moldenViz.tabulator import GridType, Tabulator
 
 SMALL_GRID_MAX_SECONDS = 0.5
 
@@ -75,6 +72,24 @@ def test_tabulate_gtos_cached_values_cover_all_coeffs() -> None:
     assert gto_data.shape == (expected_points, expected_coeffs)
     assert np.all(np.isfinite(gto_data))
     assert tab.gtos is gto_data  # Cached array should match the return value
+    assert tab.has_gtos
+
+
+def test_clear_gtos_releases_cache_and_reports_missing_data() -> None:
+    """Manual cache eviction should retain the grid and expose a clear state."""
+    tab = Tabulator(str(MOLDEN_PATH))
+    axis = np.linspace(-1.0, 1.0, 2)
+    tab.cartesian_grid(axis, axis, axis)
+    grid = tab.grid
+
+    tab.clear_gtos()
+
+    assert not tab.has_gtos
+    assert tab.grid is grid
+    with pytest.raises(RuntimeError, match=r'Call tabulate_gtos\(\) first'):
+        _ = tab.gtos
+
+    tab.clear_gtos()
 
 
 def test_tabulate_gtos_performance_small_grid() -> None:
@@ -128,6 +143,30 @@ def test_spherical_grid_shape() -> None:
     assert tab.grid.shape == (len(r) * len(theta) * len(phi), 3)
 
 
+def test_set_grid_is_the_explicit_arbitrary_grid_mutator() -> None:
+    """Arbitrary grids should reset structured metadata and cached GTOs."""
+    tab = Tabulator(str(MOLDEN_PATH))
+    axis = np.linspace(-1.0, 1.0, 2)
+    tab.cartesian_grid(axis, axis, axis)
+
+    new_grid = np.array([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]])
+    tab.set_grid(new_grid)
+
+    assert tab.grid is new_grid
+    assert tab.grid_type is GridType.UNKNOWN
+    assert tab.grid_dimensions == (0, 0, 0)
+    assert tab.grid_axes is None
+    assert not tab.has_gtos
+
+
+def test_grid_property_is_read_only() -> None:
+    """Grid replacement should go through ``set_grid`` rather than assignment."""
+    tab = Tabulator(str(MOLDEN_PATH))
+
+    with pytest.raises(AttributeError):
+        tab.grid = np.zeros((1, 3))  # type: ignore[misc]
+
+
 @pytest.mark.parametrize(('lmax', 'num_points'), [(0, 10), (3, 25), (5, 50)])
 def test_tabulate_xlms_shape(lmax: int, num_points: int) -> None:
     """Test that _tabulate_xlms returns an array of the correct shape."""
@@ -140,7 +179,7 @@ def test_tabulate_xlms_shape(lmax: int, num_points: int) -> None:
 
 
 @pytest.mark.parametrize('mo_inds', [None, 0, [0], [0, 1, 2], [0, 1, 2, 3, 4], range(1, 10)])
-def test_tabulate_mos(mo_inds: int | array_like_type | None) -> None:
+def test_tabulate_mos(mo_inds: int | list[int] | range | None) -> None:
     """Test that tabulate_mos returns an array of the correct shape."""
     tab = Tabulator(str(MOLDEN_PATH))
     tab.cartesian_grid(np.linspace(-1, 1, 5), np.linspace(-1, 1, 5), np.linspace(-1, 1, 5))
@@ -157,7 +196,7 @@ def test_tabulate_mos(mo_inds: int | array_like_type | None) -> None:
 
 
 @pytest.mark.parametrize('mo_inds', [-1, range(0), range(-1, 1), [0, -1], [1, 2, 3, -1], [0, 178]])
-def test_invalid_mo_inds(mo_inds: int | array_like_type | None) -> None:
+def test_invalid_mo_inds(mo_inds: int | list[int] | range | None) -> None:
     """Test that tabulate_mos raises ValueError for invalid mo_inds."""
     tab = Tabulator(str(MOLDEN_PATH))
     tab.cartesian_grid(np.linspace(-1, 1, 5), np.linspace(-1, 1, 5), np.linspace(-1, 1, 5))

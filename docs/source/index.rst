@@ -70,6 +70,7 @@ Contents
    :caption: API Documentation
 
    api
+   api-stability
 
 .. toctree::
    :maxdepth: 1

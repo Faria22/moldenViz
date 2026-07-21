@@ -24,21 +24,21 @@ def _read_file(path: Path) -> list[str]:
         return f.readlines()
 
 
-molden_files_folder = Path(__file__).parent / 'molden_files'
+_molden_files_folder = Path(__file__).parent / 'molden_files'
 
 # Load example molecular structures
-co = _read_file(molden_files_folder / 'co.inp')
-o2 = _read_file(molden_files_folder / 'o2.inp')
-co2 = _read_file(molden_files_folder / 'co2.inp')
-h2o = _read_file(molden_files_folder / 'h2o.inp')
-benzene = _read_file(molden_files_folder / 'benzene.inp')
-prismane = _read_file(molden_files_folder / 'prismane.inp')
-pyridine = _read_file(molden_files_folder / 'pyridine.inp')
-furan = _read_file(molden_files_folder / 'furan.inp')
-acrolein = _read_file(molden_files_folder / 'acrolein.inp')
+co = _read_file(_molden_files_folder / 'co.inp')
+o2 = _read_file(_molden_files_folder / 'o2.inp')
+co2 = _read_file(_molden_files_folder / 'co2.inp')
+h2o = _read_file(_molden_files_folder / 'h2o.inp')
+benzene = _read_file(_molden_files_folder / 'benzene.inp')
+prismane = _read_file(_molden_files_folder / 'prismane.inp')
+pyridine = _read_file(_molden_files_folder / 'pyridine.inp')
+furan = _read_file(_molden_files_folder / 'furan.inp')
+acrolein = _read_file(_molden_files_folder / 'acrolein.inp')
 
 #: Dictionary mapping example names to their molden file contents
-all_examples = {
+_all_examples = {
     'co': co,
     'o2': o2,
     'co2': co2,

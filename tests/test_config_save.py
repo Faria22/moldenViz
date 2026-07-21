@@ -1,4 +1,5 @@
 """Unit tests for the configuration save functionality."""
+# ruff:file-ignore[private-member-access]
 
 import importlib
 from pathlib import Path
@@ -17,7 +18,7 @@ BOND_MAX_LENGTH = 5.0
 
 
 def test_save_current_config_creates_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test that save_current_config creates the config file."""
+    """Test that _save_current_config creates the config file."""
     # Temporarily change the CUSTOM_CONFIG_PATH to a temp directory
     test_config_dir = tmp_path / '.config' / 'moldenViz'
     test_config_dir.mkdir(parents=True, exist_ok=True)
@@ -28,14 +29,14 @@ def test_save_current_config_creates_file(tmp_path: Path, monkeypatch: pytest.Mo
     config = config_module.Config()
 
     # Save the config
-    config.save_current_config()
+    config._save_current_config()
 
     # Verify the file was created
     assert test_config_path.exists()
 
 
 def test_save_current_config_preserves_values(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test that save_current_config correctly saves all configuration values."""
+    """Test that _save_current_config correctly saves all configuration values."""
     # Temporarily change the CUSTOM_CONFIG_PATH to a temp directory
     test_config_dir = tmp_path / '.config' / 'moldenViz'
     test_config_dir.mkdir(parents=True, exist_ok=True)
@@ -53,7 +54,7 @@ def test_save_current_config_preserves_values(tmp_path: Path, monkeypatch: pytes
     config.config.molecule.bond.max_length = BOND_MAX_LENGTH
 
     # Save the config
-    config.save_current_config()
+    config._save_current_config()
 
     # Load and verify the saved config
     with test_config_path.open('r') as f:
@@ -67,7 +68,7 @@ def test_save_current_config_preserves_values(tmp_path: Path, monkeypatch: pytes
 
 
 def test_save_current_config_with_custom_colors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test that save_current_config correctly saves custom MO colors."""
+    """Test that _save_current_config correctly saves custom MO colors."""
     # Temporarily change the CUSTOM_CONFIG_PATH to a temp directory
     test_config_dir = tmp_path / '.config' / 'moldenViz'
     test_config_dir.mkdir(parents=True, exist_ok=True)
@@ -81,7 +82,7 @@ def test_save_current_config_with_custom_colors(tmp_path: Path, monkeypatch: pyt
     config.config.mo.custom_colors = ['blue', 'red']
 
     # Save the config
-    config.save_current_config()
+    config._save_current_config()
 
     # Load and verify the saved config
     with test_config_path.open('r') as f:
@@ -91,7 +92,7 @@ def test_save_current_config_with_custom_colors(tmp_path: Path, monkeypatch: pyt
 
 
 def test_save_current_config_without_custom_colors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test that save_current_config doesn't include custom_colors when None."""
+    """Test that _save_current_config doesn't include custom_colors when None."""
     # Temporarily change the CUSTOM_CONFIG_PATH to a temp directory
     test_config_dir = tmp_path / '.config' / 'moldenViz'
     test_config_dir.mkdir(parents=True, exist_ok=True)
@@ -105,7 +106,7 @@ def test_save_current_config_without_custom_colors(tmp_path: Path, monkeypatch: 
     config.config.mo.custom_colors = None
 
     # Save the config
-    config.save_current_config()
+    config._save_current_config()
 
     # Load and verify the saved config
     with test_config_path.open('r') as f:
