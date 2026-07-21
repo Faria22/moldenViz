@@ -7,10 +7,9 @@ import numpy as np
 import pytest
 
 import moldenViz.parser as parser_module
+from moldenViz import GaussianPrimitive, Shell
 
 Parser = parser_module.Parser
-_GTO = parser_module._GTO  # ruff:ignore[private-member-access]
-_Shell = parser_module._Shell  # ruff:ignore[private-member-access]
 
 # ----------------------------------------------------------------------
 # utilities
@@ -40,12 +39,12 @@ def test_section_indices_order(parser_obj: Parser) -> None:
 
 def test_gaussian_normalization_positive() -> None:
     """Check if Gaussian type orbitals and shells are normalized correctly."""
-    gto = _GTO(0.8, 0.5)
-    gto.normalize(l=2)
-    shell = _Shell(2, [gto])
-    shell.normalize()
-    assert gto.norm > 0.0
-    assert shell.norm > 0.0
+    gto = GaussianPrimitive(0.8, 0.5)
+    gto._normalize(l=2)  # ruff:ignore[private-member-access]
+    shell = Shell(2, [gto])
+    shell._normalize()  # ruff:ignore[private-member-access]
+    assert gto._norm > 0.0  # ruff:ignore[private-member-access]
+    assert shell._norm > 0.0  # ruff:ignore[private-member-access]
 
 
 def test_atomic_orbital_permutation(parser_obj: Parser) -> None:
@@ -105,3 +104,12 @@ def test_file_vs_lines_consistency(tmp_path: Path) -> None:
     # Quick invariants - if these match, deeper structures are identical
     assert [a.atomic_number for a in p_from_lines.atoms] == [a.atomic_number for a in p_from_file.atoms]
     assert [mo.energy for mo in p_from_lines.mos] == [mo.energy for mo in p_from_file.mos]
+
+
+def test_only_molecule_has_stable_result_attributes() -> None:
+    """Molecule-only parsing should expose empty orbital result containers."""
+    parser = Parser(str(MOLDEN_PATH), only_molecule=True)
+
+    assert parser.shells == []
+    assert parser.mos == []
+    assert parser.mo_coeffs.shape == (0, 0)

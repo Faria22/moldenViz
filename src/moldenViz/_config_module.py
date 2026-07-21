@@ -9,10 +9,11 @@ import matplotlib.pyplot as plt
 import toml
 from pydantic import BaseModel, Field, field_validator
 
+from .models import AtomType
+
 # Global config directory paths
 DEFAULT_CONFIGS_DIR = Path(__file__).parent / 'default_configs'
 CUSTOM_CONFIGS_DIR = Path().home() / '.config/moldenViz'
-CUSTOM_CONFIGS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Global config file paths
 DEFAULT_CONFIG_PATH = DEFAULT_CONFIGS_DIR / 'config.toml'
@@ -22,27 +23,6 @@ ATOM_TYPES_PATH = DEFAULT_CONFIGS_DIR / 'atom_types.json'
 # Maintain backwards compatibility
 default_configs_dir = DEFAULT_CONFIGS_DIR
 custom_configs_dir = CUSTOM_CONFIGS_DIR
-
-
-class AtomType(BaseModel):
-    """Represents the properties of an atom type for visualization.
-
-    Parameters
-    ----------
-    name : str
-        The name/symbol of the atom type (e.g., 'C', 'H', 'O').
-    color : str
-        The color to use for visualizing this atom type (hex color without #).
-    radius : float
-        The radius for displaying this atom type (must be positive).
-    max_num_bonds : int
-        The maximum number of bonds this atom type can form (non-negative).
-    """
-
-    name: str = Field(..., min_length=1, max_length=3, description='Atom symbol')
-    color: str = Field(..., pattern=r'^[0-9A-Fa-f]{6}$', description='Hex color code without #')
-    radius: float = Field(..., gt=0, description='Atom radius (must be positive)')
-    max_num_bonds: int = Field(..., ge=0, description='Maximum number of bonds')
 
 
 class SphericalGridConfig(BaseModel):
@@ -222,13 +202,13 @@ class Config:
     """Configuration class to manage default and custom configurations."""
 
     def __init__(self) -> None:
-        default_config = self.load_default_config()
-        custom_config = self.load_custom_config()
+        default_config = self._load_default_config()
+        custom_config = self._load_custom_config()
 
         atoms_custom_config = custom_config.pop('Atom', {})
 
         # Validate and merge configuration using pydantic
-        merged_config_dict = self.recursive_merge(default_config, custom_config)
+        merged_config_dict = self._recursive_merge(default_config, custom_config)
 
         # Validate the merged configuration with pydantic
         try:
@@ -237,12 +217,12 @@ class Config:
             raise ValueError(f'Invalid configuration: {e}') from e
 
         # Convert to SimpleNamespace for backward compatibility
-        self.config = self.dict_to_namedspace(self._pydantic_config.model_dump(by_alias=True))
+        self.config = self._dict_to_namedspace(self._pydantic_config.model_dump(by_alias=True))
 
-        self.atom_types = self.load_atom_types(atoms_custom_config)
+        self.atom_types = self._load_atom_types(atoms_custom_config)
 
     @staticmethod
-    def dict_to_namedspace(d: dict) -> SimpleNamespace:
+    def _dict_to_namedspace(d: dict) -> SimpleNamespace:
         """Convert a dictionary to a SimpleNamespace for attribute-style access.
 
         Parameters
@@ -255,10 +235,12 @@ class Config:
         SimpleNamespace
             A SimpleNamespace object with attributes corresponding to the dictionary keys.
         """
-        return SimpleNamespace(**{k: Config.dict_to_namedspace(v) if isinstance(v, dict) else v for k, v in d.items()})
+        return SimpleNamespace(
+            **{k: Config._dict_to_namedspace(v) if isinstance(v, dict) else v for k, v in d.items()},
+        )
 
     @staticmethod
-    def merge_configs(default_config: dict, custom_config: dict) -> SimpleNamespace:
+    def _merge_configs(default_config: dict, custom_config: dict) -> SimpleNamespace:
         """Merge multiple configuration dictionaries into a single SimpleNamespace.
 
         Parameters
@@ -273,10 +255,10 @@ class Config:
         SimpleNamespace
             A SimpleNamespace object with attributes corresponding to the merged configuration items.
         """
-        return Config.dict_to_namedspace(Config.recursive_merge(default_config, custom_config))
+        return Config._dict_to_namedspace(Config._recursive_merge(default_config, custom_config))
 
     @staticmethod
-    def recursive_merge(default: dict, custom: dict) -> dict:
+    def _recursive_merge(default: dict, custom: dict) -> dict:
         """Recursively merge two dictionaries.
 
         Parameters
@@ -294,7 +276,7 @@ class Config:
         merged = default.copy()
         for k, v in custom.items():
             if isinstance(v, dict) and isinstance(default.get(k), dict):
-                merged[k] = Config.recursive_merge(default[k], v)
+                merged[k] = Config._recursive_merge(default[k], v)
             else:
                 merged[k] = v
         return merged
@@ -323,7 +305,7 @@ class Config:
         return getattr(self.config, item)
 
     @staticmethod
-    def load_atom_types(atoms_custom_config: dict) -> dict[int, AtomType]:
+    def _load_atom_types(atoms_custom_config: dict) -> dict[int, AtomType]:
         """Load default atom types from the JSON file and custom atom types from the custom config.
 
         Atom type based on atomic number
@@ -383,7 +365,7 @@ class Config:
         return atom_types
 
     @staticmethod
-    def load_default_config() -> dict:
+    def _load_default_config() -> dict:
         """Load default configuration from the TOML file.
 
         Returns
@@ -403,7 +385,7 @@ class Config:
             return toml.load(f)
 
     @staticmethod
-    def load_custom_config() -> dict:
+    def _load_custom_config() -> dict:
         """Load custom configuration from the TOML file.
 
         Returns
@@ -417,7 +399,7 @@ class Config:
         with CUSTOM_CONFIG_PATH.open('r') as f:
             return toml.load(f)
 
-    def save_current_config(self) -> None:
+    def _save_current_config(self) -> None:
         """Save the current configuration to the custom config file.
 
         This method writes the current configuration values to ~/.config/moldenViz/config.toml,
@@ -464,6 +446,9 @@ class Config:
         # Add custom_colors if set
         if self.config.mo.custom_colors is not None:
             config_dict['MO']['custom_colors'] = self.config.mo.custom_colors
+
+        # Create the user directory only when an explicit save needs it.
+        CUSTOM_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
         # Write to file
         with CUSTOM_CONFIG_PATH.open('w') as f:

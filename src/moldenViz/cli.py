@@ -9,7 +9,9 @@ from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
 from .__about__ import __version__
-from .examples.get_example_files import all_examples
+from .examples._get_example_files import _all_examples
+
+__all__ = ['main']
 
 if TYPE_CHECKING:  # pragma: no cover - typing helper
     from collections.abc import Callable
@@ -51,7 +53,7 @@ def _resolve_plotter() -> Callable[..., Any]:
     return module.Plotter
 
 
-class ColorFormatter(logging.Formatter):
+class _ColorFormatter(logging.Formatter):
     """Apply ANSI colors to log level prefixes."""
 
     def format(self, record: logging.LogRecord) -> str:
@@ -86,13 +88,13 @@ def main() -> None:
     source = parser.add_mutually_exclusive_group(required=True)
 
     source.add_argument('file', nargs='?', default=None, help='Optional molden file path', type=str)
-    parser.add_argument('-m', '--only_molecule', action='store_true', help='Only plots the molecule')
+    parser.add_argument('-m', '--only-molecule', action='store_true', help='Only plots the molecule')
     source.add_argument(
         '-e',
         '--example',
         type=str,
         metavar='molecule',
-        choices=all_examples.keys(),
+        choices=_all_examples.keys(),
         help='Load example %(metavar)s. Options are: %(choices)s',
     )
 
@@ -114,12 +116,12 @@ def main() -> None:
         level = logging.WARNING
 
     handler = logging.StreamHandler()
-    handler.setFormatter(ColorFormatter('%(levelname)s %(name)s: %(message)s'))
+    handler.setFormatter(_ColorFormatter('%(levelname)s %(name)s: %(message)s'))
     logging.basicConfig(level=level, handlers=[handler], force=True)
 
     logger.debug('Parsed CLI arguments: %s', vars(args))
 
-    source_path = args.file or all_examples[args.example]
+    source_path = args.file or _all_examples[args.example]
     source_label = args.file or f'example {args.example}'
     logger.info('Launching plotter for %s', source_label)
 

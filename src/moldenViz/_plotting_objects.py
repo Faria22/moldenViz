@@ -9,8 +9,9 @@ import pyvista as pv
 from numpy.typing import NDArray
 from scipy.spatial.distance import pdist, squareform
 
-from ._config_module import AtomType, Config
-from .parser import _Atom
+from ._config_module import Config
+from .models import Atom as ParsedAtom
+from .models import AtomType
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,7 @@ class Atom:
         self.mesh = pv.Sphere(center=center, radius=self.atom_type.radius)
         self.bonds: list[Bond] = []
 
-    def remove_extra_bonds(self) -> None:
+    def _remove_extra_bonds(self) -> None:
         """Clip bonds so the atom respects its configured maximum.
 
         Notes
@@ -172,7 +173,7 @@ class Bond:
         mesh = cast(pv.PolyData, bond_mesh.triangulate()) - atom_mesh
         return cast(pv.PolyData, mesh)
 
-    def trim_ends(self) -> None:
+    def _trim_ends(self) -> None:
         """Trim bond geometry so it does not intrude into atom spheres."""
         if self.mesh is None:
             return
@@ -203,12 +204,12 @@ class Bond:
 class Molecule:
     """Composite object storing rendered atoms and inferred bonds."""
 
-    def __init__(self, atoms: list[_Atom], config: Config = config) -> None:
+    def __init__(self, atoms: list[ParsedAtom], config: Config = config) -> None:
         """Initialize a molecule from parsed atom data.
 
         Parameters
         ----------
-        atoms : list[_Atom]
+        atoms : list[ParsedAtom]
             Parsed atoms emitted by :class:`moldenViz.parser.Parser`.
         """
         self.config = config
@@ -216,14 +217,14 @@ class Molecule:
         # Max radius is used later for plotting
         self.max_radius = 0
 
-        self.get_atoms(atoms)
+        self._get_atoms(atoms)
 
-    def get_atoms(self, atoms: list[_Atom]) -> None:
+    def _get_atoms(self, atoms: list[ParsedAtom]) -> None:
         """Convert parsed atoms to visualization atoms and create bonds.
 
         Parameters
         ----------
-        atoms : list[_Atom]
+        atoms : list[ParsedAtom]
             List of parsed atom objects.
         """
         atomic_numbers = [atom.atomic_number for atom in atoms]
@@ -242,9 +243,9 @@ class Molecule:
                 self.atoms[atom_b_ind].bonds.append(bond)
 
             for atom in self.atoms:
-                atom.remove_extra_bonds()
+                atom._remove_extra_bonds()  # ruff:ignore[private-member-access]
 
-    def add_meshes(self, plotter: pv.Plotter, opacity: float = config.molecule.opacity) -> tuple[list[pv.Actor], ...]:
+    def _add_meshes(self, plotter: pv.Plotter, opacity: float = config.molecule.opacity) -> tuple[list[pv.Actor], ...]:
         """Add all molecule meshes (atoms and bonds) to the PyVista plotter.
 
         Parameters
@@ -276,7 +277,7 @@ class Molecule:
                 if bond.plotted or bond.mesh is None:
                     continue
 
-                bond.trim_ends()
+                bond._trim_ends()  # ruff:ignore[private-member-access]
                 if bond.mesh is None:
                     continue
 

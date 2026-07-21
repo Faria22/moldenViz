@@ -5,10 +5,23 @@ from __future__ import annotations
 from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
+from .__about__ import __version__
+from .models import Atom, AtomType, GaussianPrimitive, MolecularOrbital, Shell
 from .parser import Parser
-from .tabulator import Tabulator
+from .tabulator import GridType, Tabulator
 
-__all__ = ['Parser', 'Plotter', 'Tabulator']
+__all__ = [
+    'Atom',
+    'AtomType',
+    'GaussianPrimitive',
+    'GridType',
+    'MolecularOrbital',
+    'Parser',
+    'Plotter',
+    'Shell',
+    'Tabulator',
+    '__version__',
+]
 
 if TYPE_CHECKING:  # pragma: no cover - type checking helper
     from .plotter import Plotter as Plotter

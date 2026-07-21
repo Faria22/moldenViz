@@ -1,0 +1,81 @@
+"""Tests for the supported moldenViz API boundary."""
+
+from __future__ import annotations
+
+import os
+import subprocess
+import sys
+from typing import TYPE_CHECKING
+
+import moldenViz
+import moldenViz.parser as parser_module
+import moldenViz.tabulator as tabulator_module
+from moldenViz import Atom, GaussianPrimitive, MolecularOrbital, Shell, examples
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+EXPECTED_ROOT_API = [
+    'Atom',
+    'AtomType',
+    'GaussianPrimitive',
+    'GridType',
+    'MolecularOrbital',
+    'Parser',
+    'Plotter',
+    'Shell',
+    'Tabulator',
+    '__version__',
+]
+
+
+def test_root_all_defines_supported_api() -> None:
+    """The root export list should be explicit and stable."""
+    assert moldenViz.__all__ == EXPECTED_ROOT_API
+
+
+def test_public_models_are_parser_result_types() -> None:
+    """Parser-facing models should be available from supported import paths."""
+    assert parser_module.Atom is Atom
+    assert parser_module.GaussianPrimitive is GaussianPrimitive
+    assert parser_module.MolecularOrbital is MolecularOrbital
+    assert parser_module.Shell is Shell
+
+
+def test_removed_v1_names_are_not_public() -> None:
+    """The v2 API should not retain compatibility aliases for removed names."""
+    for name in ('_Atom', '_GTO', '_MolecularOrbital', '_Shell'):
+        assert not hasattr(parser_module, name)
+    assert not hasattr(tabulator_module, 'array_like_type')
+    assert not hasattr(examples, 'all_examples')
+
+
+def test_public_module_all_values_are_explicit() -> None:
+    """Public modules should export only supported project-owned names."""
+    assert parser_module.__all__ == [
+        'BOHR_PER_ANGSTROM',
+        'Atom',
+        'GaussianPrimitive',
+        'MolecularOrbital',
+        'Parser',
+        'Shell',
+    ]
+    assert tabulator_module.__all__ == ['GridType', 'Tabulator']
+    assert examples.__all__ == ['acrolein', 'benzene', 'co', 'co2', 'furan', 'h2o', 'o2', 'prismane', 'pyridine']
+
+
+def test_root_import_is_lightweight_and_read_only(tmp_path: Path) -> None:
+    """Importing the root models must not load GUI modules or create user config."""
+    script = """
+import pathlib
+import sys
+import moldenViz
+
+assert 'moldenViz.plotter' not in sys.modules
+assert 'moldenViz._plotter_ui' not in sys.modules
+assert 'pyvista' not in sys.modules
+assert not (pathlib.Path.home() / '.config' / 'moldenViz').exists()
+"""
+    env = os.environ.copy()
+    env['HOME'] = str(tmp_path)
+    subprocess.run([sys.executable, '-c', script], check=True, env=env)

@@ -1,4 +1,5 @@
 """Integration test to verify Save Settings button functionality in plotter."""
+# ruff:file-ignore[private-member-access]
 
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -9,25 +10,25 @@ plotter_module = pytest.importorskip('moldenViz.plotter')
 
 
 def test_save_settings_method_exists_in_plotter() -> None:
-    """Test that save_settings method exists on Plotter."""
+    """Test that _save_settings method exists on Plotter."""
     plotter_class = plotter_module.Plotter
 
-    assert hasattr(plotter_class, 'save_settings')
-    assert callable(plotter_class.save_settings)
+    assert hasattr(plotter_class, '_save_settings')
+    assert callable(plotter_class._save_settings)
 
 
-@patch('moldenViz.plotter_ui.messagebox')
+@patch('moldenViz._plotter_ui.messagebox')
 @patch('moldenViz.plotter.config')
 def test_save_settings_success(mock_config: Any, mock_messagebox: Any) -> None:
-    """Test that save_settings calls config.save_current_config and shows success message."""
+    """Test that _save_settings calls config._save_current_config and shows success message."""
     # Set up mocks
-    mock_config.save_current_config = MagicMock()
+    mock_config._save_current_config = MagicMock()
 
     # Call the method
-    plotter_module.Plotter.save_settings()
+    plotter_module.Plotter._save_settings()
 
-    # Verify that save_current_config was called
-    mock_config.save_current_config.assert_called_once()
+    # Verify that _save_current_config was called
+    mock_config._save_current_config.assert_called_once()
 
     # Verify that success message was shown
     mock_messagebox.showinfo.assert_called_once()
@@ -36,15 +37,15 @@ def test_save_settings_success(mock_config: Any, mock_messagebox: Any) -> None:
     assert 'Configuration saved successfully' in args[1]
 
 
-@patch('moldenViz.plotter_ui.messagebox')
+@patch('moldenViz._plotter_ui.messagebox')
 @patch('moldenViz.plotter.config')
 def test_save_settings_handles_oserror(mock_config: Any, mock_messagebox: Any) -> None:
-    """Test that save_settings handles OSError gracefully."""
+    """Test that _save_settings handles OSError gracefully."""
     # Set up mock to raise OSError
-    mock_config.save_current_config = MagicMock(side_effect=OSError('Permission denied'))
+    mock_config._save_current_config = MagicMock(side_effect=OSError('Permission denied'))
 
     # Call the method
-    plotter_module.Plotter.save_settings()
+    plotter_module.Plotter._save_settings()
 
     # Verify that error message was shown
     mock_messagebox.showerror.assert_called_once()
@@ -54,15 +55,15 @@ def test_save_settings_handles_oserror(mock_config: Any, mock_messagebox: Any) -
     assert 'Permission denied' in args[1]
 
 
-@patch('moldenViz.plotter_ui.messagebox')
+@patch('moldenViz._plotter_ui.messagebox')
 @patch('moldenViz.plotter.config')
 def test_save_settings_handles_valueerror(mock_config: Any, mock_messagebox: Any) -> None:
-    """Test that save_settings handles ValueError gracefully."""
+    """Test that _save_settings handles ValueError gracefully."""
     # Set up mock to raise ValueError
-    mock_config.save_current_config = MagicMock(side_effect=ValueError('Invalid config'))
+    mock_config._save_current_config = MagicMock(side_effect=ValueError('Invalid config'))
 
     # Call the method
-    plotter_module.Plotter.save_settings()
+    plotter_module.Plotter._save_settings()
 
     # Verify that error message was shown
     mock_messagebox.showerror.assert_called_once()

@@ -13,9 +13,11 @@ from scipy.special import assoc_legendre_p_all as s_plm
 
 from .parser import Parser
 
+__all__ = ['GridType', 'Tabulator']
+
 logger = logging.getLogger(__name__)
 
-array_like_type = NDArray[np.integer] | list[int] | tuple[int, ...] | range
+_MOIndices = NDArray[np.integer] | list[int] | tuple[int, ...] | range
 
 
 def _grid_creation_with_only_molecule_error() -> RuntimeError:
@@ -73,16 +75,15 @@ class Tabulator:
         self._gtos: NDArray[np.floating]
 
         # Used for when exporting to cube format
-        self.original_axes: tuple[NDArray[np.floating], ...] | None = None
+        self._grid_axes: tuple[NDArray[np.floating], ...] | None = None
 
     @property
     def grid(self) -> NDArray[np.floating]:
         """The 2D array of Cartesian grid points used for tabulation."""
         return self._grid
 
-    @grid.setter
-    def grid(self, new_grid: Any) -> None:
-        """Set the tabulation grid after validating its structure.
+    def set_grid(self, new_grid: Any) -> None:
+        """Set an arbitrary Cartesian point grid after validating its structure.
 
         Parameters
         ----------
@@ -112,26 +113,35 @@ class Tabulator:
         if new_grid.shape[1] != num_cols:
             raise ValueError(f"'grid' must have exactly 3 columns, but got {new_grid.shape[1]} columns.")
 
-        del self.grid
-        self._grid = new_grid
+        if self._only_molecule:
+            raise _grid_creation_with_only_molecule_error()
 
-    @grid.deleter
-    def grid(self) -> None:
-        """Delete the cached grid and mark its type as unknown."""
-        if hasattr(self, '_grid'):
-            del self._grid
+        self._grid = new_grid
         self._grid_type = GridType.UNKNOWN
         self._grid_dimensions = (0, 0, 0)
-        self.original_axes = None
+        self._grid_axes = None
+        if hasattr(self, '_gtos'):
+            del self._gtos
 
     @property
     def gtos(self) -> NDArray[np.floating]:
         """The tabulated Gaussian-type orbitals (GTOs) on the grid."""
         return self._gtos
 
-    @gtos.deleter
-    def gtos(self) -> None:
-        del self._gtos
+    @property
+    def grid_type(self) -> GridType:
+        """The coordinate grid type."""
+        return self._grid_type
+
+    @property
+    def grid_dimensions(self) -> tuple[int, int, int]:
+        """The three-dimensional grid shape used by structured exporters."""
+        return self._grid_dimensions
+
+    @property
+    def grid_axes(self) -> tuple[NDArray[np.floating], ...] | None:
+        """The original coordinate axes, if the grid was built from axes."""
+        return self._grid_axes
 
     @staticmethod
     def _axis_spacing(axis: NDArray[np.floating], name: str) -> float:
@@ -216,15 +226,14 @@ class Tabulator:
         if self._only_molecule:
             raise _grid_creation_with_only_molecule_error()
 
-        self.original_axes = (x, y, z)
-
         xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
         if grid_type == GridType.SPHERICAL:
             xx, yy, zz = self._spherical_to_cartesian(xx, yy, zz)
 
-        self._grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
+        self.set_grid(np.column_stack((xx.ravel(), yy.ravel(), zz.ravel())))
         self._grid_type = grid_type
         self._grid_dimensions = (len(x), len(y), len(z))
+        self._grid_axes = (x, y, z)
         logger.info(
             'Created %s grid with %d points (%dx%dx%d).',
             grid_type.value,
@@ -367,12 +376,15 @@ class Tabulator:
             m_inds = np.arange(-l, l + 1)
             inner_slice = slice(block_cursor, block_cursor + num_m)
 
-            radial = r_pows[l] * (shell.prefactor @ np.exp(-shell.gto_exps[:, None] * r_sq[None, :]))
+            radial = r_pows[l] * (
+                shell._prefactor  # ruff:ignore[private-member-access]
+                @ np.exp(-shell._gto_exps[:, None] * r_sq[None, :])  # ruff:ignore[private-member-access]
+            )
 
             atom_block[:, inner_slice] = radial[:, None] * xlms[l, m_inds, ...].T
             block_cursor += num_m
 
-    def tabulate_mos(self, mo_inds: int | array_like_type | None = None) -> NDArray[np.floating]:
+    def tabulate_mos(self, mo_inds: int | _MOIndices | None = None) -> NDArray[np.floating]:
         """Tabulate molecular orbitals (MOs) on the current grid.
 
         Parameters
@@ -507,13 +519,13 @@ class Tabulator:
     def export_cube(self, destination: Path, mo_index: int) -> None:
         """Write a single molecular orbital to a Gaussian cube file."""
         cube_values_per_line = 6
-        if self._grid_type != GridType.CARTESIAN or self.original_axes is None:
+        if self._grid_type != GridType.CARTESIAN or self._grid_axes is None:
             raise RuntimeError('Cube exports are only supported for Cartesian grids.')
 
         mo_values = self.tabulate_mos(mo_index)
         logger.debug('Writing cube file %s for MO %d.', destination, mo_index)
 
-        x, y, z = self.original_axes
+        x, y, z = self._grid_axes
         dx = self._axis_spacing(x, 'x')
         dy = self._axis_spacing(y, 'y')
         dz = self._axis_spacing(z, 'z')

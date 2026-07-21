@@ -1,5 +1,5 @@
 """Tests covering Plotter behaviours called out by plotter_coverage_gaps.md."""
-# ruff:file-ignore[undocumented-public-class, undocumented-public-method, undocumented-public-function]
+# ruff:file-ignore[private-member-access, undocumented-public-class, undocumented-public-method, undocumented-public-function]
 
 from __future__ import annotations
 
@@ -16,14 +16,14 @@ from matplotlib import colors as mcolors
 from moldenViz import Tabulator
 
 plotter_module = pytest.importorskip('moldenViz.plotter')
-plotter_ui_module = pytest.importorskip('moldenViz.plotter_ui')
+_plotter_ui_module = pytest.importorskip('moldenViz._plotter_ui')
 
 
 def test_ui_helpers_are_defined_in_companion_module() -> None:
     """Keep the Tk and Qt helpers out of the core plotter module."""
-    assert plotter_module.Plotter.grid_settings_screen.__module__ == plotter_ui_module.__name__
-    assert plotter_module._OrbitalSelectionScreen.__module__ == plotter_ui_module.__name__  # ruff:ignore[private-member-access]
-    assert plotter_module._OrbitalsTreeview.__module__ == plotter_ui_module.__name__  # ruff:ignore[private-member-access]
+    assert plotter_module.Plotter._grid_settings_screen.__module__ == _plotter_ui_module.__name__
+    assert plotter_module._OrbitalSelectionScreen.__module__ == _plotter_ui_module.__name__
+    assert _plotter_ui_module._OrbitalsTreeview.__module__ == _plotter_ui_module.__name__
 
 
 class _GridTypeProxy:
@@ -190,7 +190,7 @@ class DummyMolecule:
         self.atoms = atoms
         self.max_radius = 1.0
 
-    def add_meshes(  # ruff:ignore[no-self-use]
+    def _add_meshes(  # ruff:ignore[no-self-use]
         self,
         _plotter: DummyBackgroundPlotter,
         opacity: float,
@@ -212,16 +212,16 @@ class DummySelectionScreen:
         self.loading_events: list[tuple[bool, str]] = []
         self.last_loading_message = 'Tabulating orbitals...'
 
-    def update_nav_button_states(self) -> None:  # pragma: no cover - noop stub
+    def _update_nav_button_states(self) -> None:  # pragma: no cover - noop stub
         pass
 
-    def set_loading_state(self, loading: bool, message: str = 'Tabulating orbitals...') -> None:
+    def _set_loading_state(self, loading: bool, message: str = 'Tabulating orbitals...') -> None:
         self._loading = loading
         self.last_loading_message = message
         self.loading_events.append((loading, message))
 
-    def on_gtos_ready(self) -> None:
-        self.set_loading_state(False)
+    def _on_gtos_ready(self) -> None:
+        self._set_loading_state(False)
 
     def destroy(self) -> None:  # pragma: no cover - noop stub
         self.destroyed = True
@@ -472,10 +472,10 @@ class SimpleTreeview(SimpleWidget):
 class FakeTabulator:
     def __init__(self, _source: Any = None, only_molecule: bool = False, **_kwargs: Any) -> None:
         grid_enum = plotter_module.GridType
-        self._grid_type = grid_enum.SPHERICAL
-        self._grid_dimensions = (1, 1, 1)
+        self.grid_type = grid_enum.SPHERICAL
+        self.grid_dimensions = (1, 1, 1)
         self.grid = np.zeros((1, 3))
-        self.original_axes = None
+        self.grid_axes = None
         self.gto_data = object()
         self._gtos = np.zeros((1, 1))
         self._parser = SimpleNamespace(
@@ -483,7 +483,11 @@ class FakeTabulator:
             mos=[SimpleNamespace(sym='s', spin='alpha', occ=2.0, energy=-0.5)],
         )
         self.export_calls: list[tuple[str, int | None]] = []
-        self.only_molecule = only_molecule
+        self._only_molecule = only_molecule
+
+    @property
+    def gtos(self) -> np.ndarray:
+        return self._gtos
 
     def spherical_grid(
         self,
@@ -493,11 +497,11 @@ class FakeTabulator:
         tabulate_gtos: bool = True,
     ) -> None:
         rr, tt, pp = np.meshgrid(r, theta, phi, indexing='ij')
-        xx, yy, zz = Tabulator._spherical_to_cartesian(rr, tt, pp)  # ruff:ignore[private-member-access]
+        xx, yy, zz = Tabulator._spherical_to_cartesian(rr, tt, pp)
         self.grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
-        self._grid_type = GridType.SPHERICAL
-        self._grid_dimensions = (len(r), len(theta), len(phi))
-        self.original_axes = (r, theta, phi)
+        self.grid_type = GridType.SPHERICAL
+        self.grid_dimensions = (len(r), len(theta), len(phi))
+        self.grid_axes = (r, theta, phi)
         if tabulate_gtos:
             self._gtos = np.zeros((self.grid.shape[0], 1))
 
@@ -510,9 +514,9 @@ class FakeTabulator:
     ) -> None:
         xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
         self.grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
-        self._grid_type = GridType.CARTESIAN
-        self._grid_dimensions = (len(x), len(y), len(z))
-        self.original_axes = (x, y, z)
+        self.grid_type = GridType.CARTESIAN
+        self.grid_dimensions = (len(x), len(y), len(z))
+        self.grid_axes = (x, y, z)
         if tabulate_gtos:
             self._gtos = np.zeros((self.grid.shape[0], 1))
 
@@ -582,23 +586,23 @@ class PVRecorder:
 
 class SelectionPlotter:
     def __init__(self) -> None:
-        self.tk_root = RootRecorder()
+        self._tk_root = RootRecorder()
         self._no_prev_tk_root = True
         self.tabulator = FakeTabulator()
-        self.tabulator._parser.mos = [  # ruff:ignore[private-member-access]
+        self.tabulator._parser.mos = [
             SimpleNamespace(sym='s', spin='alpha', occ=2.0, energy=-0.5),
             SimpleNamespace(sym='p', spin='alpha', occ=1.0, energy=-0.1),
             SimpleNamespace(sym='d', spin='beta', occ=0.0, energy=0.2),
         ]
-        self.pv_plotter = PVRecorder()
-        self.on_screen = True
-        self.selection_screen: Any | None = None
+        self._pv_plotter = PVRecorder()
+        self._on_screen = True
+        self._selection_screen: Any | None = None
         self.plot_calls: list[int] = []
 
     def plot_orbital(self, idx: int) -> None:
         self.plot_calls.append(idx)
-        if self.selection_screen is not None:
-            self.selection_screen.current_mo_ind = idx
+        if self._selection_screen is not None:
+            self._selection_screen.current_mo_ind = idx
 
     def _cancel_gto_future(self) -> None:  # pragma: no cover - stubbed out
         pass
@@ -646,12 +650,12 @@ def plotter_env(monkeypatch: pytest.MonkeyPatch) -> Any:
 
 
 def test_describe_source_reports_list_length() -> None:
-    assert plotter_module._describe_source('sample.molden') == 'sample.molden'  # ruff:ignore[private-member-access]
-    assert plotter_module._describe_source(['a', 'b', 'c']) == '3 molden lines'  # ruff:ignore[private-member-access]
+    assert plotter_module._describe_source('sample.molden') == 'sample.molden'
+    assert plotter_module._describe_source(['a', 'b', 'c']) == '3 molden lines'
 
 
 def test_custom_cmap_from_colors_uses_endpoints() -> None:
-    cmap = plotter_module.Plotter.custom_cmap_from_colors(['red', 'blue'])
+    cmap = plotter_module.Plotter._custom_cmap_from_colors(['red', 'blue'])
     assert cmap.name == 'custom_mo'
     assert cmap(0) == pytest.approx(mcolors.to_rgba('red'))
     almost_one = np.nextafter(1.0, 0.0)
@@ -660,35 +664,35 @@ def test_custom_cmap_from_colors_uses_endpoints() -> None:
 
 def test_settings_parent_prefers_selection_screen(plotter_env: Any) -> None:
     plotter = plotter_env.make_plotter()
-    assert plotter._settings_parent() is plotter.selection_screen  # ruff:ignore[private-member-access]
+    assert plotter._settings_parent() is plotter._selection_screen
 
 
 def test_settings_parent_requires_root(plotter_env: Any) -> None:
     plotter = plotter_env.make_plotter()
-    plotter.selection_screen = None
-    plotter.tk_root = None
+    plotter._selection_screen = None
+    plotter._tk_root = None
     with pytest.raises(RuntimeError):
-        plotter._settings_parent()  # ruff:ignore[private-member-access]
+        plotter._settings_parent()
 
 
 def test_get_current_mo_index_tracks_selection(plotter_env: Any) -> None:
     plotter = plotter_env.make_plotter()
     target_index = 4
-    plotter.selection_screen.current_mo_ind = target_index
-    assert plotter._get_current_mo_index() == target_index  # ruff:ignore[private-member-access]
-    plotter.selection_screen = None
+    plotter._selection_screen.current_mo_ind = target_index
+    assert plotter._get_current_mo_index() == target_index
+    plotter._selection_screen = None
     missing_index = -1
-    assert plotter._get_current_mo_index() == missing_index  # ruff:ignore[private-member-access]
+    assert plotter._get_current_mo_index() == missing_index
 
 
 def test_do_export_with_all_scope_calls_tabulator(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
     plotter = plotter_env.make_plotter()
-    plotter.selection_screen.current_mo_ind = 2
+    plotter._selection_screen.current_mo_ind = 2
     export_window = DummyWindow()
 
     messagebox_calls: list[tuple[str, str]] = []
 
-    monkeypatch.setattr(plotter_module.filedialog, 'asksaveasfilename', lambda **_kwargs: '/tmp/export.vtk')
+    monkeypatch.setattr(_plotter_ui_module.filedialog, 'asksaveasfilename', lambda **_kwargs: '/tmp/export.vtk')
     monkeypatch.setattr(
         plotter_module.messagebox,
         'showinfo',
@@ -700,7 +704,7 @@ def test_do_export_with_all_scope_calls_tabulator(monkeypatch: pytest.MonkeyPatc
         lambda *_args, **_kwargs: pytest.fail('showerror called'),
     )
 
-    plotter._do_export(export_window, DummyVar('vtk'), DummyVar('all'))  # ruff:ignore[private-member-access]
+    plotter._do_export(export_window, DummyVar('vtk'), DummyVar('all'))
 
     assert plotter.tabulator.export_calls == [('/tmp/export.vtk', None)]
     assert export_window.destroyed
@@ -709,7 +713,7 @@ def test_do_export_with_all_scope_calls_tabulator(monkeypatch: pytest.MonkeyPatc
 
 def test_do_export_requires_selected_orbital(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
     plotter = plotter_env.make_plotter()
-    plotter.selection_screen.current_mo_ind = -1
+    plotter._selection_screen.current_mo_ind = -1
 
     errors: list[tuple[str, str]] = []
     monkeypatch.setattr(
@@ -718,19 +722,19 @@ def test_do_export_requires_selected_orbital(monkeypatch: pytest.MonkeyPatch, pl
         lambda title, msg: errors.append((title, msg)),
     )
     monkeypatch.setattr(
-        plotter_module.filedialog,
+        _plotter_ui_module.filedialog,
         'asksaveasfilename',
         lambda **_kwargs: pytest.fail('Dialog should not open'),
     )
 
-    plotter._do_export(DummyWindow(), DummyVar('vtk'), DummyVar('current'))  # ruff:ignore[private-member-access]
+    plotter._do_export(DummyWindow(), DummyVar('vtk'), DummyVar('current'))
     assert errors
     assert 'No orbital' in errors[0][1]
 
 
 def test_do_export_rejects_cube_all(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
     plotter = plotter_env.make_plotter()
-    plotter.selection_screen.current_mo_ind = 0
+    plotter._selection_screen.current_mo_ind = 0
 
     errors: list[tuple[str, str]] = []
     monkeypatch.setattr(
@@ -739,50 +743,50 @@ def test_do_export_rejects_cube_all(monkeypatch: pytest.MonkeyPatch, plotter_env
         lambda title, msg: errors.append((title, msg)),
     )
     monkeypatch.setattr(
-        plotter_module.filedialog,
+        _plotter_ui_module.filedialog,
         'asksaveasfilename',
         lambda **_kwargs: pytest.fail('Dialog should not open'),
     )
 
-    plotter._do_export(DummyWindow(), DummyVar('cube'), DummyVar('all'))  # ruff:ignore[private-member-access]
+    plotter._do_export(DummyWindow(), DummyVar('cube'), DummyVar('all'))
     assert errors
     assert 'Cube format' in errors[0][1]
 
 
 def test_do_export_uses_current_index(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
     plotter = plotter_env.make_plotter()
-    plotter.selection_screen.current_mo_ind = 3
+    plotter._selection_screen.current_mo_ind = 3
     export_window = DummyWindow()
 
-    monkeypatch.setattr(plotter_module.filedialog, 'asksaveasfilename', lambda **_kwargs: '/tmp/single.vtk')
+    monkeypatch.setattr(_plotter_ui_module.filedialog, 'asksaveasfilename', lambda **_kwargs: '/tmp/single.vtk')
     monkeypatch.setattr(plotter_module.messagebox, 'showinfo', lambda *_args, **_kwargs: None)
     monkeypatch.setattr(plotter_module.messagebox, 'showerror', lambda *_args, **_kwargs: None)
 
-    plotter._do_export(export_window, DummyVar('vtk'), DummyVar('current'))  # ruff:ignore[private-member-access]
+    plotter._do_export(export_window, DummyVar('vtk'), DummyVar('current'))
     assert plotter.tabulator.export_calls == [('/tmp/single.vtk', 3)]
 
 
 def test_do_export_handles_errors(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
     plotter = plotter_env.make_plotter()
-    plotter.selection_screen.current_mo_ind = 0
+    plotter._selection_screen.current_mo_ind = 0
     export_window = DummyWindow()
 
     def boom(*_args: Any, **_kwargs: Any) -> None:
         raise RuntimeError('fail')
 
     plotter.tabulator.export = boom  # type: ignore[assignment]
-    monkeypatch.setattr(plotter_module.filedialog, 'asksaveasfilename', lambda **_kwargs: '/tmp/single.vtk')
+    monkeypatch.setattr(_plotter_ui_module.filedialog, 'asksaveasfilename', lambda **_kwargs: '/tmp/single.vtk')
 
     errors: list[tuple[str, str]] = []
     monkeypatch.setattr(plotter_module.messagebox, 'showerror', lambda title, msg: errors.append((title, msg)))
     monkeypatch.setattr(plotter_module.messagebox, 'showinfo', lambda *_args, **_kwargs: None)
 
-    plotter._do_export(export_window, DummyVar('vtk'), DummyVar('current'))  # ruff:ignore[private-member-access]
+    plotter._do_export(export_window, DummyVar('vtk'), DummyVar('current'))
     assert errors
 
 
 def test_plotter_rejects_tabulator_without_grid(plotter_env: Any) -> None:
-    bad_tab = SimpleNamespace(_grid_type=GridType.SPHERICAL, gto_data=object(), original_axes=None)
+    bad_tab = SimpleNamespace(grid_type=GridType.SPHERICAL, gtos=object(), grid_axes=None)
     with pytest.raises(ValueError, match='grid attribute'):
         plotter_env.make_plotter(tabulator=bad_tab)
 
@@ -790,9 +794,9 @@ def test_plotter_rejects_tabulator_without_grid(plotter_env: Any) -> None:
 def test_plotter_rejects_unknown_grid_type(plotter_env: Any) -> None:
     bad_tab = SimpleNamespace(
         grid=np.zeros((1, 3)),
-        _grid_type=GridType.UNKNOWN,
-        gto_data=object(),
-        original_axes=None,
+        grid_type=GridType.UNKNOWN,
+        gtos=object(),
+        grid_axes=None,
     )
     with pytest.raises(ValueError, match='only supports spherical and cartesian'):
         plotter_env.make_plotter(tabulator=bad_tab)
@@ -800,7 +804,7 @@ def test_plotter_rejects_unknown_grid_type(plotter_env: Any) -> None:
 
 def test_plotter_requires_tabulated_gtos(plotter_env: Any) -> None:
     tabulator = plotter_env.make_tabulator()
-    del tabulator.gto_data
+    del tabulator._gtos
 
     with pytest.raises(ValueError, match='tabulated GTOs'):
         plotter_env.make_plotter(tabulator=tabulator)
@@ -809,20 +813,20 @@ def test_plotter_requires_tabulated_gtos(plotter_env: Any) -> None:
 def test_export_orbitals_dialog_sets_attributes(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
     install_fake_tk_widgets(monkeypatch)
     plotter = plotter_env.make_plotter()
-    plotter.selection_screen.current_mo_ind = 1
+    plotter._selection_screen.current_mo_ind = 1
 
-    plotter.export_orbitals_dialog()
+    plotter._export_orbitals_dialog()
 
-    assert isinstance(plotter._export_window, SimpleToplevel)  # ruff:ignore[private-member-access]
-    assert plotter._export_current_orb_radio is not None  # ruff:ignore[private-member-access]
-    assert plotter._export_all_orb_radio is not None  # ruff:ignore[private-member-access]
+    assert isinstance(plotter._export_window, SimpleToplevel)
+    assert plotter._export_current_orb_radio is not None
+    assert plotter._export_all_orb_radio is not None
 
 
 def test_export_image_dialog_builds_controls(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
     install_fake_tk_widgets(monkeypatch)
     plotter = plotter_env.make_plotter()
 
-    plotter.export_image_dialog()
+    plotter._export_image_dialog()
 
 
 @pytest.mark.usefixtures('plotter_env')
@@ -842,7 +846,7 @@ def test_plotter_creates_internal_tk_root(monkeypatch: pytest.MonkeyPatch) -> No
     assert created
     assert created[0].withdrawn
     assert created[0].mainloop_calls == 1
-    assert plotter.selection_screen is None
+    assert plotter._selection_screen is None
 
 
 def test_plotter_generates_default_spherical_grid(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
@@ -892,7 +896,7 @@ def test_plotter_generates_default_cartesian_grid(monkeypatch: pytest.MonkeyPatc
 def test_plotter_initializes_custom_colormap(plotter_env: Any) -> None:
     plotter_module.config.mo.custom_colors = ['navy', 'white']
     plotter = plotter_env.make_plotter()
-    assert getattr(plotter.cmap, 'name', '') == 'custom_mo'
+    assert getattr(plotter._cmap, 'name', '') == 'custom_mo'
 
 
 def test_plotter_builds_menus_and_overrides_clear(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -903,43 +907,44 @@ def test_plotter_builds_menus_and_overrides_clear(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(plotter_module, '_OrbitalSelectionScreen', DummySelectionScreen)
     monkeypatch.setattr(plotter_module.pv, 'StructuredGrid', DummyStructuredGrid)
     monkeypatch.setattr(plotter_module.pv, 'pyvista_ndarray', lambda arr: arr)
-    monkeypatch.setattr(plotter_ui_module, 'QMenu', FakeQMenu)
-    monkeypatch.setattr(plotter_ui_module, 'QAction', FakeQAction)
-    monkeypatch.setattr(plotter_ui_module, 'isValid', lambda _action: True)
+    monkeypatch.setattr(_plotter_ui_module, 'QMenu', FakeQMenu)
+    monkeypatch.setattr(_plotter_ui_module, 'QAction', FakeQAction)
+    monkeypatch.setattr(_plotter_ui_module, 'isValid', lambda _action: True)
 
     plotter = plotter_module.Plotter('dummy', tk_root=DummyTk())
 
-    main_menu = plotter.pv_plotter.main_menu
+    main_menu = plotter._pv_plotter.main_menu
     assert [menu.title for menu in main_menu.menus] == ['Settings', 'Export']
     settings_action_texts = [action.text() for action in main_menu.menus[0].actions()]
     assert {'Grid Settings', 'MO Settings', 'Molecule Settings'} <= set(settings_action_texts)
-    assert main_menu.clear_action.triggered.callbacks[-1] == plotter._clear_all  # ruff:ignore[private-member-access]
+    assert main_menu.clear_action.triggered.callbacks[-1] == plotter._clear_all
 
 
-def test_plotter_validates_axis_spacing(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
+def test_plotter_does_not_access_private_axis_validation(
+    monkeypatch: pytest.MonkeyPatch,
+    plotter_env: Any,
+) -> None:
     tabulator = plotter_env.make_tabulator()
     axes = (
         np.array([0.0, 0.5, 1.0]),
         np.array([0.0, 0.5, 1.0]),
         np.array([0.0, 0.5, 1.0]),
     )
-    tabulator.original_axes = axes
+    tabulator.grid_axes = axes
 
-    calls: list[str] = []
     monkeypatch.setattr(
         plotter_module.Tabulator,
         '_axis_spacing',
-        lambda _axis, name: calls.append(name) or 0.5,
+        lambda *_args: pytest.fail('Plotter accessed private Tabulator axis validation'),
     )
 
     plotter_env.make_plotter(tabulator=tabulator)
-    assert calls == ['x', 'y', 'z']
 
 
 def test_plotter_only_molecule_skips_selection_screen(plotter_env: Any) -> None:
     plotter = plotter_env.make_plotter(only_molecule=True)
     assert not hasattr(plotter, 'orb_mesh')
-    assert plotter.selection_screen is None
+    assert plotter._selection_screen is None
 
 
 def test_apply_grid_settings_updates_spherical_grid(plotter_env: Any) -> None:
@@ -949,7 +954,7 @@ def test_apply_grid_settings_updates_spherical_grid(plotter_env: Any) -> None:
     plotter.radius_points_entry = DummyEntry('2')
     plotter.theta_points_entry = DummyEntry('2')
     plotter.phi_points_entry = DummyEntry('2')
-    plotter.selection_screen.current_mo_ind = 0
+    plotter._selection_screen.current_mo_ind = 0
 
     captured: dict[str, Any] = {}
 
@@ -961,10 +966,10 @@ def test_apply_grid_settings_updates_spherical_grid(plotter_env: Any) -> None:
     def remember(idx: int) -> None:
         replotted.append(idx)
 
-    plotter.update_mesh = fake_update  # type: ignore[assignment]
+    plotter._update_mesh = fake_update  # type: ignore[assignment]
     plotter.plot_orbital = remember  # type: ignore[assignment]
 
-    plotter.apply_grid_settings()
+    plotter._apply_grid_settings()
 
     i_points, j_points, k_points, grid_type = captured['args']
     assert grid_type == GridType.SPHERICAL
@@ -998,7 +1003,7 @@ def test_apply_grid_settings_cartesian_validation_shows_error(
         lambda title, msg: errors.append((title, msg)),
     )
 
-    plotter.apply_grid_settings()
+    plotter._apply_grid_settings()
     assert errors
 
 
@@ -1013,7 +1018,7 @@ def test_apply_grid_settings_rejects_nonpositive_radius(monkeypatch: pytest.Monk
     errors: list[tuple[str, str]] = []
     monkeypatch.setattr(plotter_module.messagebox, 'showerror', lambda title, msg: errors.append((title, msg)))
 
-    plotter.apply_grid_settings()
+    plotter._apply_grid_settings()
     assert errors
     assert 'Radius' in errors[0][1]
 
@@ -1029,7 +1034,7 @@ def test_apply_grid_settings_rejects_nonpositive_points(monkeypatch: pytest.Monk
     errors: list[tuple[str, str]] = []
     monkeypatch.setattr(plotter_module.messagebox, 'showerror', lambda title, msg: errors.append((title, msg)))
 
-    plotter.apply_grid_settings()
+    plotter._apply_grid_settings()
     assert errors
     assert 'Number of points' in errors[0][1]
     assert 'greater than zero' in errors[0][1]
@@ -1040,7 +1045,7 @@ def test_grid_settings_screen_creates_entries(monkeypatch: pytest.MonkeyPatch, p
     plotter = plotter_env.make_plotter()
     seed_tabulator_with_cartesian_grid(plotter.tabulator)
 
-    plotter.grid_settings_screen()
+    plotter._grid_settings_screen()
 
     assert hasattr(plotter, 'radius_entry')
     assert hasattr(plotter, 'x_min_entry')
@@ -1050,7 +1055,7 @@ def test_mo_settings_screen_initializes_controls(monkeypatch: pytest.MonkeyPatch
     install_fake_tk_widgets(monkeypatch)
     plotter = plotter_env.make_plotter()
 
-    plotter.mo_settings_screen()
+    plotter._mo_settings_screen()
 
     assert hasattr(plotter, 'contour_entry')
     assert hasattr(plotter, 'opacity_scale')
@@ -1060,7 +1065,7 @@ def test_molecule_settings_screen_initializes_entries(monkeypatch: pytest.Monkey
     install_fake_tk_widgets(monkeypatch)
     plotter = plotter_env.make_plotter()
 
-    plotter.molecule_settings_screen()
+    plotter._molecule_settings_screen()
 
     assert hasattr(plotter, 'bond_max_length_entry')
     assert hasattr(plotter, 'bond_radius_entry')
@@ -1070,7 +1075,7 @@ def test_color_settings_screen_initializes_entries(monkeypatch: pytest.MonkeyPat
     install_fake_tk_widgets(monkeypatch)
     plotter = plotter_env.make_plotter()
 
-    plotter.color_settings_screen()
+    plotter._color_settings_screen()
 
     assert isinstance(plotter.background_color_entry, SimpleEntry)
 
@@ -1081,7 +1086,7 @@ def test_color_settings_screen_populates_custom_scheme(monkeypatch: pytest.Monke
     plotter_module.config.mo.custom_colors = ['black', 'white']
     plotter = plotter_env.make_plotter()
 
-    plotter.color_settings_screen()
+    plotter._color_settings_screen()
 
     assert plotter.mo_color_scheme_var.get() == 'bespoke'
     assert plotter.mo_negative_color_entry.get() == 'black'
@@ -1106,11 +1111,11 @@ def test_on_mo_color_scheme_change_toggles_widgets(plotter_env: Any) -> None:
     plotter.mo_custom_color_widgets = [Tracker()]
     plotter.mo_color_scheme_var = DummyVar('custom')
 
-    plotter.on_mo_color_scheme_change(SimpleNamespace())
+    plotter._on_mo_color_scheme_change(SimpleNamespace())
     assert plotter.mo_custom_color_widgets[0].visible
 
     plotter.mo_color_scheme_var.set('coolwarm')
-    plotter.on_mo_color_scheme_change(SimpleNamespace())
+    plotter._on_mo_color_scheme_change(SimpleNamespace())
     assert not plotter.mo_custom_color_widgets[0].visible
 
 
@@ -1134,12 +1139,12 @@ def test_on_bond_color_type_change_updates_visibility(plotter_env: Any) -> None:
     plotter.bond_color_entry = Tracker()
 
     calls: list[str] = []
-    plotter.apply_bond_color_settings = lambda: calls.append('run')  # type: ignore[assignment]
+    plotter._apply_bond_color_settings = lambda: calls.append('run')  # type: ignore[assignment]
 
-    plotter.on_bond_color_type_change()
+    plotter._on_bond_color_type_change()
     assert plotter.bond_color_label.visible
     plotter.bond_color_type_var.set('gradient')
-    plotter.on_bond_color_type_change()
+    plotter._on_bond_color_type_change()
     assert not plotter.bond_color_label.visible
     assert calls
 
@@ -1147,12 +1152,12 @@ def test_on_bond_color_type_change_updates_visibility(plotter_env: Any) -> None:
 def test_reset_grid_settings_restores_defaults(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
     install_fake_tk_widgets(monkeypatch)
     plotter = plotter_env.make_plotter()
-    plotter.grid_settings_screen()
+    plotter._grid_settings_screen()
     plotter.radius_entry.insert(0, '9.0')
 
-    plotter.reset_grid_settings()
+    plotter._reset_grid_settings()
     expected = max(
-        plotter_module.config.grid.max_radius_multiplier * plotter.molecule.max_radius,
+        plotter_module.config.grid.max_radius_multiplier * plotter._molecule.max_radius,
         plotter_module.config.grid.min_radius,
     )
     assert float(plotter.radius_entry.get()) == pytest.approx(expected)
@@ -1161,11 +1166,11 @@ def test_reset_grid_settings_restores_defaults(monkeypatch: pytest.MonkeyPatch, 
 def test_reset_mo_settings_restores_inputs(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
     install_fake_tk_widgets(monkeypatch)
     plotter = plotter_env.make_plotter()
-    plotter.mo_settings_screen()
+    plotter._mo_settings_screen()
     plotter.contour_entry.insert(0, '9.5')
     plotter.opacity_scale.value = 0.1
 
-    plotter.reset_mo_settings()
+    plotter._reset_mo_settings()
     assert float(plotter.contour_entry.get()) == pytest.approx(plotter_module.config.mo.contour)
     assert plotter.opacity_scale.value == pytest.approx(plotter_module.config.mo.opacity)
 
@@ -1173,12 +1178,12 @@ def test_reset_mo_settings_restores_inputs(monkeypatch: pytest.MonkeyPatch, plot
 def test_reset_molecule_settings_restores_config(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
     install_fake_tk_widgets(monkeypatch)
     plotter = plotter_env.make_plotter()
-    plotter.molecule_settings_screen()
-    plotter.atom_actors[0].SetVisibility(False)
-    plotter.bond_actors[0].SetVisibility(False)
+    plotter._molecule_settings_screen()
+    plotter._atom_actors[0].SetVisibility(False)
+    plotter._bond_actors[0].SetVisibility(False)
     plotter.bond_max_length_entry.insert(0, '7.7')
 
-    plotter.reset_molecule_settings()
+    plotter._reset_molecule_settings()
     assert plotter.are_atoms_visible()
     assert plotter.are_bonds_visible()
     assert float(plotter.bond_max_length_entry.get()) == pytest.approx(
@@ -1191,13 +1196,13 @@ def test_reset_color_settings_restores_entries(monkeypatch: pytest.MonkeyPatch, 
     plotter_module.config.molecule.bond.color_type = 'uniform'
     plotter_module.config.molecule.bond.color = 'yellow'
     plotter = plotter_env.make_plotter()
-    plotter.color_settings_screen()
+    plotter._color_settings_screen()
     plotter.background_color_entry.insert(0, 'black')
     plotter.mo_color_scheme_var.set('custom')
     plotter.mo_negative_color_entry.insert(0, 'purple')
     plotter.bond_color_type_var.set('split')
 
-    plotter.reset_color_settings()
+    plotter._reset_color_settings()
     assert plotter.background_color_entry.get() == str(plotter_module.config.background_color)
     assert plotter.bond_color_type_var.get() == plotter_module.config.molecule.bond.color_type
     assert plotter.bond_color_entry.get() == str(plotter_module.config.molecule.bond.color)
@@ -1206,7 +1211,7 @@ def test_reset_color_settings_restores_entries(monkeypatch: pytest.MonkeyPatch, 
 def test_apply_mo_contour_replots_current(plotter_env: Any) -> None:
     plotter = plotter_env.make_plotter()
     plotter.contour_entry = DummyEntry('0.25')
-    plotter.selection_screen.current_mo_ind = 1
+    plotter._selection_screen.current_mo_ind = 1
 
     replotted: list[int] = []
 
@@ -1215,8 +1220,8 @@ def test_apply_mo_contour_replots_current(plotter_env: Any) -> None:
 
     plotter.plot_orbital = remember  # type: ignore[assignment]
 
-    plotter.apply_mo_contour()
-    assert plotter.contour == pytest.approx(0.25)
+    plotter._apply_mo_contour()
+    assert plotter._contour == pytest.approx(0.25)
     assert replotted == [1]
 
 
@@ -1225,7 +1230,7 @@ def test_apply_custom_mo_color_settings_updates_scheme(plotter_env: Any) -> None
     plotter.mo_color_scheme_var = DummyVar('custom')
     plotter.mo_negative_color_entry = DummyEntry('navy')
     plotter.mo_positive_color_entry = DummyEntry('gold')
-    plotter.selection_screen.current_mo_ind = 0
+    plotter._selection_screen.current_mo_ind = 0
 
     replotted: list[int] = []
 
@@ -1234,7 +1239,7 @@ def test_apply_custom_mo_color_settings_updates_scheme(plotter_env: Any) -> None
 
     plotter.plot_orbital = remember  # type: ignore[assignment]
 
-    plotter.apply_custom_mo_color_settings()
+    plotter._apply_custom_mo_color_settings()
 
     assert plotter_module.config.mo.custom_colors == ['navy', 'gold']
     assert replotted == [0]
@@ -1256,7 +1261,7 @@ def test_apply_custom_mo_color_settings_rejects_invalid(
         lambda title, msg: errors.append((title, msg)),
     )
 
-    plotter.apply_custom_mo_color_settings()
+    plotter._apply_custom_mo_color_settings()
     assert errors
     assert 'custom colors' in errors[0][1]
 
@@ -1264,8 +1269,8 @@ def test_apply_custom_mo_color_settings_rejects_invalid(
 def test_apply_mo_color_settings_switches_scheme(plotter_env: Any) -> None:
     plotter = plotter_env.make_plotter()
     plotter.mo_color_scheme_var = DummyVar('viridis')
-    plotter.selection_screen.current_mo_ind = 2
-    plotter.on_mo_color_scheme_change = lambda *_args: None  # type: ignore[assignment]
+    plotter._selection_screen.current_mo_ind = 2
+    plotter._on_mo_color_scheme_change = lambda *_args: None  # type: ignore[assignment]
 
     replotted: list[int] = []
 
@@ -1274,38 +1279,38 @@ def test_apply_mo_color_settings_switches_scheme(plotter_env: Any) -> None:
 
     plotter.plot_orbital = remember  # type: ignore[assignment]
 
-    plotter.apply_mo_color_settings()
+    plotter._apply_mo_color_settings()
 
     assert plotter_module.config.mo.color_scheme == 'viridis'
-    assert plotter.cmap == 'viridis'
+    assert plotter._cmap == 'viridis'
     assert replotted == [2]
 
 
 def test_apply_color_settings_runs_all_handlers(plotter_env: Any) -> None:
     plotter = plotter_env.make_plotter()
     calls: list[str] = []
-    plotter.apply_mo_color_settings = lambda: calls.append('mo')  # type: ignore[assignment]
-    plotter.apply_custom_mo_color_settings = lambda: calls.append('custom')  # type: ignore[assignment]
-    plotter.apply_bond_color_settings = lambda: calls.append('bond')  # type: ignore[assignment]
+    plotter._apply_mo_color_settings = lambda: calls.append('mo')  # type: ignore[assignment]
+    plotter._apply_custom_mo_color_settings = lambda: calls.append('custom')  # type: ignore[assignment]
+    plotter._apply_bond_color_settings = lambda: calls.append('bond')  # type: ignore[assignment]
 
-    plotter.apply_color_settings()
+    plotter._apply_color_settings()
     assert calls == ['mo', 'custom', 'bond']
 
 
 def test_apply_mo_color_settings_returns_for_custom(plotter_env: Any) -> None:
     plotter = plotter_env.make_plotter()
     plotter.mo_color_scheme_var = DummyVar('custom')
-    plotter.on_mo_color_scheme_change = lambda *_args: None  # type: ignore[assignment]
+    plotter._on_mo_color_scheme_change = lambda *_args: None  # type: ignore[assignment]
 
-    plotter.apply_mo_color_settings()
-    assert plotter.cmap == plotter_module.config.mo.color_scheme
+    plotter._apply_mo_color_settings()
+    assert plotter._cmap == plotter_module.config.mo.color_scheme
 
 
 def test_apply_mo_color_settings_same_value_no_replot(plotter_env: Any) -> None:
     plotter = plotter_env.make_plotter()
     current_scheme = plotter_module.config.mo.color_scheme
     plotter.mo_color_scheme_var = DummyVar(current_scheme)
-    plotter.on_mo_color_scheme_change = lambda *_args: None  # type: ignore[assignment]
+    plotter._on_mo_color_scheme_change = lambda *_args: None  # type: ignore[assignment]
 
     calls: list[int] = []
 
@@ -1313,17 +1318,17 @@ def test_apply_mo_color_settings_same_value_no_replot(plotter_env: Any) -> None:
         calls.append(idx)
 
     plotter.plot_orbital = remember_plot  # type: ignore[assignment]
-    plotter.selection_screen.current_mo_ind = 1
+    plotter._selection_screen.current_mo_ind = 1
 
-    plotter.apply_mo_color_settings()
+    plotter._apply_mo_color_settings()
     assert not calls
 
 
 def test_apply_mo_color_settings_skips_replot_without_selection(plotter_env: Any) -> None:
     plotter = plotter_env.make_plotter()
     plotter.mo_color_scheme_var = DummyVar('viridis')
-    plotter.selection_screen.current_mo_ind = -1
-    plotter.on_mo_color_scheme_change = lambda *_args: None  # type: ignore[assignment]
+    plotter._selection_screen.current_mo_ind = -1
+    plotter._on_mo_color_scheme_change = lambda *_args: None  # type: ignore[assignment]
 
     calls: list[int] = []
 
@@ -1332,7 +1337,7 @@ def test_apply_mo_color_settings_skips_replot_without_selection(plotter_env: Any
 
     plotter.plot_orbital = remember_plot  # type: ignore[assignment]
 
-    plotter.apply_mo_color_settings()
+    plotter._apply_mo_color_settings()
     assert not calls
 
 
@@ -1340,8 +1345,8 @@ def test_apply_custom_mo_color_settings_non_custom_returns(plotter_env: Any) -> 
     plotter = plotter_env.make_plotter()
     plotter.mo_color_scheme_var = DummyVar('coolwarm')
 
-    plotter.apply_custom_mo_color_settings()
-    assert plotter.cmap == plotter_module.config.mo.color_scheme
+    plotter._apply_custom_mo_color_settings()
+    assert plotter._cmap == plotter_module.config.mo.color_scheme
 
 
 def test_apply_background_color_updates_plotter(plotter_env: Any) -> None:
@@ -1349,9 +1354,9 @@ def test_apply_background_color_updates_plotter(plotter_env: Any) -> None:
     plotter.background_color_entry = DummyEntry('navy')
     plotter.background_color_var = DummyVar('navy')
 
-    plotter.apply_background_color()
+    plotter._apply_background_color()
 
-    assert plotter.pv_plotter.background == 'navy'
+    assert plotter._pv_plotter.background == 'navy'
 
 
 def test_apply_background_color_rejects_invalid(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
@@ -1362,7 +1367,7 @@ def test_apply_background_color_rejects_invalid(monkeypatch: pytest.MonkeyPatch,
     errors: list[tuple[str, str]] = []
     monkeypatch.setattr(plotter_module.messagebox, 'showerror', lambda title, msg: errors.append((title, msg)))
 
-    plotter.apply_background_color()
+    plotter._apply_background_color()
     assert errors
 
 
@@ -1373,12 +1378,12 @@ def test_apply_background_color_handles_exception(monkeypatch: pytest.MonkeyPatc
     def boom(_color: str) -> None:
         raise ValueError('explode')
 
-    plotter.pv_plotter.set_background = boom  # type: ignore[assignment]
+    plotter._pv_plotter.set_background = boom  # type: ignore[assignment]
 
     errors: list[tuple[str, str]] = []
     monkeypatch.setattr(plotter_module.messagebox, 'showerror', lambda title, msg: errors.append((title, msg)))
 
-    plotter.apply_background_color()
+    plotter._apply_background_color()
     assert errors
 
 
@@ -1392,9 +1397,9 @@ def test_apply_bond_color_settings_reloads_molecule(plotter_env: Any) -> None:
     def remember(cfg: Any) -> None:
         reloads.append(cfg)
 
-    plotter.load_molecule = remember  # type: ignore[assignment]
+    plotter._load_molecule = remember  # type: ignore[assignment]
 
-    plotter.apply_bond_color_settings()
+    plotter._apply_bond_color_settings()
 
     assert plotter_module.config.molecule.bond.color_type == 'split'
     assert reloads
@@ -1411,9 +1416,9 @@ def test_apply_bond_color_settings_no_reload_when_unchanged(plotter_env: Any) ->
     def remember(cfg: Any) -> None:
         reloads.append(cfg)
 
-    plotter.load_molecule = remember  # type: ignore[assignment]
+    plotter._load_molecule = remember  # type: ignore[assignment]
 
-    plotter.apply_bond_color_settings()
+    plotter._apply_bond_color_settings()
     assert not reloads
 
 
@@ -1427,60 +1432,60 @@ def test_apply_bond_color_settings_updates_uniform_color(plotter_env: Any) -> No
     def remember(cfg: Any) -> None:
         reloads.append(cfg)
 
-    plotter.load_molecule = remember  # type: ignore[assignment]
+    plotter._load_molecule = remember  # type: ignore[assignment]
 
-    plotter.apply_bond_color_settings()
+    plotter._apply_bond_color_settings()
     assert plotter_module.config.molecule.bond.color == 'cyan'
     assert reloads
 
 
 def test_on_opacity_change_updates_actor(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    monkeypatch.setattr(plotter_module.ttk, 'Label', DummyLabelWidget)
+    monkeypatch.setattr(_plotter_ui_module.ttk, 'Label', DummyLabelWidget)
     plotter = plotter_env.make_plotter()
-    plotter.orb_actor = DummyActor()
+    plotter._orb_actor = DummyActor()
     label = DummyLabelWidget('Molecular Orbital Opacity: 1.00')
     container = DummyContainer([label])
     plotter.mo_settings_window = DummyContainer([container])
 
-    plotter.on_opacity_change('0.33')
+    plotter._on_opacity_change('0.33')
 
-    assert plotter.opacity == pytest.approx(0.33)
-    assert plotter.orb_actor.opacity == pytest.approx(0.33)
+    assert plotter._opacity == pytest.approx(0.33)
+    assert plotter._orb_actor.opacity == pytest.approx(0.33)
     assert '0.33' in label.text
 
 
 def test_on_molecule_opacity_change_updates_actors(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    monkeypatch.setattr(plotter_module.ttk, 'Label', DummyLabelWidget)
+    monkeypatch.setattr(_plotter_ui_module.ttk, 'Label', DummyLabelWidget)
     plotter = plotter_env.make_plotter()
     label = DummyLabelWidget('Molecule Opacity: 1.00')
     plotter.molecule_settings_window = DummyContainer([DummyContainer([label])])
 
-    plotter.on_molecule_opacity_change('0.45')
+    plotter._on_molecule_opacity_change('0.45')
 
-    assert plotter.molecule_opacity == pytest.approx(0.45)
-    assert all(actor.opacity == pytest.approx(0.45) for actor in plotter.molecule_actors)
+    assert plotter._molecule_opacity == pytest.approx(0.45)
+    assert all(actor.opacity == pytest.approx(0.45) for actor in plotter._molecule_actors)
     assert '0.45' in label.text
 
 
 def test_clear_all_hides_actors_and_resets_selection(plotter_env: Any) -> None:
     plotter = plotter_env.make_plotter()
-    plotter.selection_screen.current_mo_ind = 3
-    plotter.orb_actor = DummyActor()
+    plotter._selection_screen.current_mo_ind = 3
+    plotter._orb_actor = DummyActor()
 
-    plotter._clear_all()  # ruff:ignore[private-member-access]
+    plotter._clear_all()
 
-    assert plotter.orb_actor is None
-    assert plotter.selection_screen.current_mo_ind == -1
-    assert all(not actor.GetVisibility() for actor in plotter.molecule_actors)
+    assert plotter._orb_actor is None
+    assert plotter._selection_screen.current_mo_ind == -1
+    assert all(not actor.GetVisibility() for actor in plotter._molecule_actors)
 
 
 def test_toggle_atoms_flips_visibility(plotter_env: Any) -> None:
     plotter = plotter_env.make_plotter()
-    initial_visibility = plotter.atom_actors[0].GetVisibility()
+    initial_visibility = plotter._atom_actors[0].GetVisibility()
 
     plotter.toggle_atoms()
 
-    assert plotter.atom_actors[0].GetVisibility() is (not initial_visibility)
+    assert plotter._atom_actors[0].GetVisibility() is (not initial_visibility)
 
 
 def test_apply_grid_settings_updates_cartesian(plotter_env: Any) -> None:
@@ -1495,7 +1500,7 @@ def test_apply_grid_settings_updates_cartesian(plotter_env: Any) -> None:
     plotter.z_min_entry = DummyEntry('-3.0')
     plotter.z_max_entry = DummyEntry('3.0')
     plotter.z_num_points_entry = DummyEntry('4')
-    plotter.selection_screen.current_mo_ind = 0
+    plotter._selection_screen.current_mo_ind = 0
 
     captured: dict[str, Any] = {}
 
@@ -1507,10 +1512,10 @@ def test_apply_grid_settings_updates_cartesian(plotter_env: Any) -> None:
     def remember(idx: int) -> None:
         replotted.append(idx)
 
-    plotter.update_mesh = fake_update  # type: ignore[assignment]
+    plotter._update_mesh = fake_update  # type: ignore[assignment]
     plotter.plot_orbital = remember  # type: ignore[assignment]
 
-    plotter.apply_grid_settings()
+    plotter._apply_grid_settings()
 
     i_points, j_points, k_points, grid_type = captured['args']
     assert grid_type == GridType.CARTESIAN
@@ -1532,9 +1537,9 @@ def test_apply_molecule_settings_updates_config(plotter_env: Any) -> None:
     def remember(cfg: Any) -> None:
         reloads.append(cfg)
 
-    plotter.load_molecule = remember  # type: ignore[assignment]
+    plotter._load_molecule = remember  # type: ignore[assignment]
 
-    plotter.apply_molecule_settings()
+    plotter._apply_molecule_settings()
 
     new_max = 5.5
     new_radius = 0.22
@@ -1555,7 +1560,7 @@ def test_apply_molecule_settings_validates_numbers(monkeypatch: pytest.MonkeyPat
         lambda title, msg: errors.append((title, msg)),
     )
 
-    plotter.apply_molecule_settings()
+    plotter._apply_molecule_settings()
     assert errors
     assert 'Bond Max Length' in errors[0][1]
 
@@ -1568,7 +1573,7 @@ def test_apply_molecule_settings_rejects_invalid_radius(monkeypatch: pytest.Monk
     errors: list[tuple[str, str]] = []
     monkeypatch.setattr(plotter_module.messagebox, 'showerror', lambda title, msg: errors.append((title, msg)))
 
-    plotter.apply_molecule_settings()
+    plotter._apply_molecule_settings()
     assert errors
     assert 'Bond Radius' in errors[0][1]
 
@@ -1584,24 +1589,24 @@ def test_apply_molecule_settings_no_changes_skip_reload(plotter_env: Any) -> Non
     def remember(cfg: Any) -> None:
         reloads.append(cfg)
 
-    plotter.load_molecule = remember  # type: ignore[assignment]
+    plotter._load_molecule = remember  # type: ignore[assignment]
 
-    plotter.apply_molecule_settings()
+    plotter._apply_molecule_settings()
     assert not reloads
 
 
 def test_load_molecule_removes_existing_actors(plotter_env: Any) -> None:
     plotter = plotter_env.make_plotter()
-    original_actor = plotter.molecule_actors[0]
+    original_actor = plotter._molecule_actors[0]
 
-    plotter.load_molecule(plotter_module.config)
-    assert original_actor in plotter.pv_plotter.removed_actors
+    plotter._load_molecule(plotter_module.config)
+    assert original_actor in plotter._pv_plotter.removed_actors
 
 
 def test_apply_mo_contour_invalid_input(plotter_env: Any) -> None:
     plotter = plotter_env.make_plotter()
     plotter.contour_entry = DummyEntry('not-a-number')
-    plotter.selection_screen.current_mo_ind = 0
+    plotter._selection_screen.current_mo_ind = 0
 
     replotted: list[int] = []
 
@@ -1610,9 +1615,9 @@ def test_apply_mo_contour_invalid_input(plotter_env: Any) -> None:
 
     plotter.plot_orbital = remember  # type: ignore[assignment]
 
-    plotter.apply_mo_contour()
+    plotter._apply_mo_contour()
     assert replotted == []
-    assert plotter.contour == pytest.approx(plotter_module.config.mo.contour)
+    assert plotter._contour == pytest.approx(plotter_module.config.mo.contour)
 
 
 def test_do_image_export_vector(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
@@ -1622,7 +1627,7 @@ def test_do_image_export_vector(monkeypatch: pytest.MonkeyPatch, plotter_env: An
     transparent_var = DummyVar(False)
 
     infos: list[tuple[str, str]] = []
-    monkeypatch.setattr(plotter_module.filedialog, 'asksaveasfilename', lambda **_kwargs: '/tmp/export.svg')
+    monkeypatch.setattr(_plotter_ui_module.filedialog, 'asksaveasfilename', lambda **_kwargs: '/tmp/export.svg')
     monkeypatch.setattr(plotter_module.messagebox, 'showinfo', lambda title, msg: infos.append((title, msg)))
     monkeypatch.setattr(
         plotter_module.messagebox,
@@ -1630,9 +1635,9 @@ def test_do_image_export_vector(monkeypatch: pytest.MonkeyPatch, plotter_env: An
         lambda *_args, **_kwargs: pytest.fail('Unexpected error'),
     )
 
-    plotter._do_image_export(window, format_var, transparent_var)  # ruff:ignore[private-member-access]
+    plotter._do_image_export(window, format_var, transparent_var)
 
-    assert plotter.pv_plotter.saved_graphic == '/tmp/export.svg'
+    assert plotter._pv_plotter.saved_graphic == '/tmp/export.svg'
     assert window.destroyed
     assert infos
 
@@ -1643,13 +1648,13 @@ def test_do_image_export_png_respects_transparency(monkeypatch: pytest.MonkeyPat
     format_var = DummyVar('png')
     transparent_var = DummyVar(True)
 
-    monkeypatch.setattr(plotter_module.filedialog, 'asksaveasfilename', lambda **_kwargs: '/tmp/export.png')
+    monkeypatch.setattr(_plotter_ui_module.filedialog, 'asksaveasfilename', lambda **_kwargs: '/tmp/export.png')
     monkeypatch.setattr(plotter_module.messagebox, 'showinfo', lambda *_args, **_kwargs: None)
     monkeypatch.setattr(plotter_module.messagebox, 'showerror', lambda *_args, **_kwargs: None)
 
-    plotter._do_image_export(window, format_var, transparent_var)  # ruff:ignore[private-member-access]
+    plotter._do_image_export(window, format_var, transparent_var)
 
-    assert plotter.pv_plotter.screenshot_calls == [('/tmp/export.png', True)]
+    assert plotter._pv_plotter.screenshot_calls == [('/tmp/export.png', True)]
 
 
 def test_do_image_export_handles_failures(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
@@ -1658,18 +1663,18 @@ def test_do_image_export_handles_failures(monkeypatch: pytest.MonkeyPatch, plott
     format_var = DummyVar('png')
     transparent_var = DummyVar(False)
 
-    monkeypatch.setattr(plotter_module.filedialog, 'asksaveasfilename', lambda **_kwargs: '/tmp/export.png')
+    monkeypatch.setattr(_plotter_ui_module.filedialog, 'asksaveasfilename', lambda **_kwargs: '/tmp/export.png')
 
     def boom(*_args: Any, **_kwargs: Any) -> None:
         raise RuntimeError('boom')
 
-    plotter.pv_plotter.screenshot = boom  # type: ignore[assignment]
+    plotter._pv_plotter.screenshot = boom  # type: ignore[assignment]
 
     errors: list[tuple[str, str]] = []
     monkeypatch.setattr(plotter_module.messagebox, 'showerror', lambda title, msg: errors.append((title, msg)))
     monkeypatch.setattr(plotter_module.messagebox, 'showinfo', lambda *_args, **_kwargs: None)
 
-    plotter._do_image_export(window, format_var, transparent_var)  # ruff:ignore[private-member-access]
+    plotter._do_image_export(window, format_var, transparent_var)
     assert errors
     assert 'Failed to export image' in errors[0][1]
 
@@ -1680,20 +1685,20 @@ def test_do_image_export_cancel(monkeypatch: pytest.MonkeyPatch, plotter_env: An
     format_var = DummyVar('png')
     transparent_var = DummyVar(False)
 
-    monkeypatch.setattr(plotter_module.filedialog, 'asksaveasfilename', lambda **_kwargs: '')
+    monkeypatch.setattr(_plotter_ui_module.filedialog, 'asksaveasfilename', lambda **_kwargs: '')
 
-    plotter._do_image_export(window, format_var, transparent_var)  # ruff:ignore[private-member-access]
-    assert not plotter.pv_plotter.screenshot_calls
+    plotter._do_image_export(window, format_var, transparent_var)
+    assert not plotter._pv_plotter.screenshot_calls
 
 
 def test_save_settings_reports_success(monkeypatch: pytest.MonkeyPatch) -> None:
     saves: list[str] = []
-    monkeypatch.setattr(plotter_module.config, 'save_current_config', lambda: saves.append('saved'))
+    monkeypatch.setattr(plotter_module.config, '_save_current_config', lambda: saves.append('saved'))
 
     infos: list[tuple[str, str]] = []
     monkeypatch.setattr(plotter_module.messagebox, 'showinfo', lambda title, msg: infos.append((title, msg)))
 
-    plotter_module.Plotter.save_settings()
+    plotter_module.Plotter._save_settings()
     assert saves == ['saved']
     assert infos
 
@@ -1702,24 +1707,24 @@ def test_save_settings_reports_error(monkeypatch: pytest.MonkeyPatch) -> None:
     def boom() -> None:
         raise OSError('disk full')
 
-    monkeypatch.setattr(plotter_module.config, 'save_current_config', boom)
+    monkeypatch.setattr(plotter_module.config, '_save_current_config', boom)
     errors: list[tuple[str, str]] = []
     monkeypatch.setattr(plotter_module.messagebox, 'showerror', lambda title, msg: errors.append((title, msg)))
 
-    plotter_module.Plotter.save_settings()
+    plotter_module.Plotter._save_settings()
     assert errors
 
 
 def test_plot_orbital_creates_actor(plotter_env: Any) -> None:
     plotter = plotter_env.make_plotter()
-    plotter.selection_screen.current_mo_ind = -1
+    plotter._selection_screen.current_mo_ind = -1
 
     plotter.plot_orbital(0)
 
-    assert plotter.selection_screen.current_mo_ind == 0
-    assert isinstance(plotter.orb_actor, DummyActor)
-    assert 'orbital' in plotter.orb_mesh.arrays
-    assert plotter.pv_plotter.added_meshes
+    assert plotter._selection_screen.current_mo_ind == 0
+    assert isinstance(plotter._orb_actor, DummyActor)
+    assert 'orbital' in plotter._orb_mesh.arrays
+    assert plotter._pv_plotter.added_meshes
 
 
 def test_plot_orbital_minus_one_clears_scene(plotter_env: Any) -> None:
@@ -1728,19 +1733,19 @@ def test_plot_orbital_minus_one_clears_scene(plotter_env: Any) -> None:
 
     plotter.plot_orbital(-1)
 
-    assert plotter.orb_actor is None
-    assert plotter.selection_screen.current_mo_ind == -1
-    assert plotter.pv_plotter.removed_actors
+    assert plotter._orb_actor is None
+    assert plotter._selection_screen.current_mo_ind == -1
+    assert plotter._pv_plotter.removed_actors
 
 
 def test_toggle_bonds_triggers_update(plotter_env: Any) -> None:
     plotter = plotter_env.make_plotter()
-    initial_visibility = plotter.bond_actors[0].GetVisibility()
+    initial_visibility = plotter._bond_actors[0].GetVisibility()
 
     plotter.toggle_bonds()
 
-    assert plotter.bond_actors[0].GetVisibility() is (not initial_visibility)
-    assert plotter.pv_plotter.update_count == 1
+    assert plotter._bond_actors[0].GetVisibility() is (not initial_visibility)
+    assert plotter._pv_plotter.update_count == 1
 
 
 def test_update_mesh_rebuilds_structured_grid(plotter_env: Any) -> None:
@@ -1749,11 +1754,11 @@ def test_update_mesh_rebuilds_structured_grid(plotter_env: Any) -> None:
     y = np.linspace(-1, 1, 2)
     z = np.linspace(-1, 1, 2)
 
-    plotter.update_mesh(x, y, z, GridType.CARTESIAN)
+    plotter._update_mesh(x, y, z, GridType.CARTESIAN)
 
     expected_points = x.size * y.size * z.size
     assert plotter.tabulator.grid.shape[0] == expected_points
-    assert plotter.orb_mesh.points.shape[0] == expected_points
+    assert plotter._orb_mesh.points.shape[0] == expected_points
 
 
 def test_update_mesh_rejects_unknown_grid_type(plotter_env: Any) -> None:
@@ -1761,21 +1766,21 @@ def test_update_mesh_rejects_unknown_grid_type(plotter_env: Any) -> None:
     points = np.linspace(0.0, 1.0, 2)
 
     with pytest.raises(ValueError, match='only supports spherical'):
-        plotter.update_mesh(points, points, points, GridType.UNKNOWN)
+        plotter._update_mesh(points, points, points, GridType.UNKNOWN)
 
 
 def test_update_mesh_handles_spherical_grid(plotter_env: Any) -> None:
     plotter = plotter_env.make_plotter()
     r = np.linspace(0.0, 1.0, 2)
 
-    plotter.update_mesh(r, r, r, GridType.SPHERICAL)
-    assert plotter.tabulator._grid_type == GridType.SPHERICAL  # ruff:ignore[private-member-access]
+    plotter._update_mesh(r, r, r, GridType.SPHERICAL)
+    assert plotter.tabulator.grid_type == GridType.SPHERICAL
 
 
 def test_toggle_molecule_balances_atom_and_bond_visibility(plotter_env: Any) -> None:
     plotter = plotter_env.make_plotter()
-    plotter.atom_actors[0].SetVisibility(False)
-    plotter.bond_actors[0].SetVisibility(True)
+    plotter._atom_actors[0].SetVisibility(False)
+    plotter._bond_actors[0].SetVisibility(True)
     plotter.show_atoms_var = DummyVar(True)
     plotter.show_bonds_var = DummyVar(True)
 
@@ -1789,12 +1794,12 @@ def test_toggle_molecule_balances_atom_and_bond_visibility(plotter_env: Any) -> 
 
 def test_toggle_molecule_toggles_scene_when_states_match(plotter_env: Any) -> None:
     plotter = plotter_env.make_plotter()
-    visible_before = plotter.molecule_actors[0].GetVisibility()
+    visible_before = plotter._molecule_actors[0].GetVisibility()
 
     plotter.toggle_molecule()
 
-    assert plotter.molecule_actors[0].GetVisibility() is (not visible_before)
-    assert plotter.pv_plotter.update_count == 1
+    assert plotter._molecule_actors[0].GetVisibility() is (not visible_before)
+    assert plotter._pv_plotter.update_count == 1
 
 
 def test_visibility_helpers_reflect_actor_state(plotter_env: Any) -> None:
@@ -1803,17 +1808,17 @@ def test_visibility_helpers_reflect_actor_state(plotter_env: Any) -> None:
     assert plotter.are_atoms_visible()
     assert plotter.are_bonds_visible()
 
-    plotter.molecule_actors[0].SetVisibility(False)
-    plotter.atom_actors[0].SetVisibility(False)
-    plotter.bond_actors[0].SetVisibility(False)
+    plotter._molecule_actors[0].SetVisibility(False)
+    plotter._atom_actors[0].SetVisibility(False)
+    plotter._bond_actors[0].SetVisibility(False)
 
     assert not plotter.is_molecule_visible()
     assert not plotter.are_atoms_visible()
     assert not plotter.are_bonds_visible()
 
-    plotter.molecule_actors = []
-    plotter.atom_actors = []
-    plotter.bond_actors = []
+    plotter._molecule_actors = []
+    plotter._atom_actors = []
+    plotter._bond_actors = []
     assert plotter.is_molecule_visible() is False
     assert plotter.are_atoms_visible() is False
     assert plotter.are_bonds_visible() is False
@@ -1823,10 +1828,10 @@ def test_update_settings_button_states(plotter_env: Any) -> None:
     plotter = plotter_env.make_plotter()
     plotter.show_atoms_var = DummyVar(False)
     plotter.show_bonds_var = DummyVar(False)
-    plotter.atom_actors[0].SetVisibility(False)
-    plotter.bond_actors[0].SetVisibility(True)
+    plotter._atom_actors[0].SetVisibility(False)
+    plotter._bond_actors[0].SetVisibility(True)
 
-    plotter.update_settings_button_states()
+    plotter._update_settings_button_states()
 
     assert plotter.show_atoms_var.get() is False
     assert plotter.show_bonds_var.get() is True
@@ -1839,14 +1844,14 @@ def test_pv_plotter_close_signal_closes_windows(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(plotter_module, 'Tabulator', RecordingTabulator)
     monkeypatch.setattr(plotter_module.tk, 'Tk', DummyTk)
     plotter = plotter_module.Plotter('dummy')
-    callbacks = plotter.pv_plotter.app_window.signal_close.callbacks
+    callbacks = plotter._pv_plotter.app_window.signal_close.callbacks
     assert callbacks
 
     callbacks[0]()
 
-    assert not plotter.on_screen
-    assert plotter.selection_screen.destroyed
-    assert plotter.tk_root.quit_calls == 1
+    assert not plotter._on_screen
+    assert plotter._selection_screen.destroyed
+    assert plotter._tk_root.quit_calls == 1
 
 
 def install_fake_tk_widgets(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1864,69 +1869,69 @@ def install_fake_tk_widgets(monkeypatch: pytest.MonkeyPatch) -> None:
         'Separator',
     ]
     for name in widget_names:
-        monkeypatch.setattr(plotter_module.ttk, name, SimpleWidget)
-    monkeypatch.setattr(plotter_module.ttk, 'Entry', SimpleEntry)
-    monkeypatch.setattr(plotter_module.ttk, 'Combobox', SimpleCombobox)
+        monkeypatch.setattr(_plotter_ui_module.ttk, name, SimpleWidget)
+    monkeypatch.setattr(_plotter_ui_module.ttk, 'Entry', SimpleEntry)
+    monkeypatch.setattr(_plotter_ui_module.ttk, 'Combobox', SimpleCombobox)
 
 
 @pytest.fixture
 def selection_screen_ui(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    original_screen_bases = plotter_module._OrbitalSelectionScreen.__bases__  # ruff:ignore[private-member-access]
-    original_tree_bases = plotter_module._OrbitalsTreeview.__bases__  # ruff:ignore[private-member-access]
-    plotter_module._OrbitalSelectionScreen.__bases__ = (SimpleToplevel,)  # ruff:ignore[private-member-access]
-    plotter_module._OrbitalsTreeview.__bases__ = (SimpleTreeview,)  # ruff:ignore[private-member-access]
-    monkeypatch.setattr(plotter_module.ttk, 'Frame', SimpleWidget)
-    monkeypatch.setattr(plotter_module.ttk, 'Button', SimpleWidget)
-    monkeypatch.setattr(plotter_module.ttk, 'Label', SimpleWidget)
+    original_screen_bases = plotter_module._OrbitalSelectionScreen.__bases__
+    original_tree_bases = _plotter_ui_module._OrbitalsTreeview.__bases__
+    plotter_module._OrbitalSelectionScreen.__bases__ = (SimpleToplevel,)
+    _plotter_ui_module._OrbitalsTreeview.__bases__ = (SimpleTreeview,)
+    monkeypatch.setattr(_plotter_ui_module.ttk, 'Frame', SimpleWidget)
+    monkeypatch.setattr(_plotter_ui_module.ttk, 'Button', SimpleWidget)
+    monkeypatch.setattr(_plotter_ui_module.ttk, 'Label', SimpleWidget)
     yield
-    plotter_module._OrbitalSelectionScreen.__bases__ = original_screen_bases  # ruff:ignore[private-member-access]
-    plotter_module._OrbitalsTreeview.__bases__ = original_tree_bases  # ruff:ignore[private-member-access]
+    plotter_module._OrbitalSelectionScreen.__bases__ = original_screen_bases
+    _plotter_ui_module._OrbitalsTreeview.__bases__ = original_tree_bases
 
 
 def test_orbital_selection_screen_navigation_and_close(selection_screen_ui: None) -> None:
     _ = selection_screen_ui
     plotter = SelectionPlotter()
-    screen = plotter_module._OrbitalSelectionScreen(plotter)  # ruff:ignore[private-member-access]
-    plotter.selection_screen = screen
+    screen = plotter_module._OrbitalSelectionScreen(plotter)
+    plotter._selection_screen = screen
 
-    screen._export_current_orb_radio = SimpleWidget()  # ruff:ignore[private-member-access]
-    screen.update_nav_button_states()
+    screen._export_current_orb_radio = SimpleWidget()
+    screen._update_nav_button_states()
     assert screen.prev_button.kwargs['state'] == plotter_module.tk.DISABLED
     assert screen.next_button.kwargs['state'] == plotter_module.tk.NORMAL
-    assert 'None' in screen._export_current_orb_radio.kwargs['text']  # ruff:ignore[private-member-access]
-    assert screen._export_current_orb_radio.kwargs['state'] == plotter_module.tk.DISABLED  # ruff:ignore[private-member-access]
+    assert 'None' in screen._export_current_orb_radio.kwargs['text']
+    assert screen._export_current_orb_radio.kwargs['state'] == plotter_module.tk.DISABLED
 
     screen.current_mo_ind = 0
-    screen.update_nav_button_states()
+    screen._update_nav_button_states()
     assert screen.next_button.kwargs['state'] == plotter_module.tk.NORMAL
-    assert '#1' in screen._export_current_orb_radio.kwargs['text']  # ruff:ignore[private-member-access]
+    assert '#1' in screen._export_current_orb_radio.kwargs['text']
 
     screen.current_mo_ind = -1
-    screen.next_plot()
-    screen.next_plot()
+    screen._next_plot()
+    screen._next_plot()
     assert plotter.plot_calls[:2] == [0, 1]
     assert screen.orb_tv.current_mo_ind == 1
 
-    screen.prev_plot()
+    screen._prev_plot()
     assert plotter.plot_calls[-1] == 0
-    screen.prev_plot()  # Should be no-op when at the start
+    screen._prev_plot()  # Should be no-op when at the start
     assert plotter.plot_calls[-1] == 0
 
-    plotter.tabulator._parser.mos = []  # type: ignore[attr-defined]  # ruff:ignore[private-member-access]
+    plotter.tabulator._parser.mos = []  # type: ignore[attr-defined]
     before = plotter.plot_calls.copy()
     screen.current_mo_ind = -1
-    screen.next_plot()
+    screen._next_plot()
     assert plotter.plot_calls == before
 
-    screen.plot_orbital(0)
+    screen._plot_orbital(0)
     assert screen.current_mo_ind == 0
 
-    screen.on_close()
-    assert not plotter.on_screen
-    assert plotter.pv_plotter.closed
+    screen._on_close()
+    assert not plotter._on_screen
+    assert plotter._pv_plotter.closed
     assert screen.destroyed
-    assert plotter.tk_root.quit_calls == 1
-    assert plotter.tk_root.destroy_calls == 1
+    assert plotter._tk_root.quit_calls == 1
+    assert plotter._tk_root.destroy_calls == 1
 
 
 def test_orbitals_treeview_populate_and_select(selection_screen_ui: None) -> None:
@@ -1942,36 +1947,36 @@ def test_orbitals_treeview_populate_and_select(selection_screen_ui: None) -> Non
 
     selection_screen = SimpleNamespace(
         current_mo_ind=-1,
-        plot_orbital=record_plot,
-        update_nav_button_states=record_update,
+        _plot_orbital=record_plot,
+        _update_nav_button_states=record_update,
         _loading=False,
     )
 
-    tree = plotter_module._OrbitalsTreeview(selection_screen)  # ruff:ignore[private-member-access]
+    tree = _plotter_ui_module._OrbitalsTreeview(selection_screen)
     mos = [
         SimpleNamespace(sym='s', occ=2.0, energy=-0.5),
         SimpleNamespace(sym='s', occ=1.0, energy=-0.3),
         SimpleNamespace(sym='p', occ=1.0, energy=-0.1),
     ]
-    tree.populate_tree(mos)
+    tree._populate_tree(mos)
     expected_children = 3
     assert len(tree.get_children()) == expected_children
-    assert tree._items[1]['values'][1].startswith('s.')  # ruff:ignore[private-member-access]
+    assert tree._items[1]['values'][1].startswith('s.')
 
     tree.current_mo_ind = 1
-    tree.highlight_orbital(2)
-    assert tree._items[1]['tags'] == ('!hightlight',)  # ruff:ignore[private-member-access]
-    assert tree._items[2]['tags'] == ('highlight',)  # ruff:ignore[private-member-access]
+    tree._highlight_orbital(2)
+    assert tree._items[1]['tags'] == ('!hightlight',)
+    assert tree._items[2]['tags'] == ('highlight',)
     expected_seen = 2
     assert tree.seen == expected_seen
 
     tree.set_selection(1)
-    tree.on_select(SimpleNamespace())
+    tree._on_select(SimpleNamespace())
     assert selection_screen.current_mo_ind == 1
     assert plot_calls == [1]
     assert updates
     assert tree.current_mo_ind == 1
     assert tree.selection() == ()
 
-    tree.erase()
+    tree._erase()
     assert tree.get_children() == []

@@ -12,15 +12,10 @@ from matplotlib.colors import LinearSegmentedColormap
 from numpy.typing import NDArray
 from pyvistaqt import BackgroundPlotter
 
-from . import plotter_ui as _plotter_ui
 from ._config_module import Config
+from ._plotter_ui import _OrbitalSelectionScreen, _PlotterUI
 from ._plotting_objects import Molecule
-from .plotter_ui import _OrbitalSelectionScreen, _PlotterUI
 from .tabulator import GridType, Tabulator
-
-_OrbitalsTreeview = _plotter_ui._OrbitalsTreeview  # ruff:ignore[private-member-access] - compatibility re-export
-filedialog = _plotter_ui.filedialog
-ttk = _plotter_ui.ttk
 
 
 def _describe_source(source: str | list[str]) -> str:
@@ -42,6 +37,8 @@ def _describe_source(source: str | list[str]) -> str:
 
 
 logger = logging.getLogger(__name__)
+
+__all__ = ['Plotter']
 
 config = Config()
 _GTO_EXECUTOR = ThreadPoolExecutor(max_workers=1)
@@ -71,36 +68,8 @@ class Plotter(_PlotterUI):
 
     Attributes
     ----------
-    on_screen : bool
-        Indicates if the plotter window is currently open.
     tabulator : Tabulator
         The Tabulator object used for tabulating GTOs and MOs.
-    molecule : Molecule
-        The Molecule object representing the molecular structure.
-    molecule_opacity : float
-        The opacity of the molecule in the visualization.
-    molecule_actors : list[pv.Actor]
-        List of PyVista actors representing the molecule.
-    atom_actors : list[pv.Actor]
-        List of PyVista actors representing the atoms.
-    bond_actors : list[pv.Actor]
-        List of PyVista actors representing the bonds.
-    tk_root : tk.Tk | None
-        The Tkinter root window.
-    pv_plotter : BackgroundPlotter
-        The PyVista BackgroundPlotter for 3D rendering.
-    molecule_actors : list[pv.Actor]
-        List of PyVista actors representing the molecule.
-    orb_mesh : pv.StructuredGrid
-        The mesh used for visualizing molecular orbitals.
-    orb_actor : pv.Actor | None
-        The PyVista actor for the currently displayed molecular orbital.
-    contour : float
-        The contour level for molecular orbital visualization.
-    opacity : float
-        The opacity of the molecular orbital in the visualization.
-    cmap : str | LinearSegmentedColormap
-        The colormap used for molecular orbital visualization.
 
     Raises
     ------
@@ -109,8 +78,8 @@ class Plotter(_PlotterUI):
         (e.g., missing grid or GTO data when `only_molecule` is `False`, or has an UNKNOWN grid type).
     """
 
-    SPHERICAL_GRID_SETTINGS_WINDOW_SIZE = '400x350'
-    CARTESIAN_GRID_SETTINGS_WINDOW_SIZE = '650x400'
+    _SPHERICAL_GRID_SETTINGS_WINDOW_SIZE = '400x350'
+    _CARTESIAN_GRID_SETTINGS_WINDOW_SIZE = '650x400'
 
     def __init__(
         self,
@@ -121,25 +90,25 @@ class Plotter(_PlotterUI):
     ) -> None:
         logger.info('Initialising Plotter (only_molecule=%s)', only_molecule)
 
-        self.on_screen = True
-        self.only_molecule = only_molecule
-        self.selection_screen: _OrbitalSelectionScreen | None = None
+        self._on_screen = True
+        self._only_molecule = only_molecule
+        self._selection_screen: _OrbitalSelectionScreen | None = None
         self._gto_future: Future[NDArray[np.floating]] | None = None
         self._gtos_ready = only_molecule
         self._gto_start_time: float | None = None
         self._active_gto_job_id: int | None = None
         self._gto_job_counter = 0
 
-        self.tk_root = tk_root
-        self._no_prev_tk_root = self.tk_root is None
-        if self.tk_root is None:
-            self.tk_root = tk.Tk()
-            self.tk_root.withdraw()  # Hides window
+        self._tk_root = tk_root
+        self._no_prev_tk_root = self._tk_root is None
+        if self._tk_root is None:
+            self._tk_root = tk.Tk()
+            self._tk_root.withdraw()  # Hides window
             logger.debug('Created internal Tk root window for Plotter UI.')
 
-        self.pv_plotter = BackgroundPlotter(editor=False)
-        self.pv_plotter.set_background(config.background_color)
-        self.pv_plotter.show_axes()
+        self._pv_plotter = BackgroundPlotter(editor=False)
+        self._pv_plotter.set_background(config.background_color)
+        self._pv_plotter.show_axes()
         logger.debug('Configured PyVista plotter background colour to %s', config.background_color)
 
         self._add_orbital_menus_to_pv_plotter()
@@ -147,31 +116,25 @@ class Plotter(_PlotterUI):
         self._override_clear_all_button()
 
         if tabulator:
-            logger.info('Using provided Tabulator instance with grid type %s', tabulator._grid_type.value)  # ruff:ignore[private-member-access]
+            logger.info('Using provided Tabulator instance with grid type %s', tabulator.grid_type.value)
             if not hasattr(tabulator, 'grid'):
                 raise ValueError('Tabulator does not have grid attribute.')
 
-            if not hasattr(tabulator, 'gto_data') and not only_molecule:
+            if not hasattr(tabulator, 'gtos') and not only_molecule:
                 raise ValueError('Tabulator does not have tabulated GTOs.')
 
-            if tabulator._grid_type == GridType.UNKNOWN:  # ruff:ignore[private-member-access]
+            if tabulator.grid_type == GridType.UNKNOWN:
                 raise ValueError('The plotter only supports spherical and cartesian grids.')
-
-            # Check if grid is uniform (PyVista requires uniform grids)
-            if tabulator.original_axes is not None:
-                Tabulator._axis_spacing(tabulator.original_axes[0], 'x')  # ruff:ignore[private-member-access]
-                Tabulator._axis_spacing(tabulator.original_axes[1], 'y')  # ruff:ignore[private-member-access]
-                Tabulator._axis_spacing(tabulator.original_axes[2], 'z')  # ruff:ignore[private-member-access]
 
             self.tabulator = tabulator
         else:
             logger.info('Creating Tabulator for source %s', _describe_source(source))
             self.tabulator = Tabulator(source, only_molecule=only_molecule)
-        self._gtos_ready = self.only_molecule or hasattr(self.tabulator, '_gtos')
+        self._gtos_ready = self._only_molecule or hasattr(self.tabulator, '_gtos')
 
-        self.molecule: Molecule
-        self.molecule_opacity = config.molecule.opacity
-        self.load_molecule(config)
+        self._molecule: Molecule
+        self._molecule_opacity = config.molecule.opacity
+        self._load_molecule(config)
 
         # If no tabulator was passed, create default grid
         if not only_molecule and not tabulator:
@@ -185,7 +148,7 @@ class Plotter(_PlotterUI):
                 self.tabulator.spherical_grid(
                     np.linspace(
                         0,
-                        max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius),
+                        max(config.grid.max_radius_multiplier * self._molecule.max_radius, config.grid.min_radius),
                         config.grid.spherical.num_r_points,
                     ),
                     np.linspace(0, np.pi, config.grid.spherical.num_theta_points),
@@ -193,7 +156,7 @@ class Plotter(_PlotterUI):
                     tabulate_gtos=False,
                 )
             else:  # cartesian
-                r = max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius)
+                r = max(config.grid.max_radius_multiplier * self._molecule.max_radius, config.grid.min_radius)
                 logger.info(
                     'Generating default cartesian grid spanning ±%.2f with %dx%dx%d samples.',
                     r,
@@ -216,32 +179,32 @@ class Plotter(_PlotterUI):
             logger.info('Running in molecule-only mode; skipping orbital mesh creation.')
             if self._no_prev_tk_root:
                 logger.debug('Entering Tk main loop for molecule-only display.')
-                self.tk_root.mainloop()
+                self._tk_root.mainloop()
             return
 
-        self.orb_mesh = self._create_mo_mesh()
-        self.orb_actor: pv.Actor | None = None
+        self._orb_mesh = self._create_mo_mesh()
+        self._orb_actor: pv.Actor | None = None
 
         # Values for MO, not the molecule
-        self.contour = config.mo.contour
-        self.opacity = config.mo.opacity
+        self._contour = config.mo.contour
+        self._opacity = config.mo.opacity
 
         # Set colormap based on configuration
         if config.mo.custom_colors is not None:
             # Create custom colormap from two colors
-            self.cmap = self.custom_cmap_from_colors(config.mo.custom_colors)
+            self._cmap = self._custom_cmap_from_colors(config.mo.custom_colors)
         else:
-            self.cmap = config.mo.color_scheme
+            self._cmap = config.mo.color_scheme
 
-        if not self.only_molecule:
-            self.selection_screen = _OrbitalSelectionScreen(self)
+        if not self._only_molecule:
+            self._selection_screen = _OrbitalSelectionScreen(self)
             logger.debug('Orbital selection screen initialised.')
             if not self._gtos_ready:
-                self.selection_screen.set_loading_state(True)
+                self._selection_screen._set_loading_state(True)  # ruff:ignore[private-member-access]
 
         if self._no_prev_tk_root:
             logger.debug('Entering Tk main loop for full Plotter UI.')
-            self.tk_root.mainloop()
+            self._tk_root.mainloop()
 
     def wait_for_gtos(self, timeout: float | None = None) -> None:
         """Block until the background GTO tabulation finishes."""
@@ -254,7 +217,7 @@ class Plotter(_PlotterUI):
             self._apply_gtos_ready(gtos)
 
     @staticmethod
-    def custom_cmap_from_colors(colors: list[str]) -> LinearSegmentedColormap:
+    def _custom_cmap_from_colors(colors: list[str]) -> LinearSegmentedColormap:
         """Create a custom colormap from a list of colors.
 
         Parameters
@@ -271,7 +234,7 @@ class Plotter(_PlotterUI):
 
     def _schedule_gto_tabulation(self) -> None:
         """Submit background GTO tabulation work."""
-        if self.only_molecule or self._gtos_ready or self._gto_future is not None:
+        if self._only_molecule or self._gtos_ready or self._gto_future is not None:
             return
         logger.info('Starting background GTO tabulation...')
         self._gto_start_time = time.perf_counter()
@@ -306,8 +269,8 @@ class Plotter(_PlotterUI):
                 return
             self._apply_gtos_ready(gtos)
 
-        if self.tk_root is not None:
-            self.tk_root.after_idle(_finish_on_main_thread)
+        if self._tk_root is not None:
+            self._tk_root.after_idle(_finish_on_main_thread)
         else:
             _finish_on_main_thread()
 
@@ -321,11 +284,11 @@ class Plotter(_PlotterUI):
             elapsed = time.perf_counter() - self._gto_start_time
             logger.info('GTO tabulation completed in %.2fs.', elapsed)
             self._gto_start_time = None
-        self.orb_mesh = self._create_mo_mesh()
-        if self.selection_screen:
-            self.selection_screen.on_gtos_ready()
-            if self.selection_screen.current_mo_ind >= 0:
-                self.plot_orbital(self.selection_screen.current_mo_ind)
+        self._orb_mesh = self._create_mo_mesh()
+        if self._selection_screen:
+            self._selection_screen._on_gtos_ready()  # ruff:ignore[private-member-access]
+            if self._selection_screen.current_mo_ind >= 0:
+                self.plot_orbital(self._selection_screen.current_mo_ind)
 
     def _ensure_gtos_ready(self) -> bool:
         """Return True if GTO data are ready for orbital operations.
@@ -351,33 +314,33 @@ class Plotter(_PlotterUI):
         self._gto_start_time = None
         self._active_gto_job_id = None
 
-    def load_molecule(self, config: Config) -> None:
+    def _load_molecule(self, config: Config) -> None:
         """Reload the molecule from the parser data."""
-        self.molecule = Molecule(self.tabulator._parser.atoms, config)  # ruff:ignore[private-member-access]
-        logger.info('Loaded molecule with %d atoms.', len(self.molecule.atoms))
+        self._molecule = Molecule(self.tabulator._parser.atoms, config)  # ruff:ignore[private-member-access]
+        logger.info('Loaded molecule with %d atoms.', len(self._molecule.atoms))
 
-        for actor in self.molecule_actors if hasattr(self, 'molecule_actors') else []:
-            self.pv_plotter.remove_actor(actor)
+        for actor in self._molecule_actors if hasattr(self, '_molecule_actors') else []:
+            self._pv_plotter.remove_actor(actor)
 
-        self.molecule_actors, self.atom_actors, self.bond_actors = self.molecule.add_meshes(
-            self.pv_plotter,
-            self.molecule_opacity,
+        self._molecule_actors, self._atom_actors, self._bond_actors = self._molecule._add_meshes(  # ruff:ignore[private-member-access]
+            self._pv_plotter,
+            self._molecule_opacity,
         )
-        logger.debug('Added %d molecule actors to the scene.', len(self.molecule_actors))
+        logger.debug('Added %d molecule actors to the scene.', len(self._molecule_actors))
 
     def plot_orbital(self, orb_ind: int) -> None:
         """Render the selected orbital isosurface in the PyVista plotter."""
         if not self._ensure_gtos_ready():
             return
-        if self.orb_actor:
-            self.pv_plotter.remove_actor(self.orb_actor)
-            self.orb_actor = None
-        if self.selection_screen:
-            self.selection_screen.current_mo_ind = orb_ind
+        if self._orb_actor:
+            self._pv_plotter.remove_actor(self._orb_actor)
+            self._orb_actor = None
+        if self._selection_screen:
+            self._selection_screen.current_mo_ind = orb_ind
 
         if orb_ind == -1:
-            if self.selection_screen:
-                self.selection_screen.update_nav_button_states()
+            if self._selection_screen:
+                self._selection_screen._update_nav_button_states()  # ruff:ignore[private-member-access]
             logger.info('Clearing molecular orbital from scene.')
             return
 
@@ -391,52 +354,52 @@ class Plotter(_PlotterUI):
             mo.energy,
         )
 
-        self.orb_mesh['orbital'] = self.tabulator.tabulate_mos(orb_ind)
+        self._orb_mesh['orbital'] = self.tabulator.tabulate_mos(orb_ind)
 
-        contour_mesh = self.orb_mesh.contour([-self.contour, self.contour])
+        contour_mesh = self._orb_mesh.contour([-self._contour, self._contour])
 
-        self.orb_actor = self.pv_plotter.add_mesh(
+        self._orb_actor = self._pv_plotter.add_mesh(
             contour_mesh,
-            clim=[-self.contour, self.contour],
-            opacity=self.opacity,
+            clim=[-self._contour, self._contour],
+            opacity=self._opacity,
             show_scalar_bar=False,
-            cmap=self.cmap,
+            cmap=self._cmap,
             smooth_shading=True,
         )
-        if self.selection_screen:
-            self.selection_screen.update_nav_button_states()
+        if self._selection_screen:
+            self._selection_screen._update_nav_button_states()  # ruff:ignore[private-member-access]
 
     def _connect_pv_plotter_close_signal(self) -> None:
         """Connect the PyVista plotter close signal to handle closing both windows."""
 
         def on_pv_plotter_close() -> None:
             """Handle PyVista plotter close event by closing the selection screen and quitting."""
-            if self.on_screen:
-                self.on_screen = False
+            if self._on_screen:
+                self._on_screen = False
                 self._cancel_gto_future()
-                if self.selection_screen and self.selection_screen.winfo_exists():
-                    self.selection_screen.destroy()
-                if self.tk_root and self._no_prev_tk_root:
-                    self.tk_root.quit()
+                if self._selection_screen and self._selection_screen.winfo_exists():
+                    self._selection_screen.destroy()
+                if self._tk_root and self._no_prev_tk_root:
+                    self._tk_root.quit()
 
-        self.pv_plotter.app_window.signal_close.connect(on_pv_plotter_close)
+        self._pv_plotter.app_window.signal_close.connect(on_pv_plotter_close)
 
     def _clear_all(self) -> None:
         """Clear all actors from the plotter, including molecule and orbitals."""
-        if self.molecule_actors:
-            for actor in self.molecule_actors:
+        if self._molecule_actors:
+            for actor in self._molecule_actors:
                 actor.SetVisibility(False)
 
-        if self.orb_actor:
-            self.pv_plotter.remove_actor(self.orb_actor)
-            self.orb_actor = None
-            if self.selection_screen:
-                self.selection_screen.current_mo_ind = -1
-                self.selection_screen.update_nav_button_states()
+        if self._orb_actor:
+            self._pv_plotter.remove_actor(self._orb_actor)
+            self._orb_actor = None
+            if self._selection_screen:
+                self._selection_screen.current_mo_ind = -1
+                self._selection_screen._update_nav_button_states()  # ruff:ignore[private-member-access]
 
     def toggle_molecule(self) -> None:
         """Toggle the visibility of the molecule."""
-        if not self.molecule_actors:
+        if not self._molecule_actors:
             return
 
         if self.are_bonds_visible() != self.are_atoms_visible():
@@ -445,25 +408,25 @@ class Plotter(_PlotterUI):
             else:
                 self.toggle_bonds()
         else:
-            for actor in self.molecule_actors:
+            for actor in self._molecule_actors:
                 actor.SetVisibility(not actor.GetVisibility())
-            self.pv_plotter.update()
+            self._pv_plotter.update()
 
-        self.update_settings_button_states()
+        self._update_settings_button_states()
 
     def toggle_atoms(self) -> None:
         """Toggle the visibility of the molecule."""
-        if self.atom_actors:
-            for actor in self.atom_actors:
+        if self._atom_actors:
+            for actor in self._atom_actors:
                 actor.SetVisibility(not actor.GetVisibility())
-            self.pv_plotter.update()
+            self._pv_plotter.update()
 
     def toggle_bonds(self) -> None:
         """Toggle the visibility of the molecule."""
-        if self.bond_actors:
-            for actor in self.bond_actors:
+        if self._bond_actors:
+            for actor in self._bond_actors:
                 actor.SetVisibility(not actor.GetVisibility())
-            self.pv_plotter.update()
+            self._pv_plotter.update()
 
     def is_molecule_visible(self) -> bool:
         """Check if the molecule is currently visible in the plotter.
@@ -473,8 +436,8 @@ class Plotter(_PlotterUI):
         bool
             `True` if the molecule is visible, `False` otherwise.
         """
-        if self.molecule_actors:
-            return bool(self.molecule_actors[0].GetVisibility())  # Check visibility of the first actor
+        if self._molecule_actors:
+            return bool(self._molecule_actors[0].GetVisibility())  # Check visibility of the first actor
         return False
 
     def are_atoms_visible(self) -> bool:
@@ -485,8 +448,8 @@ class Plotter(_PlotterUI):
         bool
             `True` if the atoms are visible, `False` otherwise.
         """
-        if self.atom_actors:
-            return bool(self.atom_actors[0].GetVisibility())  # Check visibility of the first actor
+        if self._atom_actors:
+            return bool(self._atom_actors[0].GetVisibility())  # Check visibility of the first actor
         return False
 
     def are_bonds_visible(self) -> bool:
@@ -497,8 +460,8 @@ class Plotter(_PlotterUI):
         bool
             `True` if the bonds are visible, `False` otherwise.
         """
-        if self.bond_actors:
-            return bool(self.bond_actors[0].GetVisibility())  # Check visibility of the first actor
+        if self._bond_actors:
+            return bool(self._bond_actors[0].GetVisibility())  # Check visibility of the first actor
         return False
 
     def _create_mo_mesh(self) -> pv.StructuredGrid:
@@ -515,11 +478,11 @@ class Plotter(_PlotterUI):
 
         # Pyvista needs the dimensions backwards
         # in other words, (phi, theta, r) or (z, y, x)
-        mesh.dimensions = self.tabulator._grid_dimensions[::-1]  # ruff:ignore[private-member-access]
+        mesh.dimensions = self.tabulator.grid_dimensions[::-1]
 
         return mesh
 
-    def update_mesh(
+    def _update_mesh(
         self,
         i_points: NDArray[np.floating],
         j_points: NDArray[np.floating],
@@ -547,8 +510,11 @@ class Plotter(_PlotterUI):
         """
         self._cancel_gto_future()
         self._gtos_ready = False
-        if self.selection_screen:
-            self.selection_screen.set_loading_state(True, 'Updating grid...')
+        if self._selection_screen:
+            self._selection_screen._set_loading_state(  # ruff:ignore[private-member-access]
+                True,
+                'Updating grid...',
+            )
         if grid_type == GridType.CARTESIAN:
             self.tabulator.cartesian_grid(i_points, j_points, k_points)
         elif grid_type == GridType.SPHERICAL:
@@ -556,7 +522,7 @@ class Plotter(_PlotterUI):
         else:
             raise ValueError('The plotter only supports spherical and cartesian grids.')
 
-        dimensions = 'x'.join(str(val) for val in self.tabulator._grid_dimensions)  # ruff:ignore[private-member-access]
+        dimensions = 'x'.join(str(val) for val in self.tabulator.grid_dimensions)
         logger.info(
             'Rebuilt %s grid with %d points (dimensions %s).',
             grid_type.value,
@@ -564,9 +530,9 @@ class Plotter(_PlotterUI):
             dimensions,
         )
 
-        self.orb_mesh = self._create_mo_mesh()
+        self._orb_mesh = self._create_mo_mesh()
         self._gtos_ready = True
-        if self.selection_screen:
-            self.selection_screen.on_gtos_ready()
-            if self.selection_screen.current_mo_ind >= 0:
-                self.plot_orbital(self.selection_screen.current_mo_ind)
+        if self._selection_screen:
+            self._selection_screen._on_gtos_ready()  # ruff:ignore[private-member-access]
+            if self._selection_screen.current_mo_ind >= 0:
+                self.plot_orbital(self._selection_screen.current_mo_ind)

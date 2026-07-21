@@ -1,142 +1,18 @@
 """Read and parse a molden file."""
 
 import logging
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.special import gamma
+
+from .models import Atom, GaussianPrimitive, MolecularOrbital, Shell
+
+__all__ = ['BOHR_PER_ANGSTROM', 'Atom', 'GaussianPrimitive', 'MolecularOrbital', 'Parser', 'Shell']
+
+BOHR_PER_ANGSTROM = 1.8897259886
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class _Atom:
-    """Represents an atom with its properties and associated shells.
-
-    Parameters
-    ----------
-    label : str
-        The atomic label (e.g., 'C', 'O', 'H').
-    atomic_number : int
-        The atomic number of the element.
-    position : NDArray[np.floating]
-        The 3D position coordinates of the atom.
-    shells : list[_Shell]
-        List of electron shells associated with this atom.
-    """
-
-    label: str
-    atomic_number: int
-    position: NDArray[np.floating]
-    shells: list['_Shell']
-
-
-@dataclass
-class _MolecularOrbital:
-    """Represents a molecular orbital with its properties.
-
-    Parameters
-    ----------
-    sym : str
-        The symmetry label of the molecular orbital.
-    energy : float
-        The energy of the molecular orbital.
-    spin : str
-        The spin state of the molecular orbital ('Alpha' or 'Beta').
-    occ : int
-        The occupation number of the molecular orbital.
-    """
-
-    sym: str
-    energy: float
-    spin: str
-    occ: int
-
-
-class _GTO:
-    """Represents a Gaussian-type orbital (GTO) primitive.
-
-    Parameters
-    ----------
-    exp : float
-        The exponent of the Gaussian function.
-    coeff : float
-        The coefficient of the Gaussian function.
-    """
-
-    def __init__(self, exp: float, coeff: float) -> None:
-        """Initialize a GTO primitive with exponent and coefficient."""
-        self.exp = exp
-        self.coeff = coeff
-
-        self.norm = 0.0
-
-    def normalize(self, l: int) -> None:
-        """Normalize the GTO primitive.
-
-        Parameters
-        ----------
-        l : int
-            The angular momentum quantum number.
-
-        Notes
-        -----
-        Uses the normalization factor from Jiyun Kuang and C D Lin 1997
-        J. Phys. B: At. Mol. Opt. Phys. 30 2529, page 2532.
-        """
-        # See (Jiyun Kuang and C D Lin 1997 J. Phys. B: At. Mol. Opt. Phys. 30 2529)
-        # page 2532 for the normalization factor
-        self.norm = np.sqrt(2 * (2 * self.exp) ** (l + 1.5) / gamma(l + 1.5))
-
-
-class _Shell:
-    """Represents an electron shell containing multiple GTO primitives.
-
-    Parameters
-    ----------
-    l : int
-        The angular momentum quantum number of the shell.
-    gtos : list[_GTO]
-        List of GTO primitives that compose this shell.
-    """
-
-    def __init__(self, l: int, gtos: list[_GTO]) -> None:
-        """Initialize a shell with angular momentum and GTO primitives."""
-        self.l = l
-        self.gtos = gtos
-
-        self.norm = 0.0
-        self.gto_norms = np.empty(len(gtos), dtype=float)
-        self.gto_exps = np.array([gto.exp for gto in gtos], dtype=float)
-        self.gto_coeffs = np.array([gto.coeff for gto in gtos], dtype=float)
-        self.prefactor = np.empty(len(gtos), dtype=float)
-
-    def normalize(self) -> None:
-        """Normalize the shell.
-
-        Notes
-        -----
-        Uses the normalization factor from Jiyun Kuang and C D Lin 1997
-        J. Phys. B: At. Mol. Opt. Phys. 30 2529, equations 18 and 20.
-        """
-        for idx, gto in enumerate(self.gtos):
-            gto.normalize(self.l)
-            self.gto_norms[idx] = gto.norm
-
-        overlap = 0.0
-        for i_gto in self.gtos:
-            for j_gto in self.gtos:
-                overlap += (
-                    i_gto.coeff
-                    * j_gto.coeff
-                    * (2 * np.sqrt(i_gto.exp * j_gto.exp) / (i_gto.exp + j_gto.exp)) ** (self.l + 1.5)
-                )
-
-        self.norm = 1 / np.sqrt(overlap)
-        self.prefactor = self.norm * self.gto_norms * self.gto_coeffs
 
 
 class Parser:
@@ -152,13 +28,13 @@ class Parser:
 
     Attributes
     ----------
-    atoms : list[_Atom]
+    atoms : list[Atom]
         A list of Atom objects containing the label, atomic number,
         and position for each atom.
-    shells : list[_Shell]
-        A list of `_Shell` objects containing the atom, angular
+    shells : list[Shell]
+        A list of `Shell` objects containing the atom, angular
         momentum quantum number (l), and GTOs for each shell.
-    mos : list[_MolecularOrbital]
+    mos : list[MolecularOrbital]
         A list of MolecularOrbital objects containing the symmetry,
         energy, and coefficients for each MO.
     mo_coeffs : NDArray[np.floating]
@@ -171,38 +47,39 @@ class Parser:
         If the source is not a valid molden file path, or molden file lines.
     """
 
-    ANGSTROM_TO_BOHR = 1.8897259886
-
     def __init__(
         self,
-        source: str | list[str] | Any,
+        source: str | list[str],
         only_molecule: bool = False,
     ) -> None:
         """Initialize the Parser with either a filename or molden lines."""
         if isinstance(source, str):
             with Path(source).open('r') as file:
-                self.molden_lines = file.readlines()
+                self._molden_lines = file.readlines()
         elif isinstance(source, list):
-            self.molden_lines = source
+            self._molden_lines = source
         else:
             raise TypeError('Source must be a filename (str) or list of lines (list[str]).')
 
         # Remove leading/trailing whitespace and newline characters
-        self.molden_lines = [line.strip() for line in self.molden_lines]
+        self._molden_lines = [line.strip() for line in self._molden_lines]
 
-        self.check_molden_format()
+        self._check_molden_format()
 
-        self._atom_ind, self._gto_ind, self._mo_ind = self.divide_molden_lines()
+        self._atom_ind, self._gto_ind, self._mo_ind = self._divide_molden_lines()
 
-        self.atoms = self.get_atoms()
+        self.atoms = self._parse_atoms()
+        self.shells: list[Shell] = []
+        self.mos: list[MolecularOrbital] = []
+        self.mo_coeffs: NDArray[np.floating] = np.empty((0, 0), dtype=float)
 
         if only_molecule:
             return
 
-        self.shells = self.get_shells()
-        self.mos, self.mo_coeffs = self.get_mos()
+        self.shells = self._parse_shells()
+        self.mos, self.mo_coeffs = self._parse_mos()
 
-    def check_molden_format(self) -> None:
+    def _check_molden_format(self) -> None:
         """Check if the provided molden lines conform to the expected format.
 
         Raises
@@ -213,24 +90,24 @@ class Parser:
 
         """
         logger.info('Checking molden format...')
-        if not self.molden_lines:
+        if not self._molden_lines:
             raise ValueError('The provided molden lines are empty.')
 
-        if not any('[Atoms]' in line for line in self.molden_lines):
+        if not any('[Atoms]' in line for line in self._molden_lines):
             raise ValueError("No '[Atoms]' section found in the molden file.")
 
-        if not any('[GTO]' in line for line in self.molden_lines):
+        if not any('[GTO]' in line for line in self._molden_lines):
             raise ValueError("No '[GTO]' section found in the molden file.")
 
-        if not any('[MO]' in line for line in self.molden_lines):
+        if not any('[MO]' in line for line in self._molden_lines):
             raise ValueError("No '[MO]' section found in the molden file.")
 
-        if not any(orbs in line for orbs in ['5D', '9G'] for line in self.molden_lines):
+        if not any(orbs in line for orbs in ['5D', '9G'] for line in self._molden_lines):
             raise ValueError('Cartesian orbitals functions are not currently supported.')
 
         logger.info('Molden format check passed.')
 
-    def divide_molden_lines(self) -> tuple[int, int, int]:
+    def _divide_molden_lines(self) -> tuple[int, int, int]:
         """Divide the molden lines into sections for atoms, GTOs, and MOs.
 
         Returns
@@ -245,53 +122,53 @@ class Parser:
 
         """
         logger.info('Dividing molden lines into sections...')
-        if '[Atoms] AU' in self.molden_lines:
-            atom_ind = self.molden_lines.index('[Atoms] AU')
-        elif '[Atoms] Angs' in self.molden_lines:
-            atom_ind = self.molden_lines.index('[Atoms] Angs')
+        if '[Atoms] AU' in self._molden_lines:
+            atom_ind = self._molden_lines.index('[Atoms] AU')
+        elif '[Atoms] Angs' in self._molden_lines:
+            atom_ind = self._molden_lines.index('[Atoms] Angs')
         else:
             raise ValueError('No (AU/Angs) in [Atoms] section found in the molden file.')
 
-        gto_ind = self.molden_lines.index('[GTO]')
+        gto_ind = self._molden_lines.index('[GTO]')
 
-        mo_ind = self.molden_lines.index('[MO]')
+        mo_ind = self._molden_lines.index('[MO]')
 
         logger.info('Finished dividing molden lines.')
         return atom_ind, gto_ind, mo_ind
 
-    def get_atoms(self) -> list[_Atom]:
+    def _parse_atoms(self) -> list[Atom]:
         """Parse the atoms from the molden file.
 
         Returns
         -------
-        list[_Atom]
+        list[Atom]
             A list of Atom objects containing the label, atomic number,
             and position for each atom.
 
         """
         logger.info('Parsing atoms...')
-        angs = 'Angs' in self.molden_lines[self._atom_ind]
+        angs = 'Angs' in self._molden_lines[self._atom_ind]
 
         atoms = []
-        for line in self.molden_lines[self._atom_ind + 1 : self._gto_ind]:
+        for line in self._molden_lines[self._atom_ind + 1 : self._gto_ind]:
             label, _, atomic_number, *coords = line.split()
 
             position = np.array([float(coord) for coord in coords], dtype=float)
             if angs:
-                position *= self.ANGSTROM_TO_BOHR
+                position *= BOHR_PER_ANGSTROM
 
-            atoms.append(_Atom(label, int(atomic_number), position, []))
+            atoms.append(Atom(label, int(atomic_number), position, []))
 
         logger.info('Parsed %s atoms.', len(atoms))
         return atoms
 
-    def get_shells(self) -> list[_Shell]:
+    def _parse_shells(self) -> list[Shell]:
         """Parse the Gaussian-type orbitals (GTOs) from the molden file.
 
         Returns
         -------
-        list[_Shell]
-            A list of `_Shell` objects containing the atom, angular
+        list[Shell]
+            A list of `Shell` objects containing the atom, angular
             momentum quantum number (l), and GTOs for each shell.
 
         Raises
@@ -305,7 +182,7 @@ class Parser:
 
         shell_labels = ['s', 'p', 'd', 'f', 'g']
 
-        lines = iter(self.molden_lines[self._gto_ind + 1 : self._mo_ind])
+        lines = iter(self._molden_lines[self._gto_ind + 1 : self._mo_ind])
 
         shells = []
         for atom in self.atoms:
@@ -325,10 +202,10 @@ class Parser:
                 gtos = []
                 for _ in range(int(num_gtos)):
                     exp, coeff = next(lines).split()
-                    gtos.append(_GTO(float(exp), float(coeff)))
+                    gtos.append(GaussianPrimitive(float(exp), float(coeff)))
 
-                shell = _Shell(shell_labels.index(shell_label), gtos)
-                shell.normalize()
+                shell = Shell(shell_labels.index(shell_label), gtos)
+                shell._normalize()  # ruff:ignore[private-member-access]
 
                 atom.shells.append(shell)
                 shells.append(shell)
@@ -336,7 +213,7 @@ class Parser:
         logger.info('Parsed %s GTOs.', len(shells))
         return shells
 
-    def get_mos(self, sort: bool = True) -> tuple[list[_MolecularOrbital], NDArray[np.floating]]:
+    def _parse_mos(self, sort: bool = True) -> tuple[list[MolecularOrbital], NDArray[np.floating]]:
         """Parse the molecular orbitals (MOs) from the molden file.
 
         Parameters
@@ -347,7 +224,7 @@ class Parser:
 
         Returns
         -------
-        tuple[list[_MolecularOrbital], NDArray[np.floating]]
+        tuple[list[MolecularOrbital], NDArray[np.floating]]
             Two-item tuple: the first element contains the parsed molecular
             orbitals (symmetry, energy, spin, occupation), and the second is a
             2D NumPy array of orbital coefficients shaped
@@ -359,7 +236,7 @@ class Parser:
 
         order = self._gto_order()
 
-        lines = self.molden_lines[self._mo_ind + 1 :]
+        lines = self._molden_lines[self._mo_ind + 1 :]
         total_num_mos = sum('Sym=' in line for line in lines)
 
         lines = iter(lines)
@@ -386,7 +263,7 @@ class Parser:
             # Store coefficients in shared array
             mo_coeffs[mo_ind] = np.array(coeffs, dtype=float)[order]
 
-            mo = _MolecularOrbital(
+            mo = MolecularOrbital(
                 sym=sym,
                 energy=energy,
                 spin=spin,
