@@ -145,21 +145,21 @@ class Plotter:
         self._override_clear_all_button()
 
         if tabulator:
-            logger.info('Using provided Tabulator instance with grid type %s', tabulator._grid_type.value)  # noqa: SLF001
+            logger.info('Using provided Tabulator instance with grid type %s', tabulator._grid_type.value)  # ruff:ignore[private-member-access]
             if not hasattr(tabulator, 'grid'):
                 raise ValueError('Tabulator does not have grid attribute.')
 
             if not hasattr(tabulator, 'gto_data') and not only_molecule:
                 raise ValueError('Tabulator does not have tabulated GTOs.')
 
-            if tabulator._grid_type == GridType.UNKNOWN:  # noqa: SLF001
+            if tabulator._grid_type == GridType.UNKNOWN:  # ruff:ignore[private-member-access]
                 raise ValueError('The plotter only supports spherical and cartesian grids.')
 
             # Check if grid is uniform (PyVista requires uniform grids)
             if tabulator.original_axes is not None:
-                Tabulator._axis_spacing(tabulator.original_axes[0], 'x')  # noqa: SLF001
-                Tabulator._axis_spacing(tabulator.original_axes[1], 'y')  # noqa: SLF001
-                Tabulator._axis_spacing(tabulator.original_axes[2], 'z')  # noqa: SLF001
+                Tabulator._axis_spacing(tabulator.original_axes[0], 'x')  # ruff:ignore[private-member-access]
+                Tabulator._axis_spacing(tabulator.original_axes[1], 'y')  # ruff:ignore[private-member-access]
+                Tabulator._axis_spacing(tabulator.original_axes[2], 'z')  # ruff:ignore[private-member-access]
 
             self.tabulator = tabulator
         else:
@@ -311,7 +311,7 @@ class Plotter:
 
     def _apply_gtos_ready(self, gtos: NDArray[np.floating]) -> None:
         """Store computed GTOs and update UI state."""
-        self.tabulator._gtos = gtos  # noqa: SLF001
+        self.tabulator._gtos = gtos  # ruff:ignore[private-member-access]
         self._gtos_ready = True
         self._gto_future = None
         self._active_gto_job_id = None
@@ -351,7 +351,7 @@ class Plotter:
 
     def load_molecule(self, config: Config) -> None:
         """Reload the molecule from the parser data."""
-        self.molecule = Molecule(self.tabulator._parser.atoms, config)  # noqa: SLF001
+        self.molecule = Molecule(self.tabulator._parser.atoms, config)  # ruff:ignore[private-member-access]
         logger.info('Loaded molecule with %d atoms.', len(self.molecule.atoms))
 
         for actor in self.molecule_actors if hasattr(self, 'molecule_actors') else []:
@@ -728,20 +728,31 @@ class Plotter:
 
         # Perform the export
         try:
-            if file_format in {'svg', 'pdf'}:
-                # Use save_graphic for vector formats
-                self.pv_plotter.save_graphic(file_path)
-            else:
-                # Use screenshot for raster formats
-                self.pv_plotter.screenshot(
-                    file_path,
-                    transparent_background=transparent if file_format == 'png' else False,
-                )
-
+            self._save_image(file_path, file_format, transparent)
             messagebox.showinfo('Export Successful', f'Image exported successfully to:\n{file_path}')
             export_window.destroy()
         except (RuntimeError, OSError, ValueError) as e:
             messagebox.showerror('Export Failed', f'Failed to export image:\n\n{e!s}')
+
+    def _save_image(self, file_path: str, file_format: str, transparent: bool) -> None:
+        """Save an image using the exporter for its file format.
+
+        Parameters
+        ----------
+        file_path : str
+            Destination path for the exported image.
+        file_format : str
+            Selected image format.
+        transparent : bool
+            Whether PNG output should use a transparent background.
+        """
+        if file_format in {'svg', 'pdf'}:
+            self.pv_plotter.save_graphic(file_path)
+        else:
+            self.pv_plotter.screenshot(
+                file_path,
+                transparent_background=transparent if file_format == 'png' else False,
+            )
 
     def _settings_parent(self) -> tk.Misc:
         """Return the appropriate parent widget for settings dialogs.
@@ -782,7 +793,7 @@ class Plotter:
         ttk.Label(settings_frame, text='MO Grid parameters').grid(row=0, column=0, padx=5, pady=5, columnspan=5)
 
         self.grid_type_radio_var = tk.StringVar()
-        self.grid_type_radio_var.set(self.tabulator._grid_type.value)  # noqa: SLF001
+        self.grid_type_radio_var.set(self.tabulator._grid_type.value)  # ruff:ignore[private-member-access]
 
         ttk.Label(settings_frame, text='Spherical grid:').grid(row=1, column=0, padx=5, pady=5)
         sph_grid_type_button = ttk.Radiobutton(
@@ -873,9 +884,8 @@ class Plotter:
     def apply_mo_contour(self) -> None:
         """Apply contour changes immediately."""
         try:
-            new_contour = float(self.contour_entry.get().strip())
-            self.contour = new_contour
-            logger.info('Set molecular orbital contour to %.2f.', new_contour)
+            self.contour = float(self.contour_entry.get().strip())
+            logger.info('Set molecular orbital contour to %.2f.', self.contour)
             # Replot the current orbital with the new contour
             idx = self._get_current_mo_index()
             if idx >= 0:
@@ -991,13 +1001,17 @@ class Plotter:
         """Apply background color changes immediately."""
         try:
             color = self.background_color_entry.get().strip()
-            if mcolors.is_color_like(color):
-                self.pv_plotter.set_background(color)
-                logger.info('Set background color to %s.', color)
-            else:
-                messagebox.showerror('Invalid Input', f'"{color}" is not a valid color.')
+            self._set_background_color(color)
         except (ValueError, RuntimeError) as e:
             messagebox.showerror('Error', f'Failed to set background color: {e!s}')
+
+    def _set_background_color(self, color: str) -> None:
+        """Set the background color when the value is valid."""
+        if mcolors.is_color_like(color):
+            self.pv_plotter.set_background(color)
+            logger.info('Set background color to %s.', color)
+        else:
+            messagebox.showerror('Invalid Input', f'"{color}" is not a valid color.')
 
     def on_mo_color_scheme_change(self, _event: tk.Event) -> None:
         """Handle MO color scheme dropdown change to show/hide custom color entries."""
@@ -1286,7 +1300,7 @@ class Plotter:
         self.phi_points_entry.delete(0, tk.END)
 
         # Previous grid was cartesian, so use default values
-        if self.tabulator._grid_type == GridType.CARTESIAN:  # noqa: SLF001
+        if self.tabulator._grid_type == GridType.CARTESIAN:  # ruff:ignore[private-member-access]
             self.radius_entry.insert(
                 0,
                 str(max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius)),
@@ -1296,10 +1310,10 @@ class Plotter:
             self.phi_points_entry.insert(0, str(config.grid.spherical.num_phi_points))
             return
 
-        num_r, num_theta, num_phi = self.tabulator._grid_dimensions  # noqa: SLF001
+        num_r, num_theta, num_phi = self.tabulator._grid_dimensions  # ruff:ignore[private-member-access]
 
         # The last point of the grid for sure has the largest r
-        r, _, _ = Tabulator._cartesian_to_spherical(*self.tabulator.grid[-1, :])  # noqa: SLF001
+        r, _, _ = Tabulator._cartesian_to_spherical(*self.tabulator.grid[-1, :])  # ruff:ignore[private-member-access]
 
         self.radius_entry.insert(0, str(r))
         self.radius_points_entry.insert(0, str(num_r))
@@ -1321,7 +1335,7 @@ class Plotter:
         self.z_num_points_entry.delete(0, tk.END)
 
         # Previous grid was sphesical, so use adapted default values
-        if self.tabulator._grid_type == GridType.SPHERICAL:  # noqa: SLF001
+        if self.tabulator._grid_type == GridType.SPHERICAL:  # ruff:ignore[private-member-access]
             r = max(config.grid.max_radius_multiplier * self.molecule.max_radius, config.grid.min_radius)
 
             self.x_min_entry.insert(0, str(-r))
@@ -1337,7 +1351,7 @@ class Plotter:
             self.z_num_points_entry.insert(0, str(config.grid.cartesian.num_z_points))
             return
 
-        x_num, y_num, z_num = self.tabulator._grid_dimensions  # noqa: SLF001
+        x_num, y_num, z_num = self.tabulator._grid_dimensions  # ruff:ignore[private-member-access]
         x_min, y_min, z_min = self.tabulator.grid[0, :]
         x_max, y_max, z_max = self.tabulator.grid[-1, :]
 
@@ -1481,7 +1495,7 @@ class Plotter:
             phi = np.linspace(0, 2 * np.pi, num_phi_points)
 
             rr, tt, pp = np.meshgrid(r, theta, phi, indexing='ij')
-            xx, yy, zz = Tabulator._spherical_to_cartesian(rr, tt, pp)  # noqa: SLF001
+            xx, yy, zz = Tabulator._spherical_to_cartesian(rr, tt, pp)  # ruff:ignore[private-member-access]
 
             new_grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
             if not np.array_equal(new_grid, self.tabulator.grid):
@@ -1657,7 +1671,7 @@ class Plotter:
             logger.info('Clearing molecular orbital from scene.')
             return
 
-        mo = self.tabulator._parser.mos[orb_ind]  # noqa: SLF001
+        mo = self.tabulator._parser.mos[orb_ind]  # ruff:ignore[private-member-access]
         logger.info(
             'Displaying molecular orbital #%d (%s, spin=%s, occ=%s, energy=%.6f au).',
             orb_ind + 1,
@@ -1791,7 +1805,7 @@ class Plotter:
 
         # Pyvista needs the dimensions backwards
         # in other words, (phi, theta, r) or (z, y, x)
-        mesh.dimensions = self.tabulator._grid_dimensions[::-1]  # noqa: SLF001
+        mesh.dimensions = self.tabulator._grid_dimensions[::-1]  # ruff:ignore[private-member-access]
 
         return mesh
 
@@ -1832,7 +1846,7 @@ class Plotter:
         else:
             raise ValueError('The plotter only supports spherical and cartesian grids.')
 
-        dimensions = 'x'.join(str(val) for val in self.tabulator._grid_dimensions)  # noqa: SLF001
+        dimensions = 'x'.join(str(val) for val in self.tabulator._grid_dimensions)  # ruff:ignore[private-member-access]
         logger.info(
             'Rebuilt %s grid with %d points (dimensions %s).',
             grid_type.value,
@@ -1890,16 +1904,16 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self.update_nav_button_states()  # Update buttons for initial state
 
         self.orb_tv = _OrbitalsTreeview(self)
-        self.orb_tv.populate_tree(self.plotter.tabulator._parser.mos)  # noqa: SLF001
+        self.orb_tv.populate_tree(self.plotter.tabulator._parser.mos)  # ruff:ignore[private-member-access]
         self.orb_tv.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
     def on_close(self) -> None:
         """Close the selection dialog and release GUI resources."""
         self.plotter.on_screen = False
-        self.plotter._cancel_gto_future()  # noqa: SLF001
+        self.plotter._cancel_gto_future()  # ruff:ignore[private-member-access]
         self.plotter.pv_plotter.close()
         self.destroy()
-        if self.plotter.tk_root and self.plotter._no_prev_tk_root:  # noqa: SLF001
+        if self.plotter.tk_root and self.plotter._no_prev_tk_root:  # ruff:ignore[private-member-access]
             self.plotter.tk_root.quit()
             self.plotter.tk_root.destroy()
 
@@ -1915,7 +1929,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         """Advance to the next molecular orbital."""
         if self._loading:
             return
-        max_index = len(self.plotter.tabulator._parser.mos) - 1  # noqa: SLF001
+        max_index = len(self.plotter.tabulator._parser.mos) - 1  # ruff:ignore[private-member-access]
         if max_index < 0:
             return
         current = self.current_mo_ind
@@ -1961,7 +1975,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
             self.prev_button.config(state=tk.DISABLED)
             self.next_button.config(state=tk.DISABLED)
             return
-        total = len(self.plotter.tabulator._parser.mos)  # noqa: SLF001
+        total = len(self.plotter.tabulator._parser.mos)  # ruff:ignore[private-member-access]
         can_go_prev = self.current_mo_ind > 0
         can_go_next = total > 0 and self.current_mo_ind < total - 1
         self.prev_button.config(state=tk.NORMAL if can_go_prev else tk.DISABLED)
@@ -2066,7 +2080,7 @@ class _OrbitalsTreeview(ttk.Treeview):
         _event : tk.Event
             Tkinter event object (unused).
         """
-        if self.selection_screen._loading:  # noqa: SLF001
+        if self.selection_screen._loading:  # ruff:ignore[private-member-access]
             return
         selected_item = self.selection()
         self.selection_remove(selected_item)
