@@ -366,7 +366,11 @@ class Plotter:
     def _override_clear_all_button(self) -> None:
         """Override the default "Clear All" action in the PyVista plotter's View menu."""
         view_menu = None
-        for action in self.pv_plotter.main_menu.actions():
+        main_menu = self.pv_plotter.main_menu
+        if main_menu is None:
+            raise RuntimeError('PyVista plotter does not have a main menu.')
+
+        for action in main_menu.actions():
             if action.text() == 'View':
                 view_menu = action.menu()
                 break
@@ -424,8 +428,11 @@ class Plotter:
         export_menu.addAction(export_image_action)
 
         # Add menus to main menu bar
-        self.pv_plotter.main_menu.addMenu(settings_menu)
-        self.pv_plotter.main_menu.addMenu(export_menu)
+        main_menu = self.pv_plotter.main_menu
+        if main_menu is None:
+            raise RuntimeError('PyVista plotter does not have a main menu.')
+        main_menu.addMenu(settings_menu)
+        main_menu.addMenu(export_menu)
 
     def _do_export(self, export_window: tk.Toplevel, format_var: tk.StringVar, scope_var: tk.StringVar) -> None:
         """Execute the export operation.
@@ -1780,7 +1787,7 @@ class Plotter:
 
         """
         mesh = pv.StructuredGrid()
-        mesh.points = pv.pyvista_ndarray(self.tabulator.grid)
+        mesh.points = pv.pyvista_ndarray(self.tabulator.grid)  # pyright: ignore[reportCallIssue]
 
         # Pyvista needs the dimensions backwards
         # in other words, (phi, theta, r) or (z, y, x)
