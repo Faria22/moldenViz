@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
@@ -17,6 +18,8 @@ from moldenViz import Tabulator
 
 plotter_module = pytest.importorskip('moldenViz.plotter')
 _plotter_ui_module = pytest.importorskip('moldenViz._plotter_ui')
+
+MOLDEN_PATH = Path(__file__).with_name('sample_molden.inp')
 
 
 def test_ui_helpers_are_defined_in_companion_module() -> None:
@@ -476,7 +479,6 @@ class FakeTabulator:
         self.grid_dimensions = (1, 1, 1)
         self.grid = np.zeros((1, 3))
         self.grid_axes = None
-        self.gto_data = object()
         self._gtos = np.zeros((1, 1))
         self._parser = SimpleNamespace(
             atoms=[SimpleNamespace(symbol='H', coords=(0.0, 0.0, 0.0))],
@@ -796,13 +798,8 @@ def test_plotter_rejects_tabulator_without_grid(plotter_env: Any) -> None:
 
 
 def test_plotter_rejects_unknown_grid_type(plotter_env: Any) -> None:
-    bad_tab = SimpleNamespace(
-        grid=np.zeros((1, 3)),
-        grid_type=GridType.UNKNOWN,
-        gtos=object(),
-        has_gtos=True,
-        grid_axes=None,
-    )
+    bad_tab = plotter_env.make_tabulator()
+    bad_tab.grid_type = GridType.UNKNOWN
     with pytest.raises(ValueError, match='only supports spherical and cartesian'):
         plotter_env.make_plotter(tabulator=bad_tab)
 
@@ -813,6 +810,17 @@ def test_plotter_requires_tabulated_gtos(plotter_env: Any) -> None:
 
     with pytest.raises(ValueError, match='tabulated GTOs'):
         plotter_env.make_plotter(tabulator=tabulator)
+
+
+def test_plotter_accepts_real_tabulator_with_cached_gtos(plotter_env: Any) -> None:
+    axis = np.linspace(-1.0, 1.0, 2)
+    tabulator = Tabulator(str(MOLDEN_PATH))
+    tabulator.cartesian_grid(axis, axis, axis)
+
+    plotter = plotter_module.Plotter(str(MOLDEN_PATH), tabulator=tabulator, tk_root=plotter_env.make_root())
+
+    assert plotter.tabulator is tabulator
+    assert plotter._gtos_ready
 
 
 def test_export_orbitals_dialog_sets_attributes(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:

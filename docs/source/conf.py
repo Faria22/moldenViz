@@ -71,6 +71,8 @@ autodoc_mock_imports = [
     'pyvista',
     'pyvistaqt',
     'PySide6',
+    'qtpy',
+    'shiboken6',
 ]
 
 # Make autodoc more permissive about import failures
