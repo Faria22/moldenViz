@@ -30,8 +30,8 @@ def test_spherical_cartesian_roundtrip() -> None:
     theta_vals = rng.uniform(0.0, np.pi, size=100)
     phi_vals = rng.uniform(-np.pi, np.pi, size=100)
 
-    x, y, z = Tabulator._spherical_to_cartesian(r_vals, theta_vals, phi_vals)  # noqa: SLF001
-    r2, theta2, phi2 = Tabulator._cartesian_to_spherical(x, y, z)  # noqa: SLF001
+    x, y, z = Tabulator._spherical_to_cartesian(r_vals, theta_vals, phi_vals)  # ruff:ignore[private-member-access]
+    r2, theta2, phi2 = Tabulator._cartesian_to_spherical(x, y, z)  # ruff:ignore[private-member-access]
 
     np.testing.assert_allclose(r_vals, r2, rtol=1e-12, atol=1e-12)
     np.testing.assert_allclose(theta_vals, theta2, rtol=1e-12, atol=1e-12)
@@ -46,7 +46,7 @@ def test_cartesian_to_spherical_handles_zero_radius() -> None:
 
     with warnings.catch_warnings():
         warnings.simplefilter('error', RuntimeWarning)
-        r, theta, phi = Tabulator._cartesian_to_spherical(x, y, z)  # noqa: SLF001
+        r, theta, phi = Tabulator._cartesian_to_spherical(x, y, z)  # ruff:ignore[private-member-access]
 
     assert np.isfinite(r).all()
     assert np.isfinite(theta).all()
@@ -71,7 +71,7 @@ def test_tabulate_gtos_cached_values_cover_all_coeffs() -> None:
     gto_data = tab.tabulate_gtos()
 
     expected_points = axis.size**3
-    expected_coeffs = tab._parser.mo_coeffs.shape[1]  # noqa: SLF001
+    expected_coeffs = tab._parser.mo_coeffs.shape[1]  # ruff:ignore[private-member-access]
     assert gto_data.shape == (expected_points, expected_coeffs)
     assert np.all(np.isfinite(gto_data))
     assert tab.gtos is gto_data  # Cached array should match the return value
@@ -106,7 +106,7 @@ def test_tabulate_gtos_million_point_benchmark(benchmark: BenchmarkFixture) -> N
     )
 
     expected_points = axis.size**3
-    expected_coeffs = tab._parser.mo_coeffs.shape[1]  # noqa: SLF001
+    expected_coeffs = tab._parser.mo_coeffs.shape[1]  # ruff:ignore[private-member-access]
     assert gto_data.shape == (expected_points, expected_coeffs)
 
 
@@ -134,7 +134,7 @@ def test_tabulate_xlms_shape(lmax: int, num_points: int) -> None:
     theta = np.linspace(0.0, np.pi, num_points, dtype=float)
     phi = np.linspace(-np.pi, np.pi, num_points, dtype=float)
 
-    xlms = Tabulator._tabulate_xlms(theta, phi, lmax)  # noqa: SLF001
+    xlms = Tabulator._tabulate_xlms(theta, phi, lmax)  # ruff:ignore[private-member-access]
 
     assert xlms.shape == (lmax + 1, 2 * lmax + 1, num_points)
 
@@ -181,7 +181,7 @@ def test_export_cube_creates_file(tmp_path: Path) -> None:
     contents = cube_path.read_text(encoding='ascii').splitlines()
     assert 'Molecular orbital 0' in contents[1]
     header_tokens = contents[2].split()
-    assert int(header_tokens[0]) == len(tab._parser.atoms)  # noqa: SLF001
+    assert int(header_tokens[0]) == len(tab._parser.atoms)  # ruff:ignore[private-member-access]
 
 
 def test_export_cube_requires_cartesian_grid(tmp_path: Path) -> None:

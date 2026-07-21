@@ -18,7 +18,7 @@ from ._plotting_objects import Molecule
 from .plotter_ui import _OrbitalSelectionScreen, _PlotterUI
 from .tabulator import GridType, Tabulator
 
-_OrbitalsTreeview = _plotter_ui._OrbitalsTreeview  # noqa: SLF001 - compatibility re-export
+_OrbitalsTreeview = _plotter_ui._OrbitalsTreeview  # ruff:ignore[private-member-access] - compatibility re-export
 filedialog = _plotter_ui.filedialog
 ttk = _plotter_ui.ttk
 
@@ -147,21 +147,21 @@ class Plotter(_PlotterUI):
         self._override_clear_all_button()
 
         if tabulator:
-            logger.info('Using provided Tabulator instance with grid type %s', tabulator._grid_type.value)  # noqa: SLF001
+            logger.info('Using provided Tabulator instance with grid type %s', tabulator._grid_type.value)  # ruff:ignore[private-member-access]
             if not hasattr(tabulator, 'grid'):
                 raise ValueError('Tabulator does not have grid attribute.')
 
             if not hasattr(tabulator, 'gto_data') and not only_molecule:
                 raise ValueError('Tabulator does not have tabulated GTOs.')
 
-            if tabulator._grid_type == GridType.UNKNOWN:  # noqa: SLF001
+            if tabulator._grid_type == GridType.UNKNOWN:  # ruff:ignore[private-member-access]
                 raise ValueError('The plotter only supports spherical and cartesian grids.')
 
             # Check if grid is uniform (PyVista requires uniform grids)
             if tabulator.original_axes is not None:
-                Tabulator._axis_spacing(tabulator.original_axes[0], 'x')  # noqa: SLF001
-                Tabulator._axis_spacing(tabulator.original_axes[1], 'y')  # noqa: SLF001
-                Tabulator._axis_spacing(tabulator.original_axes[2], 'z')  # noqa: SLF001
+                Tabulator._axis_spacing(tabulator.original_axes[0], 'x')  # ruff:ignore[private-member-access]
+                Tabulator._axis_spacing(tabulator.original_axes[1], 'y')  # ruff:ignore[private-member-access]
+                Tabulator._axis_spacing(tabulator.original_axes[2], 'z')  # ruff:ignore[private-member-access]
 
             self.tabulator = tabulator
         else:
@@ -313,7 +313,7 @@ class Plotter(_PlotterUI):
 
     def _apply_gtos_ready(self, gtos: NDArray[np.floating]) -> None:
         """Store computed GTOs and update UI state."""
-        self.tabulator._gtos = gtos  # noqa: SLF001
+        self.tabulator._gtos = gtos  # ruff:ignore[private-member-access]
         self._gtos_ready = True
         self._gto_future = None
         self._active_gto_job_id = None
@@ -353,7 +353,7 @@ class Plotter(_PlotterUI):
 
     def load_molecule(self, config: Config) -> None:
         """Reload the molecule from the parser data."""
-        self.molecule = Molecule(self.tabulator._parser.atoms, config)  # noqa: SLF001
+        self.molecule = Molecule(self.tabulator._parser.atoms, config)  # ruff:ignore[private-member-access]
         logger.info('Loaded molecule with %d atoms.', len(self.molecule.atoms))
 
         for actor in self.molecule_actors if hasattr(self, 'molecule_actors') else []:
@@ -381,7 +381,7 @@ class Plotter(_PlotterUI):
             logger.info('Clearing molecular orbital from scene.')
             return
 
-        mo = self.tabulator._parser.mos[orb_ind]  # noqa: SLF001
+        mo = self.tabulator._parser.mos[orb_ind]  # ruff:ignore[private-member-access]
         logger.info(
             'Displaying molecular orbital #%d (%s, spin=%s, occ=%s, energy=%.6f au).',
             orb_ind + 1,
@@ -515,7 +515,7 @@ class Plotter(_PlotterUI):
 
         # Pyvista needs the dimensions backwards
         # in other words, (phi, theta, r) or (z, y, x)
-        mesh.dimensions = self.tabulator._grid_dimensions[::-1]  # noqa: SLF001
+        mesh.dimensions = self.tabulator._grid_dimensions[::-1]  # ruff:ignore[private-member-access]
 
         return mesh
 
@@ -556,7 +556,7 @@ class Plotter(_PlotterUI):
         else:
             raise ValueError('The plotter only supports spherical and cartesian grids.')
 
-        dimensions = 'x'.join(str(val) for val in self.tabulator._grid_dimensions)  # noqa: SLF001
+        dimensions = 'x'.join(str(val) for val in self.tabulator._grid_dimensions)  # ruff:ignore[private-member-access]
         logger.info(
             'Rebuilt %s grid with %d points (dimensions %s).',
             grid_type.value,
