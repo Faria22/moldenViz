@@ -110,6 +110,23 @@ class Bond:
         self.radius = config.molecule.bond.radius
         self.color_type = self.ColorType(config.molecule.bond.color_type.lower())
         self.mesh: pv.PolyData | list[pv.PolyData] | None
+        self.atom_a = atom_a
+        self.atom_b = atom_b
+        self.plotted = False
+
+        if self.color_type is self.ColorType.UNIFORM:
+            self.color = config.molecule.bond.color
+        else:
+            self.color = [atom_a.atom_type.color, atom_b.atom_type.color]
+
+        if length <= np.finfo(float).eps:
+            self.mesh = None
+            logger.warning(
+                'Cannot render zero-length bond between atoms %s and %s.',
+                atom_a.atom_type.name,
+                atom_b.atom_type.name,
+            )
+            return
 
         if self.color_type is self.ColorType.UNIFORM:
             self.mesh = pv.Cylinder(
@@ -118,7 +135,6 @@ class Bond:
                 height=length,
                 direction=bond_vec,
             )
-            self.color = config.molecule.bond.color
         elif self.color_type is self.ColorType.SPLIT:
             atom_radii_adjustement = bond_vec * (atom_b.atom_type.radius - atom_a.atom_type.radius) / length
 
@@ -143,11 +159,6 @@ class Bond:
             )
 
             self.mesh = [mesh_a, mesh_b]
-            self.color = [atom_a.atom_type.color, atom_b.atom_type.color]
-        self.atom_a = atom_a
-        self.atom_b = atom_b
-
-        self.plotted = False
 
     def _cylinder_between(
         self,
@@ -180,6 +191,26 @@ class Bond:
             direction=direction,
         )
 
+    def _trim_distance(self, atom: Atom) -> float:
+        """Return the axial distance where the cylinder wall meets an atom.
+
+        The bond surface is a cylinder at ``self.radius`` from its axis.
+        Intersecting that cylinder with an atom sphere gives a right triangle
+        whose hypotenuse is the atom radius.
+
+        Parameters
+        ----------
+        atom : Atom
+            Atom whose spherical surface bounds the bond.
+
+        Returns
+        -------
+        float
+            Distance from the atom centre along the bond axis.
+        """
+        squared_distance = atom.atom_type.radius**2 - self.radius**2
+        return float(np.sqrt(max(squared_distance, 0.0)))
+
     def trim_ends(self) -> None:
         """Shorten the bond analytically so it ends at each atom surface.
 
@@ -190,16 +221,15 @@ class Bond:
             return
 
         axis = (self.atom_b.center - self.atom_a.center) / self.length
-        end_a = self.atom_a.center + axis * self.atom_a.atom_type.radius
-        end_b = self.atom_b.center - axis * self.atom_b.atom_type.radius
+        trim_a = self._trim_distance(self.atom_a)
+        trim_b = self._trim_distance(self.atom_b)
+        end_a = self.atom_a.center + axis * trim_a
+        end_b = self.atom_b.center - axis * trim_b
 
         if np.dot(end_b - end_a, axis) <= np.finfo(float).eps:
             self.mesh = None
         elif self.color_type is self.ColorType.SPLIT:
-            split = (
-                self.atom_a.center
-                + axis * (self.length + self.atom_a.atom_type.radius - self.atom_b.atom_type.radius) / 2
-            )
+            split = self.atom_a.center + axis * (self.length + trim_a - trim_b) / 2
             mesh_a = self._cylinder_between(end_a, split)
             mesh_b = self._cylinder_between(split, end_b)
             self.mesh = [mesh_a, mesh_b] if mesh_a is not None and mesh_b is not None else None
