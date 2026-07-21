@@ -42,9 +42,12 @@ Latest docs: https://moldenviz.readthedocs.io/en/latest/
 
 Major milestones and planned features are tracked in the [Roadmap](https://moldenviz.readthedocs.io/en/latest/roadmap.html). Highlights:
 
-- ✅ v1.8 – Image export (PNG, JPEG, SVG, PDF), enhanced GUI export dialogs.
+- ✅ v1.11 – Public tabulator exporters, lazy plotter imports, and numerical hardening.
+- ✅ v1.10 – Responsive background orbital tabulation and expanded plotter coverage.
+- ✅ v1.9 – CLI version and logging controls with coloured progress messages.
+- ✅ v1.8 – Image export (PNG, JPEG, SVG, PDF) and enhanced GUI export dialogs.
 - ✅ v1.1 – VTK/cube export, expanded CLI reference, richer docs.
-- ▶️ v2.0 – cartesian basis support
+- ▶️ v2.0 – Cartesian basis support
 
 ## Contributing
 

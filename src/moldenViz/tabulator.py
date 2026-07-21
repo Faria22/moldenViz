@@ -481,7 +481,7 @@ class Tabulator:
             raise ValueError("Unsupported export format. Use '.vtk' or '.cube'.")
 
     def export_vtk(self, destination: Path, mo_index: int | None = None) -> None:
-        """Write orbital data to a VTK multiblock dataset."""
+        """Write orbital data to a VTK structured-grid dataset."""
         # Import lazily so tabulator-only workflows do not require PyVista/VTK at import time.
         import pyvista as pv  # noqa: PLC0415
 

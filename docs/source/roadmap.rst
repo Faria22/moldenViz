@@ -6,6 +6,9 @@ This roadmap tracks major themes planned for upcoming releases. Items move from 
 Shipped
 -------
 
+- **v1.11** – Public format-specific tabulator exporters, lazy plotter imports, and hardened spherical-coordinate conversion.
+- **v1.10** – Background orbital tabulation for a more responsive plotter, broader plotter regression coverage, and tabulation improvements.
+- **v1.9** – CLI version and logging controls, coloured progress messages, and automated release workflows.
 - **v1.8** – Image export (PNG, JPEG, SVG, PDF), enhanced GUI export dialogs, improved export workflows.
 - **v1.1** – Volumetric export to VTK/Gaussian cube, expanded documentation, CLI option reference.
 - **v1.0** – Configuration system overhaul, revised docs, PyVista plotter improvements.

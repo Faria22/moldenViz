@@ -49,11 +49,6 @@ Render molecular orbitals from a Molden file:
 
 This launches the interactive viewer with both the molecule structure and orbital visualization:
 
-.. image:: _static/placeholder-full-viewer.png
-   :alt: Full moldenViz viewer showing molecule with orbital isosurface
-   :align: center
-   :class: screenshot-placeholder
-
 The interactive window allows you to:
 
 * Select and view different molecular orbitals
@@ -67,11 +62,6 @@ Show only the molecular structure (skip orbital surfaces):
 
    moldenViz path/to/file.molden -m
 
-.. image:: _static/placeholder-molecule-only.png
-   :alt: Molecule-only view without orbital surfaces
-   :align: center
-   :class: screenshot-placeholder
-
 Bundled Examples
 ----------------
 
@@ -81,17 +71,7 @@ Use one of the shipped example molecules when you just want to explore the plott
 
    moldenViz -e co
 
-.. image:: _static/placeholder-example-co.png
-   :alt: Carbon monoxide molecule with orbital visualization
-   :align: center
-   :class: screenshot-placeholder
-
 Available examples include: ``co``, ``o2``, ``co2``, ``h2o``, ``benzene``, ``prismane``, ``pyridine``, ``furan``, ``acrolein``
-
-.. image:: _static/placeholder-examples-grid.png
-   :alt: Grid showing various example molecules available in moldenViz
-   :align: center
-   :class: screenshot-placeholder
 
 Tips
 ----
