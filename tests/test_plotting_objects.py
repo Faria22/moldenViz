@@ -1,6 +1,6 @@
 """Tests for molecular plotting objects."""
 
-# ruff: noqa: PLC2701
+# ruff:file-ignore[import-private-name]
 
 from typing import cast
 
