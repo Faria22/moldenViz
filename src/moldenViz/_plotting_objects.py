@@ -107,17 +107,19 @@ class Bond:
 
         length = cast(float, np.linalg.norm(bond_vec))
         self.length = length
+        self.radius = config.molecule.bond.radius
+        self.color_type = self.ColorType(config.molecule.bond.color_type.lower())
         self.mesh: pv.PolyData | list[pv.PolyData] | None
 
-        if config.molecule.bond.color_type.lower() == self.ColorType.UNIFORM.value:
+        if self.color_type is self.ColorType.UNIFORM:
             self.mesh = pv.Cylinder(
-                radius=config.molecule.bond.radius,
+                radius=self.radius,
                 center=center,
                 height=length,
                 direction=bond_vec,
             )
             self.color = config.molecule.bond.color
-        elif config.molecule.bond.color_type.lower() == self.ColorType.SPLIT.value:
+        elif self.color_type is self.ColorType.SPLIT:
             atom_radii_adjustement = bond_vec * (atom_b.atom_type.radius - atom_a.atom_type.radius) / length
 
             center_a = (atom_a.center + center + atom_radii_adjustement / 2) / 2
@@ -127,14 +129,14 @@ class Bond:
             sign = 1 if atom_b.atom_type.radius <= atom_a.atom_type.radius else -1
 
             mesh_a = pv.Cylinder(
-                radius=config.molecule.bond.radius,
+                radius=self.radius,
                 center=center_a,
                 height=(length + sign * atom_radii_adjustement_length) / 2,
                 direction=bond_vec,
             )
 
             mesh_b = pv.Cylinder(
-                radius=config.molecule.bond.radius,
+                radius=self.radius,
                 center=center_b,
                 height=(length - sign * atom_radii_adjustement_length) / 2,
                 direction=bond_vec,
@@ -142,62 +144,74 @@ class Bond:
 
             self.mesh = [mesh_a, mesh_b]
             self.color = [atom_a.atom_type.color, atom_b.atom_type.color]
-        else:
-            raise ValueError(
-                f'Invalid bond color type: {config.molecule.bond.color_type}. '
-                f'Expected one of {[color_type.value for color_type in self.ColorType]}.',
-            )
-
         self.atom_a = atom_a
         self.atom_b = atom_b
 
         self.plotted = False
 
-    @staticmethod
-    def _trim_atom_from_bond(bond_mesh: pv.PolyData, atom_mesh: pv.PolyData) -> pv.PolyData:
-        """Trim the bond mesh to remove parts that intrude into the atom mesh.
+    def _cylinder_between(
+        self,
+        point_a: NDArray[np.floating],
+        point_b: NDArray[np.floating],
+    ) -> pv.PolyData | None:
+        """Create a cylinder spanning two points.
 
         Parameters
         ----------
-        bond_mesh : pv.PolyData
-            The mesh representing the bond.
-        atom_mesh : pv.PolyData
-            The mesh representing the atom.
+        point_a : NDArray[np.floating]
+            Centre of the first cylinder cap.
+        point_b : NDArray[np.floating]
+            Centre of the second cylinder cap.
 
         Returns
         -------
-        pv.PolyData
-            The trimmed bond mesh.
+        pv.PolyData or None
+            Cylinder between the points, or ``None`` when it has no length.
         """
-        mesh = cast(pv.PolyData, bond_mesh.triangulate()) - atom_mesh
-        return cast(pv.PolyData, mesh)
+        direction = point_b - point_a
+        height = cast(float, np.linalg.norm(direction))
+        if height <= np.finfo(float).eps:
+            return None
+
+        return pv.Cylinder(
+            radius=self.radius,
+            center=(point_a + point_b) / 2,
+            height=height,
+            direction=direction,
+        )
 
     def trim_ends(self) -> None:
-        """Trim bond geometry so it does not intrude into atom spheres."""
+        """Shorten the bond analytically so it ends at each atom surface.
+
+        Rebuilding cylinders avoids VTK boolean subtraction, which can abort
+        the process for otherwise valid atom and bond geometries.
+        """
         if self.mesh is None:
             return
 
-        warning = False
-        if isinstance(self.mesh, list):
-            self.mesh = [
-                self._trim_atom_from_bond(mesh, atom.mesh)
-                for mesh, atom in zip(self.mesh, (self.atom_a, self.atom_b), strict=True)
-            ]
-            if any(mesh.n_points == 0 for mesh in self.mesh):
-                warning = True
-        else:
-            self.mesh = self._trim_atom_from_bond(self.mesh, self.atom_a.mesh)
-            self.mesh = self._trim_atom_from_bond(self.mesh, self.atom_b.mesh)
-            if self.mesh.n_points == 0:
-                warning = True
+        axis = (self.atom_b.center - self.atom_a.center) / self.length
+        end_a = self.atom_a.center + axis * self.atom_a.atom_type.radius
+        end_b = self.atom_b.center - axis * self.atom_b.atom_type.radius
 
-        if warning:
+        if np.dot(end_b - end_a, axis) <= np.finfo(float).eps:
+            self.mesh = None
+        elif self.color_type is self.ColorType.SPLIT:
+            split = (
+                self.atom_a.center
+                + axis * (self.length + self.atom_a.atom_type.radius - self.atom_b.atom_type.radius) / 2
+            )
+            mesh_a = self._cylinder_between(end_a, split)
+            mesh_b = self._cylinder_between(split, end_b)
+            self.mesh = [mesh_a, mesh_b] if mesh_a is not None and mesh_b is not None else None
+        else:
+            self.mesh = self._cylinder_between(end_a, end_b)
+
+        if self.mesh is None:
             logger.warning(
-                'Error: Bond mesh is empty between atoms %s and %s.',
+                'Bond is entirely contained by atoms %s and %s.',
                 self.atom_a.atom_type.name,
                 self.atom_b.atom_type.name,
             )
-            self.mesh = None
 
 
 class Molecule:
