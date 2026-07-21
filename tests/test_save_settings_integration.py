@@ -3,7 +3,9 @@
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from tests._src_imports import plotter_module
+import pytest
+
+plotter_module = pytest.importorskip('moldenViz.plotter')
 
 
 def test_save_settings_method_exists_in_plotter() -> None:
