@@ -63,7 +63,8 @@ class Plotter(_PlotterUI):
         Default is `False`.
     tabulator : Tabulator, optional
         If `None`, `Plotter` creates a `Tabulator` and tabulates the GTOs and MOs with a default grid.
-        A `Tabulator` can be passed to tabulate the GTOs in a predetermined grid.
+        A `Tabulator` can be passed to reuse a predetermined grid. When `only_molecule` is `False`,
+        the supplied `Tabulator` must already have tabulated GTOs available through `tabulator.gtos`.
 
         Note: `Tabulator` grid must be spherical or cartesian. Custom grids are not allowed.
     tk_root : tk.Tk, optional
@@ -151,7 +152,7 @@ class Plotter(_PlotterUI):
             if not hasattr(tabulator, 'grid'):
                 raise ValueError('Tabulator does not have grid attribute.')
 
-            if not hasattr(tabulator, 'gto_data') and not only_molecule:
+            if not hasattr(tabulator, 'gtos') and not only_molecule:
                 raise ValueError('Tabulator does not have tabulated GTOs.')
 
             if tabulator._grid_type == GridType.UNKNOWN:  # ruff:ignore[private-member-access]

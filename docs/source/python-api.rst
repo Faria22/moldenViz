@@ -166,6 +166,8 @@ Supply a pre-configured ``Tabulator`` to ``Plotter`` for re-use or fine-grained 
 
    Plotter('molden.inp', tabulator=tab)
 
+When orbital rendering is enabled, pass a ``Tabulator`` only after it has a spherical or cartesian grid and cached GTO values. The grid helpers tabulate GTOs by default; if you call them with ``tabulate_gtos=False``, call ``tab.tabulate_gtos()`` before constructing ``Plotter``. Molecule-only viewers do not require cached GTOs.
+
 The cartesian grid keeps spacing uniform—ideal for Gaussian cube exports—while the spherical grid matches the viewer defaults and keeps memory usage low for visual inspection. Pick the smallest grid that contains your molecule; doubling every axis multiplies memory use by eight.
 
 .. _exporting-from-python:
