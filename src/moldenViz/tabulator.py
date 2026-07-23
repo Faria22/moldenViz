@@ -4,6 +4,7 @@ import logging
 import os
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
+from math import factorial
 from pathlib import Path
 from typing import Any
 
@@ -416,17 +417,8 @@ class Tabulator:
         """Tabulate all shells for a single atom into the shared GTO array."""
         centered_grid = self._grid - atom.position
         max_l = atom.shells[-1].l
-        total_points = self._grid.shape[0]
-
-        r, theta, phi = self.cartesian_to_spherical(*centered_grid.T)  # pyright: ignore[reportArgumentType]
-
-        num_r_pows = max(max_l + 1, 3)  # Ensure we compute up to r^2
-        r_pows = np.ones((num_r_pows, total_points), dtype=float)
-        if num_r_pows > 1:
-            r_pows[1:] = np.cumprod(np.broadcast_to(r, (num_r_pows - 1, total_points)), axis=0)
-        r_sq = r_pows[2]
-
-        xlms = self._tabulate_xlms(theta, phi, max_l)
+        r_sq = np.einsum('ij,ij->i', centered_grid, centered_grid)
+        solid_harmonics = self._tabulate_real_solid_harmonics(centered_grid, max_l)
         atom_block = gto_data[:, atom_slice]
         block_cursor = 0
 
@@ -436,12 +428,11 @@ class Tabulator:
             m_inds = np.arange(-l, l + 1)
             inner_slice = slice(block_cursor, block_cursor + num_m)
 
-            radial = r_pows[l] * (
-                shell._prefactor  # ruff:ignore[private-member-access]
-                @ np.exp(-shell._gto_exps[:, None] * r_sq[None, :])  # ruff:ignore[private-member-access]
+            contraction = shell._prefactor @ np.exp(  # ruff:ignore[private-member-access]
+                -shell._gto_exps[:, None] * r_sq[None, :],  # ruff:ignore[private-member-access]
             )
 
-            atom_block[:, inner_slice] = radial[:, None] * xlms[l, m_inds, ...].T
+            atom_block[:, inner_slice] = contraction[:, None] * solid_harmonics[l, m_inds, ...].T
             block_cursor += num_m
 
     def tabulate_mos(self, mo_inds: int | _MOIndices | None = None) -> NDArray[np.floating]:
@@ -665,6 +656,92 @@ class Tabulator:
             xlms[:, m, :] = factor * np.sqrt(2) * plms[:, m, :] * np.cos(m * phi)
 
         return xlms
+
+    @staticmethod
+    def _tabulate_real_solid_harmonics(
+        centered_grid: NDArray[np.floating],
+        lmax: int,
+    ) -> NDArray[np.floating]:
+        r"""Tabulate normalized real solid harmonics directly in Cartesian coordinates.
+
+        The polynomial is obtained by differentiating the finite power series
+        for the Legendre polynomial, following the Rodrigues formulas in
+        NIST DLMF sections 14.30 and 18.5:
+
+        .. math::
+
+            r^l X_{lm} =
+            N_{lm} Q_m(x, y)
+            \sum_{k=0}^{\lfloor(l-m)/2\rfloor}
+            \frac{(-1)^k(2l-2k)!}
+                 {2^l k!(l-k)!(l-2k-m)!}
+            z^{l-m-2k}(x^2+y^2+z^2)^k,
+
+        where :math:`Q_m` is the real or imaginary part of
+        :math:`(x+iy)^m`. The normalization ``N_lm`` preserves the spherical
+        kernel's normalization and Condon--Shortley phase convention.
+
+        Parameters
+        ----------
+        centered_grid : NDArray[np.floating]
+            Cartesian coordinates relative to an atom, shaped ``(n, 3)``.
+        lmax : int
+            Maximum angular momentum quantum number.
+
+        Returns
+        -------
+        NDArray[np.floating]
+            Solid harmonics indexed by ``[l, m, point]``. Negative ``m``
+            values use NumPy's negative indexing convention.
+
+        Raises
+        ------
+        ValueError
+            If the grid is not a non-empty ``(n, 3)`` array or ``lmax`` is
+            negative.
+        """
+        expected_dimensions = 2
+        cartesian_dimensions = 3
+        if (
+            centered_grid.ndim != expected_dimensions
+            or centered_grid.shape[1] != cartesian_dimensions
+            or centered_grid.shape[0] == 0
+        ):
+            raise ValueError('centered_grid must be a non-empty array shaped (n, 3).')
+        if lmax < 0:
+            raise ValueError('lmax must be a non-negative integer.')
+
+        x, y, z = np.asarray(centered_grid, dtype=float).T
+        r_sq = x * x + y * y + z * z
+        solid_harmonics = np.zeros((lmax + 1, 2 * lmax + 1, x.size), dtype=float)
+
+        xy_real = np.ones_like(x)
+        xy_imag = np.zeros_like(x)
+        for m in range(lmax + 1):
+            if m:
+                xy_real, xy_imag = xy_real * x - xy_imag * y, xy_real * y + xy_imag * x
+
+            for l in range(m, lmax + 1):
+                polynomial = np.zeros_like(x)
+                for k in range((l - m) // 2 + 1):
+                    coefficient = (
+                        (-1) ** k
+                        * factorial(2 * l - 2 * k)
+                        / (2**l * factorial(k) * factorial(l - k) * factorial(l - 2 * k - m))
+                    )
+                    polynomial += coefficient * z ** (l - m - 2 * k) * r_sq**k
+
+                normalization = np.sqrt(
+                    (2 * l + 1) * factorial(l - m) / (4 * np.pi * factorial(l + m)),
+                )
+                if m == 0:
+                    solid_harmonics[l, 0, :] = normalization * polynomial
+                else:
+                    scale = np.sqrt(2) * normalization
+                    solid_harmonics[l, m, :] = scale * xy_real * polynomial
+                    solid_harmonics[l, -m, :] = scale * xy_imag * polynomial
+
+        return solid_harmonics
 
     @staticmethod
     def _check_bounds(x: np.ndarray) -> np.ndarray:
