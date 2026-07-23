@@ -191,7 +191,7 @@ class Plotter(_PlotterUI):
         self._opacity = config.mo.opacity
 
         # Set colormap based on configuration
-        if config.mo.custom_colors is not None:
+        if config.mo.custom_colors:
             # Create custom colormap from two colors
             self._cmap = self._custom_cmap_from_colors(config.mo.custom_colors)
         else:

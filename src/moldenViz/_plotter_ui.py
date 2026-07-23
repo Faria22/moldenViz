@@ -22,6 +22,29 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_MO_COLOR_SCHEMES = ['bwr', 'RdBu', 'seismic', 'coolwarm', 'PiYG']
+
+
+def _mo_color_scheme_options(current_config: Config) -> tuple[list[str], str]:
+    """Return dropdown options and the active MO color scheme.
+
+    Parameters
+    ----------
+    current_config : Config
+        Configuration containing the saved molecular-orbital colors.
+
+    Returns
+    -------
+    tuple[list[str], str]
+        Available dropdown values and the value that should be selected.
+    """
+    options = [*_MO_COLOR_SCHEMES, 'custom']
+    if current_config.mo.custom_colors:
+        return options, 'custom'
+    if current_config.mo.color_scheme not in _MO_COLOR_SCHEMES:
+        return [current_config.mo.color_scheme, *options], current_config.mo.color_scheme
+    return options, current_config.mo.color_scheme
+
 
 def _plotter_config() -> Config:
     """Return the plotter module's active configuration object.
@@ -788,17 +811,7 @@ class _PlotterUI:
             )
 
             ttk.Label(settings_frame, text='Color Scheme:').grid(row=4, column=0, padx=5, pady=5, sticky='w')
-            # Create dropdown with predefined color schemes
-            predefined_schemes = ['bwr', 'RdBu', 'seismic', 'coolwarm', 'PiYG']
-
-            # Check if user has a custom scheme in config that's not in predefined list
-            if config.mo.color_scheme not in predefined_schemes and config.mo.color_scheme != 'custom':
-                # Add the user's scheme as the first item
-                color_schemes = [config.mo.color_scheme, *predefined_schemes, 'custom']
-                default_scheme = config.mo.color_scheme
-            else:
-                color_schemes = [*predefined_schemes, 'custom']
-                default_scheme = config.mo.color_scheme if config.mo.color_scheme in predefined_schemes else 'custom'
+            color_schemes, default_scheme = _mo_color_scheme_options(config)
 
             self.mo_color_scheme_var = tk.StringVar(value=default_scheme)
             self.mo_color_scheme_dropdown = ttk.Combobox(
@@ -1139,19 +1152,9 @@ class _PlotterUI:
         self.background_color_entry.insert(0, str(config.background_color))
 
         # Reset MO color scheme dropdown
-        predefined_schemes = ['bwr', 'RdBu', 'seismic', 'coolwarm', 'PiYG']
-
-        if config.mo.color_scheme not in predefined_schemes and config.mo.color_scheme != 'custom':
-            color_schemes = [config.mo.color_scheme, *predefined_schemes, 'custom']
-            self.mo_color_scheme_dropdown['values'] = color_schemes
-            self.mo_color_scheme_var.set(config.mo.color_scheme)
-        else:
-            color_schemes = [*predefined_schemes, 'custom']
-            self.mo_color_scheme_dropdown['values'] = color_schemes
-            if config.mo.color_scheme in predefined_schemes:
-                self.mo_color_scheme_var.set(config.mo.color_scheme)
-            else:
-                self.mo_color_scheme_var.set('custom')
+        color_schemes, default_scheme = _mo_color_scheme_options(config)
+        self.mo_color_scheme_dropdown['values'] = color_schemes
+        self.mo_color_scheme_var.set(default_scheme)
 
         # Reset custom color entries
         self.mo_negative_color_entry.delete(0, tk.END)
@@ -1311,7 +1314,7 @@ class _PlotterUI:
         if mo_color_scheme != config.mo.color_scheme:
             self._cmap = mo_color_scheme
             config.mo.color_scheme = mo_color_scheme
-            config.mo.custom_colors = []
+            config.mo.custom_colors = None
             logger.info('Applied MO color scheme: %s.', mo_color_scheme)
 
             idx = self._get_current_mo_index()
@@ -1331,7 +1334,6 @@ class _PlotterUI:
 
         if custom_colors != config.mo.custom_colors:
             config.mo.custom_colors = custom_colors
-            config.mo.color_scheme = 'custom'
             self._cmap = self._custom_cmap_from_colors(custom_colors)
             logger.info('Applied custom MO colors: negative=%s, positive=%s.', custom_colors[0], custom_colors[1])
 

@@ -18,6 +18,7 @@ from moldenViz import Tabulator
 
 plotter_module = pytest.importorskip('moldenViz.plotter')
 _plotter_ui_module = pytest.importorskip('moldenViz._plotter_ui')
+config_module = pytest.importorskip('moldenViz._config_module')
 
 MOLDEN_PATH = Path(__file__).with_name('sample_molden.inp')
 
@@ -1095,15 +1096,51 @@ def test_color_settings_screen_initializes_entries(monkeypatch: pytest.MonkeyPat
 
 def test_color_settings_screen_populates_custom_scheme(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
     install_fake_tk_widgets(monkeypatch)
-    plotter_module.config.mo.color_scheme = 'bespoke'
+    plotter_module.config.mo.color_scheme = 'bwr'
     plotter_module.config.mo.custom_colors = ['black', 'white']
     plotter = plotter_env.make_plotter()
 
     plotter._color_settings_screen()
 
-    assert plotter.mo_color_scheme_var.get() == 'bespoke'
+    assert plotter.mo_color_scheme_var.get() == 'custom'
     assert plotter.mo_negative_color_entry.get() == 'black'
     assert plotter.mo_positive_color_entry.get() == 'white'
+
+
+def test_color_settings_screen_selects_custom_colors_loaded_from_file(
+    monkeypatch: pytest.MonkeyPatch,
+    plotter_env: Any,
+    tmp_path: Path,
+) -> None:
+    """Regression test for custom colors loaded from the user config file."""
+    install_fake_tk_widgets(monkeypatch)
+    custom_config_path = tmp_path / 'config.toml'
+    custom_config_path.write_text("[MO]\ncustom_colors = ['navy', 'gold']\n")
+    monkeypatch.setattr(config_module, 'CUSTOM_CONFIG_PATH', custom_config_path)
+    monkeypatch.setattr(plotter_module, 'config', plotter_module.Config())
+    plotter = plotter_env.make_plotter()
+
+    plotter._color_settings_screen()
+
+    assert plotter.mo_color_scheme_var.get() == 'custom'
+    assert plotter.mo_negative_color_entry.get() == 'navy'
+    assert plotter.mo_positive_color_entry.get() == 'gold'
+
+
+def test_color_settings_screen_populates_non_predefined_scheme(
+    monkeypatch: pytest.MonkeyPatch,
+    plotter_env: Any,
+) -> None:
+    """A valid named colormap outside the standard choices remains selectable."""
+    install_fake_tk_widgets(monkeypatch)
+    plotter_module.config.mo.color_scheme = 'viridis'
+    plotter_module.config.mo.custom_colors = None
+    plotter = plotter_env.make_plotter()
+
+    plotter._color_settings_screen()
+
+    assert plotter.mo_color_scheme_var.get() == 'viridis'
+    assert plotter.mo_color_scheme_dropdown.values[0] == 'viridis'
 
 
 def test_on_mo_color_scheme_change_toggles_widgets(plotter_env: Any) -> None:
@@ -1251,10 +1288,12 @@ def test_apply_custom_mo_color_settings_updates_scheme(plotter_env: Any) -> None
         replotted.append(idx)
 
     plotter.plot_orbital = remember  # type: ignore[assignment]
+    fallback_scheme = plotter_module.config.mo.color_scheme
 
     plotter._apply_custom_mo_color_settings()
 
     assert plotter_module.config.mo.custom_colors == ['navy', 'gold']
+    assert plotter_module.config.mo.color_scheme == fallback_scheme
     assert replotted == [0]
 
 
@@ -1295,6 +1334,7 @@ def test_apply_mo_color_settings_switches_scheme(plotter_env: Any) -> None:
     plotter._apply_mo_color_settings()
 
     assert plotter_module.config.mo.color_scheme == 'viridis'
+    assert plotter_module.config.mo.custom_colors is None
     assert plotter._cmap == 'viridis'
     assert replotted == [2]
 

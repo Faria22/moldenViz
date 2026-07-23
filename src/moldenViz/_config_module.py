@@ -7,7 +7,7 @@ from typing import Any, Literal
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import toml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .models import AtomType
 
@@ -164,10 +164,12 @@ class MoleculeConfig(BaseModel):
 class MainConfig(BaseModel):
     """Main configuration model for moldenViz."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     smooth_shading: bool = Field(True, description='Enable smooth shading')
     background_color: str = Field('white', description='Background color for 3D visualization')
     grid: GridConfig = Field(default_factory=GridConfig)
-    mo: MOConfig = Field(default_factory=MOConfig)
+    mo: MOConfig = Field(default_factory=MOConfig, alias='MO')
     molecule: MoleculeConfig = Field(default_factory=MoleculeConfig)
 
     @field_validator('background_color')
@@ -194,9 +196,6 @@ class MainConfig(BaseModel):
             return v
         raise ValueError(f'Background color must be a valid matplotlib color. Got: {v}')
 
-    class ConfigDict:
-        populate_by_name = True
-
 
 class Config:
     """Configuration class to manage default and custom configurations."""
@@ -217,7 +216,7 @@ class Config:
             raise ValueError(f'Invalid configuration: {e}') from e
 
         # Convert to SimpleNamespace for backward compatibility
-        self.config = self._dict_to_namedspace(self._pydantic_config.model_dump(by_alias=True))
+        self.config = self._dict_to_namedspace(self._pydantic_config.model_dump())
 
         self.atom_types = self._load_atom_types(atoms_custom_config)
 
