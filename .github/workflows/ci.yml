@@ -25,14 +25,17 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
+    - name: Install uv
+      uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      with:
+        version: "0.11.29"
+
     - name: Install core package
-      run: |
-        python -m pip install --upgrade pip
-        python -m pip install .
+      run: uv sync --locked --no-default-groups
 
     - name: Verify core imports without GUI dependencies
       run: |
-        python - <<'PY'
+        uv run --locked --no-default-groups python - <<'PY'
         import importlib.util
 
         from moldenViz import Parser, Tabulator
@@ -44,7 +47,7 @@ jobs:
         PY
 
     - name: Verify core CLI metadata
-      run: moldenViz --version
+      run: uv run --locked --no-default-groups moldenViz --version
 
   test:
     runs-on: ubuntu-latest
@@ -60,28 +63,33 @@ jobs:
       uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
-    
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      with:
+        version: "0.11.29"
+
+    - name: Install just
+      uses: extractions/setup-just@v3
+      with:
+        just-version: "1.57.0"
+
     - name: Install system dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y libegl1 python3-tk
-    
-    - name: Install hatch
-      run: |
-        python -m pip install --upgrade pip
-        python -m pip install hatch
-    
+
+    - name: Sync locked development environment
+      run: uv sync --locked --group dev
+
     - name: Run linting
-      run: |
-        hatch run lint
-    
+      run: just lint
+
     - name: Run type checking
-      run: |
-        hatch run typecheck
-    
+      run: just typecheck
+
     - name: Run tests
-      run: |
-        hatch run test
+      run: just test
 
   docs:
     runs-on: ubuntu-latest
@@ -94,13 +102,21 @@ jobs:
       with:
         python-version: "3.12"
 
-    - name: Install documentation dependencies
-      run: |
-        python -m pip install --upgrade pip
-        python -m pip install '.[docs]'
+    - name: Install uv
+      uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      with:
+        version: "0.11.29"
+
+    - name: Install just
+      uses: extractions/setup-just@v3
+      with:
+        just-version: "1.57.0"
+
+    - name: Sync locked documentation environment
+      run: uv sync --locked --group docs
 
     - name: Build documentation
-      run: make -C docs html
+      run: just docs
 
   benchmark-smoke:
     runs-on: ubuntu-latest
@@ -115,10 +131,18 @@ jobs:
       with:
         python-version: "3.13"
 
-    - name: Install hatch
-      run: |
-        python -m pip install --upgrade pip
-        python -m pip install hatch
+    - name: Install uv
+      uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      with:
+        version: "0.11.29"
+
+    - name: Install just
+      uses: extractions/setup-just@v3
+      with:
+        just-version: "1.57.0"
+
+    - name: Sync locked development environment
+      run: uv sync --locked --group dev
 
     - name: Validate ASV suite in an isolated environment
-      run: hatch run bench-smoke
+      run: just bench-smoke

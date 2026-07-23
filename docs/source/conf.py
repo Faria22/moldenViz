@@ -8,23 +8,21 @@ project = 'moldenViz'
 _copyright = '2025, Felipe Faria'
 author = 'Felipe Faria'
 
-# Import the project version
+# Import the installed project version
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'src'))
 try:
-    # Try to read version directly from file to avoid importing the full module
-    version_file = ROOT / 'src' / 'moldenViz' / '__about__.py'
-    version_globals = {}
-    exec(version_file.read_text(), version_globals)
-    __version__ = version_globals['__version__']
+    from importlib.metadata import version as distribution_version
+
+    __version__ = distribution_version('moldenViz')
 
     release = __version__
     version = '.'.join(release.split('.')[:2])  # e.g., "0.1" from "0.1.4"
-except (ImportError, FileNotFoundError, KeyError) as e:
+except ImportError as e:
     release = '0.0.0'  # Fallback or error
     version = '0.0'
     logger.warning(
-        'Warning: Could not read version from __about__.py: %s Using fallback version.',
+        'Warning: Could not read the installed package version: %s Using fallback version.',
         e,
     )
 

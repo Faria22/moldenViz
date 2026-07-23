@@ -84,8 +84,8 @@ a short isolated-environment smoke test:
 
 .. code-block:: bash
 
-   pip install -e '.[dev]'
-   hatch run bench-smoke
+   just sync
+   just bench-smoke
 
 The smoke command runs ``asv check`` and quick grid-construction cases. It verifies
 configuration, discovery, project building, isolated installation, and benchmark
@@ -100,22 +100,22 @@ Run the complete suite for the current commit:
 
 .. code-block:: bash
 
-   hatch run bench
+   just bench
 
-Pass an ASV revision range or benchmark filter through the Hatch script when a
+Pass an ASV revision and optional benchmark filters through the Just recipe when a
 focused run is more useful:
 
 .. code-block:: bash
 
-   hatch run bench main..HEAD
-   hatch run bench --bench TimeGTOTabulation HEAD^!
+   just bench main..HEAD
+   just bench HEAD^! --bench TimeGTOTabulation
 
 For a statistically sampled side-by-side comparison between a base revision and
 the current branch, use:
 
 .. code-block:: bash
 
-   hatch run asv continuous --factor 1.1 origin/main HEAD
+   uv run --locked --group dev asv continuous --factor 1.1 origin/main HEAD
 
 The default 10% reporting factor is a triage signal, not an automatic correctness
 threshold. Re-run suspicious cases on an idle, stable machine and inspect raw
@@ -138,9 +138,9 @@ Inspect saved measurements on the command line or build and preview the site:
 
 .. code-block:: bash
 
-   hatch run asv show HEAD
-   hatch run asv publish
-   hatch run asv preview
+   uv run --locked --group dev asv show HEAD
+   uv run --locked --group dev asv publish
+   uv run --locked --group dev asv preview
 
 Local results remain untracked because comparisons across unrelated machines are
 usually misleading. Results intended as a durable baseline should come from a
@@ -151,7 +151,7 @@ from different machine names into a regression decision.
 CI Strategy
 -----------
 
-Pull-request CI runs ``hatch run bench-smoke`` on the authoritative Python
+Pull-request CI runs ``just bench-smoke`` on the authoritative Python
 version. This catches broken configurations, imports, builds, isolated installs,
 and benchmark calls without asserting noisy timing limits on shared GitHub
 runners.
