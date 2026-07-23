@@ -24,15 +24,17 @@ classifiers = [
 ]
 dependencies = [
     "numpy>=2.2",
-    "pyvista",
-    "pyvistaqt",
-    "toml>=0.10",
     "pydantic>=2.12.0",
-    "PyQt5>=5.15",
-    "PySide6>=6.10",
 ]
 
 [project.optional-dependencies]
+gui = [
+    "matplotlib",
+    "pyvista",
+    "pyvistaqt",
+    "PySide6>=6.10",
+    "toml>=0.10",
+]
 dev = [
     "basedpyright>=1.31.4",
     "pytest>=8.4",
@@ -40,7 +42,12 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.15.22",
 ]
-docs = ["pydata-sphinx-theme>=0.16", "sphinx>=8.0"]
+docs = [
+    "matplotlib",
+    "pydata-sphinx-theme>=0.16",
+    "sphinx>=8.0",
+    "toml>=0.10",
+]
 
 [project.urls]
 Documentation = "https://moldenviz.readthedocs.io/en/latest/"
@@ -55,7 +62,7 @@ path = "src/moldenViz/__about__.py"
 
 [tool.hatch.envs.default]
 dev-mode = true
-features = ["dev"]
+features = ["dev", "gui"]
 
 [tool.hatch.envs.default.scripts]
 lint = "ruff check {args:src tests}"

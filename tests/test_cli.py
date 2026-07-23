@@ -148,3 +148,18 @@ def test_cli_rejects_removed_underscore_flag(monkeypatch: pytest.MonkeyPatch) ->
         cli.main()
 
     assert exc.value.code == ARGPARSE_USAGE_ERROR
+
+
+def test_missing_gui_error_gives_install_command(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The CLI should identify the supported extra when GUI imports fail."""
+    cli = _reload_cli(monkeypatch)
+
+    def missing_gui(_module: str) -> None:
+        raise ModuleNotFoundError('No module named pyvistaqt')
+
+    resolve_plotter: Any = vars(cli)['_resolve_plotter']
+    resolve_plotter.cache_clear()
+    monkeypatch.setattr(cli, 'import_module', missing_gui)
+
+    with pytest.raises(RuntimeError, match=r"pip install 'moldenViz\[gui\]'"):
+        resolve_plotter()
