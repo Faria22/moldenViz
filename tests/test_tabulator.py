@@ -195,6 +195,42 @@ def test_tabulate_mos(mo_inds: int | list[int] | range | None) -> None:
         assert mo_data.shape == (125, len(mo_inds))
 
 
+@pytest.mark.parametrize('mo_inds', [0, [0, 1, 2], None])
+def test_tabulate_mos_matches_sum_reduction(mo_inds: int | list[int] | None) -> None:
+    """Matrix contractions should match the previous sum reduction."""
+    tab = Tabulator(str(MOLDEN_PATH))
+    axis = np.linspace(-1.0, 1.0, 5)
+    tab.cartesian_grid(axis, axis, axis)
+
+    mo_data = tab.tabulate_mos(mo_inds)
+    if isinstance(mo_inds, int):
+        expected = np.sum(tab.gtos * tab._parser.mo_coeffs[mo_inds][None, :], axis=1)  # ruff:ignore[private-member-access]
+    else:
+        indices = list(range(len(tab._parser.mos))) if mo_inds is None else mo_inds  # ruff:ignore[private-member-access]
+        mo_coeffs = tab._parser.mo_coeffs[indices]  # ruff:ignore[private-member-access]
+        expected = np.sum(tab.gtos[:, None, :] * mo_coeffs[None, ...], axis=2)
+
+    np.testing.assert_allclose(mo_data, expected, rtol=1e-12, atol=1e-12)
+
+
+@pytest.mark.benchmark
+def test_tabulate_mos_all_benchmark(benchmark: BenchmarkFixture) -> None:
+    """Benchmark matrix-multiplication tabulation for all MOs."""
+    tab = Tabulator(str(MOLDEN_PATH))
+    axis = np.linspace(-3.0, 3.0, 20)
+    tab.cartesian_grid(axis, axis, axis)
+
+    mo_data = benchmark.pedantic(
+        tab.tabulate_mos,
+        args=(None,),
+        warmup_rounds=1,
+        rounds=5,
+        iterations=2,
+    )
+
+    assert mo_data.shape == (axis.size**3, len(tab._parser.mos))  # ruff:ignore[private-member-access]
+
+
 @pytest.mark.parametrize('mo_inds', [-1, range(0), range(-1, 1), [0, -1], [1, 2, 3, -1], [0, 178]])
 def test_invalid_mo_inds(mo_inds: int | list[int] | range | None) -> None:
     """Test that tabulate_mos raises ValueError for invalid mo_inds."""
