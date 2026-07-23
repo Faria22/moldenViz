@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pytest
 
+from moldenViz import Atom, GaussianPrimitive, Shell
 from moldenViz.tabulator import GridType, Tabulator
 
 SMALL_GRID_MAX_SECONDS = 0.5
@@ -73,6 +74,60 @@ def test_tabulate_gtos_cached_values_cover_all_coeffs() -> None:
     assert np.all(np.isfinite(gto_data))
     assert tab.gtos is gto_data  # Cached array should match the return value
     assert tab.has_gtos
+
+
+def test_tabulate_atom_reuses_exponentials_for_compatible_shells(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Compatible shells should share exponentials while retaining their prefactors."""
+
+    def normalized_shell(l: int, exponents: list[float], coefficients: list[float]) -> Shell:
+        shell = Shell(l, [GaussianPrimitive(exp, coeff) for exp, coeff in zip(exponents, coefficients, strict=True)])
+        shell._normalize()  # ruff:ignore[private-member-access]
+        return shell
+
+    s_shell = normalized_shell(0, [0.5, 1.5], [0.25, 0.75])
+    p_shell = normalized_shell(1, [0.5, 1.5], [0.8, 0.2])
+    d_shell = normalized_shell(2, [2.0], [1.0])
+    atom = Atom('X', 0, np.zeros(3), [s_shell, p_shell, d_shell])
+
+    tab = Tabulator(str(MOLDEN_PATH))
+    grid = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [0.5, -0.25, 0.75],
+            [-1.0, 0.5, 0.25],
+            [1.5, 1.0, -0.5],
+        ],
+    )
+    tab.set_grid(grid)
+    actual = np.empty((grid.shape[0], 9))
+
+    original_exp = np.exp
+    exponential_shapes: list[tuple[int, ...]] = []
+
+    def tracked_exp(values: np.ndarray) -> np.ndarray:
+        exponential_shapes.append(values.shape)
+        return original_exp(values)
+
+    monkeypatch.setattr(np, 'exp', tracked_exp)
+    tab._tabulate_atom(atom, slice(0, actual.shape[1]), actual)  # ruff:ignore[private-member-access]
+
+    r_sq = np.einsum('ij,ij->i', grid, grid)
+    solid_harmonics = Tabulator._tabulate_real_solid_harmonics(grid, 2)  # ruff:ignore[private-member-access]
+    expected = np.empty_like(actual)
+    block_cursor = 0
+    for shell in atom.shells:
+        num_m = 2 * shell.l + 1
+        contraction = shell._prefactor @ original_exp(  # ruff:ignore[private-member-access]
+            -shell._gto_exps[:, None] * r_sq[None, :],  # ruff:ignore[private-member-access]
+        )
+        expected[:, block_cursor : block_cursor + num_m] = (
+            contraction[:, None] * solid_harmonics[shell.l, np.arange(-shell.l, shell.l + 1), ...].T
+        )
+        block_cursor += num_m
+
+    assert exponential_shapes == [(2, grid.shape[0]), (1, grid.shape[0])]
+    assert not np.array_equal(s_shell._prefactor, p_shell._prefactor)  # ruff:ignore[private-member-access]
+    np.testing.assert_allclose(actual, expected, rtol=1e-14, atol=1e-14)
 
 
 def test_clear_gtos_releases_cache_and_reports_missing_data() -> None:
