@@ -166,7 +166,7 @@ def test_plotter_defers_gto_tabulation(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_tabulate_gtos(_tabulator: plotter_module.Tabulator) -> np.ndarray:
         start_event.set()
         finish_event.wait()
-        return np.ones((1, 1))
+        return np.ones((_tabulator.grid.shape[0], 1))
 
     original_cartesian = plotter_module.Tabulator.cartesian_grid
     cartesian_args: dict[str, bool] = {}
@@ -214,7 +214,7 @@ def test_wait_for_gtos_populates_data(monkeypatch: pytest.MonkeyPatch) -> None:
     _configure_plotter_env(monkeypatch)
 
     def fake_tabulate_gtos(_tabulator: plotter_module.Tabulator) -> np.ndarray:
-        return np.full((2, 1), 7.0)
+        return np.full((_tabulator.grid.shape[0], 1), 7.0)
 
     monkeypatch.setattr(plotter_module.Tabulator, 'tabulate_gtos', fake_tabulate_gtos)
 
@@ -225,5 +225,8 @@ def test_wait_for_gtos_populates_data(monkeypatch: pytest.MonkeyPatch) -> None:
     assert plotter._selection_screen is not None
     assert isinstance(plotter._selection_screen, FakeSelectionScreen)
     assert plotter._selection_screen.loading_states == [True, False]
-    np.testing.assert_array_equal(plotter.tabulator.gtos, np.full((2, 1), 7.0))
+    np.testing.assert_array_equal(
+        plotter.tabulator.gtos,
+        np.full((plotter.tabulator.grid.shape[0], 1), 7.0),
+    )
     assert plotter._gto_future is None

@@ -48,6 +48,25 @@ Docs live under ``docs/`` and use Sphinx:
 
 Open ``docs/build/html/index.html`` in a browser to preview changes.
 
+Plotter Architecture
+--------------------
+
+Keep changes to the interactive plotter within these boundaries:
+
+- ``plotter.py`` coordinates construction and connects the other layers.
+- ``_plotter_ui.py`` owns Tk and Qt menus, widgets, and dialogs.
+- ``_plotter_rendering.py`` owns PyVista scene and orbital rendering.
+- ``_plotter_jobs.py`` owns background-job state and must remain independent
+  of Tk, Qt, and PyVista so it can be tested without a GUI.
+- ``tabulator.py`` exposes the parsed data and computation operations needed
+  by those layers; plotter modules must not access private ``Tabulator``
+  fields.
+
+The underscored modules are internal implementation details. Keep
+``moldenViz.Plotter`` and ``moldenViz.plotter.Plotter`` as the supported
+public entry points, and pass dependencies through narrow methods rather than
+introducing imports between the UI and rendering modules.
+
 Pull Request Checklist
 ----------------------
 
