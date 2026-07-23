@@ -1,17 +1,21 @@
 """Utility objects used by the Plotter to build molecular meshes."""
 
+from __future__ import annotations
+
 import logging
 from enum import Enum
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import pyvista as pv
-from numpy.typing import NDArray
 from scipy.spatial.distance import pdist, squareform
 
 from ._config_module import Config
 from .models import Atom as ParsedAtom
 from .models import AtomType
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 logger = logging.getLogger(__name__)
 

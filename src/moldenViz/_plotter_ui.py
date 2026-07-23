@@ -1039,7 +1039,7 @@ class _PlotterUI:
         num_r, num_theta, num_phi = self.tabulator.grid_dimensions
 
         # The last point of the grid for sure has the largest r
-        r, _, _ = Tabulator._cartesian_to_spherical(*self.tabulator.grid[-1, :])  # ruff:ignore[private-member-access]
+        r, _, _ = Tabulator.cartesian_to_spherical(*self.tabulator.grid[-1, :])
 
         self.radius_entry.insert(0, str(r))
         self.radius_points_entry.insert(0, str(num_r))
@@ -1211,7 +1211,7 @@ class _PlotterUI:
             phi = np.linspace(0, 2 * np.pi, num_phi_points)
 
             rr, tt, pp = np.meshgrid(r, theta, phi, indexing='ij')
-            xx, yy, zz = Tabulator._spherical_to_cartesian(rr, tt, pp)  # ruff:ignore[private-member-access]
+            xx, yy, zz = Tabulator.spherical_to_cartesian(rr, tt, pp)
 
             new_grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
             if not np.array_equal(new_grid, self.tabulator.grid):
@@ -1413,7 +1413,9 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         self._update_nav_button_states()  # Update buttons for initial state
 
         self.orb_tv = _OrbitalsTreeview(self)
-        self.orb_tv._populate_tree(self.plotter.tabulator._parser.mos)  # ruff:ignore[private-member-access]
+        self.orb_tv._populate_tree(  # ruff:ignore[private-member-access]
+            self.plotter.tabulator.molecular_orbitals,
+        )
         self.orb_tv.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
     def _on_close(self) -> None:
@@ -1438,7 +1440,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
         """Advance to the next molecular orbital."""
         if self._loading:
             return
-        max_index = len(self.plotter.tabulator._parser.mos) - 1  # ruff:ignore[private-member-access]
+        max_index = len(self.plotter.tabulator.molecular_orbitals) - 1
         if max_index < 0:
             return
         current = self.current_mo_ind
@@ -1484,7 +1486,7 @@ class _OrbitalSelectionScreen(tk.Toplevel):
             self.prev_button.config(state=tk.DISABLED)
             self.next_button.config(state=tk.DISABLED)
             return
-        total = len(self.plotter.tabulator._parser.mos)  # ruff:ignore[private-member-access]
+        total = len(self.plotter.tabulator.molecular_orbitals)
         can_go_prev = self.current_mo_ind > 0
         can_go_next = total > 0 and self.current_mo_ind < total - 1
         self.prev_button.config(state=tk.NORMAL if can_go_prev else tk.DISABLED)

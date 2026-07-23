@@ -27,8 +27,8 @@ def test_spherical_cartesian_roundtrip() -> None:
     theta_vals = rng.uniform(0.0, np.pi, size=100)
     phi_vals = rng.uniform(-np.pi, np.pi, size=100)
 
-    x, y, z = Tabulator._spherical_to_cartesian(r_vals, theta_vals, phi_vals)  # ruff:ignore[private-member-access]
-    r2, theta2, phi2 = Tabulator._cartesian_to_spherical(x, y, z)  # ruff:ignore[private-member-access]
+    x, y, z = Tabulator.spherical_to_cartesian(r_vals, theta_vals, phi_vals)
+    r2, theta2, phi2 = Tabulator.cartesian_to_spherical(x, y, z)
 
     np.testing.assert_allclose(r_vals, r2, rtol=1e-12, atol=1e-12)
     np.testing.assert_allclose(theta_vals, theta2, rtol=1e-12, atol=1e-12)
@@ -43,7 +43,7 @@ def test_cartesian_to_spherical_handles_zero_radius() -> None:
 
     with warnings.catch_warnings():
         warnings.simplefilter('error', RuntimeWarning)
-        r, theta, phi = Tabulator._cartesian_to_spherical(x, y, z)  # ruff:ignore[private-member-access]
+        r, theta, phi = Tabulator.cartesian_to_spherical(x, y, z)
 
     assert np.isfinite(r).all()
     assert np.isfinite(theta).all()

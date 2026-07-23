@@ -11,6 +11,7 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.special import assoc_legendre_p_all as s_plm
 
+from .models import Atom, MolecularOrbital
 from .parser import Parser
 
 __all__ = ['GridType', 'Tabulator']
@@ -147,6 +148,36 @@ class Tabulator:
         if self.has_gtos:
             del self._gtos
 
+    def set_gtos(self, gtos: NDArray[np.floating]) -> None:
+        """Install GTO values produced for the current grid.
+
+        Parameters
+        ----------
+        gtos : NDArray[np.floating]
+            Two-dimensional GTO values with one row per grid point.
+
+        Raises
+        ------
+        ValueError
+            If the values are not two-dimensional or do not match the grid.
+        """
+        expected_dimensions = 2
+        if gtos.ndim != expected_dimensions:
+            raise ValueError('GTO data must be a two-dimensional array.')
+        if gtos.shape[0] != self.grid.shape[0]:
+            raise ValueError('GTO data must contain one row per grid point.')
+        self._gtos = gtos
+
+    @property
+    def atoms(self) -> list[Atom]:
+        """Atoms parsed from the Molden source."""
+        return self._parser.atoms
+
+    @property
+    def molecular_orbitals(self) -> list[MolecularOrbital]:
+        """Molecular-orbital metadata parsed from the Molden source."""
+        return self._parser.mos
+
     @property
     def grid_type(self) -> GridType:
         """The coordinate grid type."""
@@ -175,7 +206,7 @@ class Tabulator:
         return float(diffs[0])
 
     @staticmethod
-    def _spherical_to_cartesian(
+    def spherical_to_cartesian(
         r: NDArray[np.floating],
         theta: NDArray[np.floating],
         phi: NDArray[np.floating],
@@ -193,7 +224,7 @@ class Tabulator:
         return x, y, z
 
     @staticmethod
-    def _cartesian_to_spherical(
+    def cartesian_to_spherical(
         x: NDArray[np.floating],
         y: NDArray[np.floating],
         z: NDArray[np.floating],
@@ -216,6 +247,9 @@ class Tabulator:
         theta = np.arccos(safe_ratio)
         phi = np.arctan2(y, x)
         return r, theta, phi
+
+    _spherical_to_cartesian = spherical_to_cartesian
+    _cartesian_to_spherical = cartesian_to_spherical
 
     def _set_grid(
         self,
@@ -247,7 +281,7 @@ class Tabulator:
 
         xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
         if grid_type == GridType.SPHERICAL:
-            xx, yy, zz = self._spherical_to_cartesian(xx, yy, zz)
+            xx, yy, zz = self.spherical_to_cartesian(xx, yy, zz)
 
         self.set_grid(np.column_stack((xx.ravel(), yy.ravel(), zz.ravel())))
         self._grid_type = grid_type
@@ -368,7 +402,7 @@ class Tabulator:
 
         logger.debug('GTO data shape: %s', gto_data.shape)
 
-        self._gtos = gto_data
+        self.set_gtos(gto_data)
         return gto_data
 
     def _tabulate_atom(self, atom: Any, atom_slice: slice, gto_data: NDArray[np.floating]) -> None:
@@ -377,7 +411,7 @@ class Tabulator:
         max_l = atom.shells[-1].l
         total_points = self._grid.shape[0]
 
-        r, theta, phi = self._cartesian_to_spherical(*centered_grid.T)  # pyright: ignore[reportArgumentType]
+        r, theta, phi = self.cartesian_to_spherical(*centered_grid.T)  # pyright: ignore[reportArgumentType]
 
         num_r_pows = max(max_l + 1, 3)  # Ensure we compute up to r^2
         r_pows = np.ones((num_r_pows, total_points), dtype=float)

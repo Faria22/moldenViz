@@ -17,6 +17,7 @@ from matplotlib import colors as mcolors
 from moldenViz import Tabulator
 
 plotter_module = pytest.importorskip('moldenViz.plotter')
+_plotter_rendering_module = pytest.importorskip('moldenViz._plotter_rendering')
 _plotter_ui_module = pytest.importorskip('moldenViz._plotter_ui')
 config_module = pytest.importorskip('moldenViz._config_module')
 
@@ -28,6 +29,12 @@ def test_ui_helpers_are_defined_in_companion_module() -> None:
     assert plotter_module.Plotter._grid_settings_screen.__module__ == _plotter_ui_module.__name__
     assert plotter_module._OrbitalSelectionScreen.__module__ == _plotter_ui_module.__name__
     assert _plotter_ui_module._OrbitalsTreeview.__module__ == _plotter_ui_module.__name__
+
+
+def test_rendering_helpers_are_defined_in_companion_module() -> None:
+    """Keep PyVista scene operations out of the Plotter coordinator."""
+    assert plotter_module.Plotter.plot_orbital.__module__ == _plotter_rendering_module.__name__
+    assert plotter_module.Plotter._create_mo_mesh.__module__ == _plotter_rendering_module.__name__
 
 
 class _GridTypeProxy:
@@ -496,6 +503,17 @@ class FakeTabulator:
     def has_gtos(self) -> bool:
         return hasattr(self, '_gtos')
 
+    @property
+    def atoms(self) -> list[Any]:
+        return self._parser.atoms
+
+    @property
+    def molecular_orbitals(self) -> list[Any]:
+        return self._parser.mos
+
+    def set_gtos(self, gtos: np.ndarray) -> None:
+        self._gtos = gtos
+
     def spherical_grid(
         self,
         r: np.ndarray,
@@ -504,7 +522,7 @@ class FakeTabulator:
         tabulate_gtos: bool = True,
     ) -> None:
         rr, tt, pp = np.meshgrid(r, theta, phi, indexing='ij')
-        xx, yy, zz = Tabulator._spherical_to_cartesian(rr, tt, pp)
+        xx, yy, zz = Tabulator.spherical_to_cartesian(rr, tt, pp)
         self.grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
         self.grid_type = GridType.SPHERICAL
         self.grid_dimensions = (len(r), len(theta), len(phi))
@@ -596,7 +614,7 @@ class SelectionPlotter:
         self._tk_root = RootRecorder()
         self._no_prev_tk_root = True
         self.tabulator = FakeTabulator()
-        self.tabulator._parser.mos = [
+        self.tabulator.molecular_orbitals[:] = [
             SimpleNamespace(sym='s', spin='alpha', occ=2.0, energy=-0.5),
             SimpleNamespace(sym='p', spin='alpha', occ=1.0, energy=-0.1),
             SimpleNamespace(sym='d', spin='beta', occ=0.0, energy=0.2),
@@ -626,10 +644,10 @@ def plotter_env(monkeypatch: pytest.MonkeyPatch) -> Any:
     """
     monkeypatch.setattr(plotter_module, 'config', plotter_module.Config())
     monkeypatch.setattr(plotter_module, 'BackgroundPlotter', DummyBackgroundPlotter)
-    monkeypatch.setattr(plotter_module, 'Molecule', DummyMolecule)
+    monkeypatch.setattr(_plotter_rendering_module, 'Molecule', DummyMolecule)
     monkeypatch.setattr(plotter_module, '_OrbitalSelectionScreen', DummySelectionScreen)
-    monkeypatch.setattr(plotter_module.pv, 'StructuredGrid', DummyStructuredGrid)
-    monkeypatch.setattr(plotter_module.pv, 'pyvista_ndarray', lambda arr: arr)
+    monkeypatch.setattr(_plotter_rendering_module.pv, 'StructuredGrid', DummyStructuredGrid)
+    monkeypatch.setattr(_plotter_rendering_module.pv, 'pyvista_ndarray', lambda arr: arr)
     monkeypatch.setattr(plotter_module.Plotter, '_add_orbital_menus_to_pv_plotter', lambda _self: None)
     monkeypatch.setattr(plotter_module.Plotter, '_override_clear_all_button', lambda _self: None)
 
@@ -917,10 +935,10 @@ def test_plotter_builds_menus_and_overrides_clear(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(plotter_module, 'config', plotter_module.Config())
     monkeypatch.setattr(plotter_module, 'Tabulator', FakeTabulator)
     monkeypatch.setattr(plotter_module, 'BackgroundPlotter', MenuAwareBackgroundPlotter)
-    monkeypatch.setattr(plotter_module, 'Molecule', DummyMolecule)
+    monkeypatch.setattr(_plotter_rendering_module, 'Molecule', DummyMolecule)
     monkeypatch.setattr(plotter_module, '_OrbitalSelectionScreen', DummySelectionScreen)
-    monkeypatch.setattr(plotter_module.pv, 'StructuredGrid', DummyStructuredGrid)
-    monkeypatch.setattr(plotter_module.pv, 'pyvista_ndarray', lambda arr: arr)
+    monkeypatch.setattr(_plotter_rendering_module.pv, 'StructuredGrid', DummyStructuredGrid)
+    monkeypatch.setattr(_plotter_rendering_module.pv, 'pyvista_ndarray', lambda arr: arr)
     monkeypatch.setattr(_plotter_ui_module, 'QMenu', FakeQMenu)
     monkeypatch.setattr(_plotter_ui_module, 'QAction', FakeQAction)
     monkeypatch.setattr(_plotter_ui_module, 'isValid', lambda _action: True)
@@ -1970,7 +1988,7 @@ def test_orbital_selection_screen_navigation_and_close(selection_screen_ui: None
     screen._prev_plot()  # Should be no-op when at the start
     assert plotter.plot_calls[-1] == 0
 
-    plotter.tabulator._parser.mos = []  # type: ignore[attr-defined]
+    plotter.tabulator.molecular_orbitals.clear()
     before = plotter.plot_calls.copy()
     screen.current_mo_ind = -1
     screen._next_plot()
