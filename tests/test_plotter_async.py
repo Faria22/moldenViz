@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from collections import UserDict
 from pathlib import Path
 from types import SimpleNamespace
@@ -14,6 +15,8 @@ import numpy as np
 from moldenViz import plotter as plotter_module
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     import pytest
 
 
@@ -67,16 +70,51 @@ class FakeBackgroundPlotter:
 
 
 class FakeTk:
-    """Minimal Tk root substitute used to execute callbacks immediately."""
+    """Minimal Tk root substitute with an explicitly pumped event loop."""
 
     def __init__(self) -> None:
-        self.idle_callbacks: list[tuple[object, tuple[object, ...]]] = []
+        self.owner_thread_id = threading.get_ident()
+        self.tk_call_thread_ids: list[int] = []
+        self.callbacks: dict[str, tuple[object, tuple[object, ...]]] = {}
+        self._next_callback_id = 0
 
-    def after_idle(self, callback: object, *args: object) -> None:
-        """Invoke callbacks immediately while tracking invocations for tests."""
+    def after(self, _delay: int, callback: object, *args: object) -> str:
+        """Queue callbacks for explicit execution by the owning test thread.
+
+        Returns
+        -------
+        str
+            Identifier that can be passed to :meth:`after_cancel`.
+        """
+        self.tk_call_thread_ids.append(threading.get_ident())
+        assert self.tk_call_thread_ids[-1] == self.owner_thread_id
         assert callable(callback)
-        self.idle_callbacks.append((callback, args))
+        callback_id = f'after-{self._next_callback_id}'
+        self._next_callback_id += 1
+        self.callbacks[callback_id] = (callback, args)
+        return callback_id
+
+    def after_cancel(self, callback_id: str) -> None:
+        """Remove a queued callback."""
+        self.tk_call_thread_ids.append(threading.get_ident())
+        assert self.tk_call_thread_ids[-1] == self.owner_thread_id
+        self.callbacks.pop(callback_id, None)
+
+    def run_one_callback(self) -> bool:
+        """Run one queued callback as the owning Tk thread.
+
+        Returns
+        -------
+        bool
+            Whether a callback was available and executed.
+        """
+        if not self.callbacks:
+            return False
+        callback_id = next(iter(self.callbacks))
+        callback, args = self.callbacks.pop(callback_id)
+        assert callable(callback)
         callback(*args)
+        return True
 
     def mainloop(self) -> None:  # pragma: no cover - trivial
         """Expose Tk's mainloop hook for compatibility."""
@@ -157,6 +195,15 @@ def _fake_tk_root() -> Any:
     return cast(Any, FakeTk())
 
 
+def _pump_until(root: FakeTk, condition: Callable[[], bool], timeout: float = 1.0) -> None:
+    """Pump fake Tk callbacks until ``condition`` becomes true."""
+    deadline = time.monotonic() + timeout
+    while not condition():
+        assert time.monotonic() < deadline
+        root.run_one_callback()
+        time.sleep(0.001)
+
+
 def test_plotter_defers_gto_tabulation(monkeypatch: pytest.MonkeyPatch) -> None:
     """Default Plotter grids should tabulate GTOs in the background."""
     _configure_plotter_env(monkeypatch)
@@ -187,7 +234,8 @@ def test_plotter_defers_gto_tabulation(monkeypatch: pytest.MonkeyPatch) -> None:
 
     plotter: plotter_module.Plotter | None = None
     try:
-        plotter = plotter_module.Plotter(_sample_molden(), tk_root=_fake_tk_root())
+        root = _fake_tk_root()
+        plotter = plotter_module.Plotter(_sample_molden(), tk_root=root)
 
         assert cartesian_args['tabulate_gtos'] is False
         assert start_event.wait(timeout=1.0)
@@ -207,6 +255,7 @@ def test_plotter_defers_gto_tabulation(monkeypatch: pytest.MonkeyPatch) -> None:
     assert plotter._selection_screen is not None
     assert isinstance(plotter._selection_screen, FakeSelectionScreen)
     assert plotter._selection_screen.loading_states[-1] is False
+    assert set(root.tk_call_thread_ids) == {root.owner_thread_id}
 
 
 def test_wait_for_gtos_populates_data(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -286,15 +335,11 @@ def test_closing_plotter_discards_running_generation(monkeypatch: pytest.MonkeyP
     def controlled_compute(_tabulator: plotter_module.Tabulator, grid: np.ndarray) -> np.ndarray:
         started.set()
         release.wait()
+        callback_finished.set()
         return np.ones((grid.shape[0], 1))
 
-    class SignallingTk(FakeTk):
-        def after_idle(self, callback: object, *args: object) -> None:
-            super().after_idle(callback, *args)
-            callback_finished.set()
-
     monkeypatch.setattr(plotter_module.Tabulator, 'compute_gtos', controlled_compute)
-    plotter = plotter_module.Plotter(_sample_molden(), tk_root=cast(Any, SignallingTk()))
+    plotter = plotter_module.Plotter(_sample_molden(), tk_root=_fake_tk_root())
     assert started.wait(timeout=1.0)
     selection_screen = plotter._selection_screen
     assert isinstance(selection_screen, FakeSelectionScreen)
@@ -309,3 +354,69 @@ def test_closing_plotter_discards_running_generation(monkeypatch: pytest.MonkeyP
     assert plotter._gtos_ready is False
     assert plotter._orb_mesh is original_mesh
     assert selection_screen.loading_states == [True]
+
+
+def test_gto_success_is_delivered_by_tk_thread(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A worker should publish data without making any Tk calls."""
+    _configure_plotter_env(monkeypatch)
+    worker_thread_ids: list[int] = []
+
+    def fake_compute_gtos(_tabulator: plotter_module.Tabulator, grid: np.ndarray) -> np.ndarray:
+        worker_thread_ids.append(threading.get_ident())
+        return np.ones((grid.shape[0], 1))
+
+    monkeypatch.setattr(plotter_module.Tabulator, 'compute_gtos', fake_compute_gtos)
+    root = cast(FakeTk, _fake_tk_root())
+    plotter = plotter_module.Plotter(_sample_molden(), tk_root=cast(Any, root))
+
+    _pump_until(root, lambda: plotter._gtos_ready)
+
+    assert worker_thread_ids
+    assert worker_thread_ids[0] != root.owner_thread_id
+    assert set(root.tk_call_thread_ids) == {root.owner_thread_id}
+
+
+def test_gto_failure_is_delivered_by_tk_thread(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A background failure should show its message from the Tk thread."""
+    _configure_plotter_env(monkeypatch)
+    shown_on_threads: list[int] = []
+
+    def fail_compute(_tabulator: plotter_module.Tabulator, _grid: np.ndarray) -> np.ndarray:
+        raise ValueError('broken grid')
+
+    def fake_showerror(_title: str, _message: str) -> None:
+        shown_on_threads.append(threading.get_ident())
+
+    monkeypatch.setattr(plotter_module.Tabulator, 'compute_gtos', fail_compute)
+    monkeypatch.setattr(plotter_module.messagebox, 'showerror', fake_showerror)
+    root = cast(FakeTk, _fake_tk_root())
+    plotter_module.Plotter(_sample_molden(), tk_root=cast(Any, root))
+
+    _pump_until(root, lambda: bool(shown_on_threads))
+
+    assert shown_on_threads == [root.owner_thread_id]
+    assert set(root.tk_call_thread_ids) == {root.owner_thread_id}
+
+
+def test_close_stops_gto_delivery(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Closing the UI should cancel polling and discard queued delivery."""
+    _configure_plotter_env(monkeypatch)
+    finish_event = threading.Event()
+
+    def fake_compute_gtos(_tabulator: plotter_module.Tabulator, grid: np.ndarray) -> np.ndarray:
+        finish_event.wait()
+        return np.ones((grid.shape[0], 1))
+
+    monkeypatch.setattr(plotter_module.Tabulator, 'compute_gtos', fake_compute_gtos)
+    root = cast(FakeTk, _fake_tk_root())
+    plotter = plotter_module.Plotter(_sample_molden(), tk_root=cast(Any, root))
+
+    plotter._on_screen = False
+    plotter._cancel_gto_future()
+    finish_event.set()
+    time.sleep(0.01)
+
+    assert not root.callbacks
+    assert plotter._gtos_ready is False

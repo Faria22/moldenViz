@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import tkinter as tk
 from concurrent.futures import ThreadPoolExecutor
+from queue import SimpleQueue
 from tkinter import messagebox
 from typing import TYPE_CHECKING
 
@@ -72,7 +73,10 @@ class Plotter(_PlotterUI, _PlotterRendering):
 
         Note: `Tabulator` grid must be spherical or cartesian. Custom grids are not allowed.
     tk_root : tk.Tk, optional
-        If user is using the plotter inside a tk app, `tk_root` can be passed to not create a new tk instance.
+        If user is using the plotter inside a Tk app, `tk_root` can be passed
+        to avoid creating a new Tk instance. The caller retains ownership of a
+        supplied root and must keep its event loop running while background GTO
+        tabulation is active. Plotter does not quit or destroy a supplied root.
 
     Attributes
     ----------
@@ -88,6 +92,7 @@ class Plotter(_PlotterUI, _PlotterRendering):
 
     _SPHERICAL_GRID_SETTINGS_WINDOW_SIZE = '400x350'
     _CARTESIAN_GRID_SETTINGS_WINDOW_SIZE = '650x400'
+    _GTO_COMPLETION_POLL_MS = 10
 
     def __init__(
         self,
@@ -110,10 +115,13 @@ class Plotter(_PlotterUI, _PlotterRendering):
             self._tk_root.withdraw()  # Hides window
             logger.debug('Created internal Tk root window for Plotter UI.')
 
+        self._gto_completions: SimpleQueue[Callable[[], None]] = SimpleQueue()
+        self._gto_completion_poll_id: str | None = None
         self._gto_job: BackgroundJob[NDArray[np.floating]] = BackgroundJob(
             _GTO_EXECUTOR,
             self._dispatch_gto_completion,
         )
+        self._schedule_gto_completion_poll()
 
         self._pv_plotter = BackgroundPlotter(editor=False)
         self._pv_plotter.set_background(config.background_color)
@@ -235,11 +243,38 @@ class Plotter(_PlotterUI, _PlotterRendering):
         return self._gto_job.future
 
     def _dispatch_gto_completion(self, callback: Callable[[], None]) -> None:
-        """Schedule a completion callback on the owning Tk event loop."""
-        if self._tk_root is not None:
-            self._tk_root.after_idle(callback)
-        else:
+        """Publish a completion callback without interacting with Tk."""
+        if self._on_screen:
+            self._gto_completions.put(callback)
+
+    def _schedule_gto_completion_poll(self) -> None:
+        """Schedule completion polling from the Tk-owning thread."""
+        if self._tk_root is None or not self._on_screen:
+            return
+        self._gto_completion_poll_id = self._tk_root.after(
+            self._GTO_COMPLETION_POLL_MS,
+            self._poll_gto_completions,
+        )
+
+    def _poll_gto_completions(self) -> None:
+        """Deliver queued background completions on the Tk-owning thread."""
+        self._gto_completion_poll_id = None
+        if not self._on_screen:
+            return
+        while not self._gto_completions.empty():
+            callback = self._gto_completions.get_nowait()
             callback()
+            if not self._on_screen:
+                return
+        self._schedule_gto_completion_poll()
+
+    def _stop_gto_completion_poll(self) -> None:
+        """Stop polling and discard callbacks after the UI closes."""
+        if self._tk_root is not None and self._gto_completion_poll_id is not None:
+            self._tk_root.after_cancel(self._gto_completion_poll_id)
+            self._gto_completion_poll_id = None
+        while not self._gto_completions.empty():
+            self._gto_completions.get_nowait()
 
     def _schedule_gto_tabulation(self) -> None:
         """Submit background GTO tabulation work."""
@@ -291,6 +326,8 @@ class Plotter(_PlotterUI, _PlotterRendering):
 
     def _cancel_gto_future(self) -> None:
         """Cancel any pending GTO computation."""
+        if not self._on_screen:
+            self._stop_gto_completion_poll()
         if not self._gto_job.pending:
             return
         future = self._gto_job.future
