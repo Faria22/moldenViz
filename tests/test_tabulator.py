@@ -107,8 +107,8 @@ def test_tabulate_gtos_performance_small_grid() -> None:
 
 
 @pytest.mark.benchmark
-def test_tabulate_gtos_million_point_benchmark(benchmark: BenchmarkFixture) -> None:
-    """Benchmark million-point grids to ensure GTO tabulation stays sub-10s."""
+def test_tabulate_gtos_large_grid_benchmark(benchmark: BenchmarkFixture) -> None:
+    """Benchmark complete GTO tabulation on a 125,000-point grid."""
     tab = Tabulator(str(MOLDEN_PATH))
     axis = np.linspace(-3.0, 3.0, 50)
     tab.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
@@ -176,6 +176,104 @@ def test_tabulate_xlms_shape(lmax: int, num_points: int) -> None:
     xlms = Tabulator._tabulate_xlms(theta, phi, lmax)  # ruff:ignore[private-member-access]
 
     assert xlms.shape == (lmax + 1, 2 * lmax + 1, num_points)
+
+
+@pytest.mark.parametrize('l', range(5))
+def test_cartesian_solid_harmonics_match_spherical_kernel(l: int) -> None:
+    """Cartesian polynomials should preserve every supported l, m value."""
+    rng = np.random.default_rng(seed=8300 + l)
+    points = rng.uniform(-4.0, 4.0, size=(500, 3))
+    r, theta, phi = Tabulator.cartesian_to_spherical(*points.T)
+
+    actual = Tabulator._tabulate_real_solid_harmonics(points, l)  # ruff:ignore[private-member-access]
+    spherical = Tabulator._tabulate_xlms(theta, phi, l)  # ruff:ignore[private-member-access]
+
+    for m in range(-l, l + 1):
+        expected = r**l * spherical[l, m]
+        np.testing.assert_allclose(actual[l, m], expected, rtol=1e-11, atol=1e-11)
+
+
+def test_cartesian_solid_harmonics_handle_origin_and_axes() -> None:
+    """Every supported solid harmonic should be finite at Cartesian edge cases."""
+    points = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [-1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, -1.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, -1.0],
+        ],
+    )
+
+    actual = Tabulator._tabulate_real_solid_harmonics(points, 4)  # ruff:ignore[private-member-access]
+    r, theta, phi = Tabulator.cartesian_to_spherical(*points.T)
+    spherical = Tabulator._tabulate_xlms(theta, phi, 4)  # ruff:ignore[private-member-access]
+
+    assert np.all(np.isfinite(actual))
+    for l in range(5):
+        for m in range(-l, l + 1):
+            np.testing.assert_allclose(actual[l, m], r**l * spherical[l, m], rtol=1e-10, atol=5e-8)
+    np.testing.assert_allclose(actual[0, 0], 1 / np.sqrt(4 * np.pi))
+    np.testing.assert_allclose(actual[1:, :, 0], 0.0, atol=0.0)
+    np.testing.assert_allclose(actual[1, 1], np.sqrt(3 / (4 * np.pi)) * points[:, 0])
+    np.testing.assert_allclose(actual[1, -1], np.sqrt(3 / (4 * np.pi)) * points[:, 1])
+    np.testing.assert_allclose(actual[1, 0], np.sqrt(3 / (4 * np.pi)) * points[:, 2])
+
+
+@pytest.mark.parametrize(
+    'molden_path',
+    [
+        MOLDEN_PATH,
+        Path(__file__).parents[1] / 'src/moldenViz/examples/molden_files/pyridine.inp',
+    ],
+)
+def test_cartesian_gto_tabulation_matches_spherical_implementation(
+    monkeypatch: pytest.MonkeyPatch,
+    molden_path: Path,
+) -> None:
+    """Representative Molden inputs should match the previous GTO kernel."""
+    tab = Tabulator(str(molden_path))
+    axis = np.linspace(-2.0, 2.0, 7)
+    tab.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
+    actual = tab.tabulate_gtos()
+
+    def spherical_solid_harmonics(
+        centered_grid: np.ndarray,
+        lmax: int,
+    ) -> np.ndarray:
+        r, theta, phi = Tabulator.cartesian_to_spherical(*centered_grid.T)
+        xlms = Tabulator._tabulate_xlms(theta, phi, lmax)  # ruff:ignore[private-member-access]
+        return xlms * np.stack([r**l for l in range(lmax + 1)])[:, None, :]
+
+    monkeypatch.setattr(
+        Tabulator,
+        '_tabulate_real_solid_harmonics',
+        staticmethod(spherical_solid_harmonics),
+    )
+    expected = tab.tabulate_gtos()
+
+    # The spherical reference clips cos(theta) away from +/-1, so values that
+    # are analytically zero on coordinate axes retain about 1e-8 of noise.
+    np.testing.assert_allclose(actual, expected, rtol=1e-10, atol=2e-8)
+
+
+@pytest.mark.benchmark
+def test_cartesian_solid_harmonics_million_point_benchmark(benchmark: BenchmarkFixture) -> None:
+    """Benchmark the Cartesian solid-harmonic kernel on one million points."""
+    rng = np.random.default_rng(seed=8300)
+    points = rng.uniform(-6.0, 6.0, size=(1_000_000, 3))
+
+    solid_harmonics = benchmark.pedantic(
+        Tabulator._tabulate_real_solid_harmonics,  # ruff:ignore[private-member-access]
+        args=(points, 4),
+        warmup_rounds=1,
+        rounds=5,
+        iterations=1,
+    )
+
+    assert solid_harmonics.shape == (5, 9, points.shape[0])
 
 
 @pytest.mark.parametrize('mo_inds', [None, 0, [0], [0, 1, 2], [0, 1, 2, 3, 4], range(1, 10)])
