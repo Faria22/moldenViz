@@ -28,11 +28,11 @@ Key Features
 Quick Start
 -----------
 
-Install moldenViz:
+Install moldenViz with the GUI dependencies used by this quick start:
 
 .. code-block:: bash
 
-   pip install moldenViz
+   pip install 'moldenViz[gui]'
 
 Plot a molecule from the command line:
 

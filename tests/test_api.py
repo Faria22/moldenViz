@@ -67,10 +67,33 @@ def test_public_module_all_values_are_explicit() -> None:
 def test_root_import_is_lightweight_and_read_only(tmp_path: Path) -> None:
     """Importing the root models must not load GUI modules or create user config."""
     script = """
+import importlib.abc
 import pathlib
 import sys
-import moldenViz
 
+gui_modules = frozenset({
+    'matplotlib',
+    'pyvista',
+    'pyvistaqt',
+    'PySide6',
+    'qtpy',
+    'toml',
+})
+
+class CoreOnlyImportBlocker(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname.partition('.')[0] in gui_modules:
+            raise ModuleNotFoundError(f'blocked GUI dependency: {fullname}')
+        return None
+
+sys.meta_path.insert(0, CoreOnlyImportBlocker())
+
+from moldenViz import Parser, Tabulator
+from moldenViz.models import Atom
+
+assert Parser.__module__ == 'moldenViz.parser'
+assert Tabulator.__module__ == 'moldenViz.tabulator'
+assert Atom.__module__ == 'moldenViz.models'
 assert 'moldenViz.plotter' not in sys.modules
 assert 'moldenViz._plotter_ui' not in sys.modules
 assert 'pyvista' not in sys.modules

@@ -16,7 +16,7 @@ Set Up a Development Environment
 
    git clone https://github.com/Faria22/moldenViz.git
    cd moldenViz
-   pip install -e .[dev]
+   pip install -e '.[dev,gui]'
 
 Run Tests and Linters
 ---------------------

@@ -11,11 +11,24 @@ A Molden file stores the atomic structure and molecular orbital information prod
 Installation
 ------------
 
-Install the package from PyPI:
+Install the core package from PyPI for parsing and tabulation:
 
 .. code-block:: bash
 
    pip install moldenViz
+
+The core package does not install Qt, PyVista, or other visualization
+dependencies. To use the interactive viewer or the ``moldenViz`` CLI, install
+the GUI extra:
+
+.. code-block:: bash
+
+   pip install 'moldenViz[gui]'
+
+The GUI extra uses PySide6 as the supported Qt binding. The root package keeps
+``Atom``, ``Parser``, ``Tabulator``, and the other model types as intentional
+eager imports; importing them loads NumPy and Pydantic. ``Plotter`` remains a
+lazy import, so core-only workflows do not load or require the GUI stack.
 
 Prerequisites
 -------------

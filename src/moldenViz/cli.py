@@ -47,7 +47,7 @@ def _resolve_plotter() -> Callable[..., Any]:
         module = import_module('moldenViz.plotter')
     except ModuleNotFoundError as exc:
         raise RuntimeError(
-            'Plotter UI dependencies are missing. Install moldenViz with GUI extras to run the CLI.',
+            "Plotter UI dependencies are missing. Install them with: pip install 'moldenViz[gui]'",
         ) from exc
 
     return module.Plotter

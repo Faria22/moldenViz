@@ -8,11 +8,23 @@
 
 ## Installation
 
+Install the core parser and tabulator:
+
 ```console
 pip install moldenViz
 ```
 
-``moldenViz`` uses ``tkinter`` for its GUI. If ``python3 -m tkinter`` fails, install the tkinter package provided by your operating system (``brew install python-tk`` on macOS, ``sudo apt-get install python3-tk`` on Ubuntu).
+Install the interactive viewer and CLI dependencies with the GUI extra:
+
+```console
+pip install 'moldenViz[gui]'
+```
+
+The GUI extra uses PySide6 as its supported Qt binding. ``moldenViz`` also uses
+``tkinter``, which Python distributions commonly provide separately. If
+``python3 -m tkinter`` fails, install the tkinter package provided by your
+operating system (``brew install python-tk`` on macOS,
+``sudo apt-get install python3-tk`` on Ubuntu).
 
 ## Quick start
 
@@ -28,7 +40,17 @@ pip install moldenViz
 - Use the Python API for scripted workflows:
 
   ```python
+  from moldenViz import Parser, Tabulator
+
+  parser = Parser('my.molden')
+  tabulator = Tabulator(parser)
+  ```
+
+- With the GUI extra installed, launch a viewer from Python:
+
+  ```python
   from moldenViz import Plotter
+
   Plotter('my.molden')
   ```
 
