@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from importlib import import_module
 from math import gamma
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
+
+    from ._config_module import AtomType
 
 __all__ = ['Atom', 'AtomType', 'GaussianPrimitive', 'MolecularOrbital', 'Shell']
 
@@ -92,10 +94,27 @@ class Shell:
         self._prefactor = self._norm * self._gto_norms * self._gto_coeffs
 
 
-class AtomType(BaseModel):
-    """Validated visualization properties for an atomic element."""
+def __getattr__(name: str) -> Any:
+    """Lazily expose GUI-specific data models.
 
-    name: str = Field(..., min_length=1, max_length=3, description='Atom symbol')
-    color: str = Field(..., pattern=r'^[0-9A-Fa-f]{6}$', description='Hex color code without #')
-    radius: float = Field(..., gt=0, description='Atom radius (must be positive)')
-    max_num_bonds: int = Field(..., ge=0, description='Maximum number of bonds')
+    Parameters
+    ----------
+    name : str
+        Attribute requested from the module namespace.
+
+    Returns
+    -------
+    Any
+        The requested model.
+
+    Raises
+    ------
+    AttributeError
+        If the attribute is not defined.
+    """
+    if name == 'AtomType':
+        module = import_module('moldenViz._config_module')
+        atom_type_cls = module.AtomType
+        globals()['AtomType'] = atom_type_cls
+        return atom_type_cls
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')

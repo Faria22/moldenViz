@@ -9,8 +9,6 @@ import matplotlib.pyplot as plt
 import toml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .models import AtomType
-
 # Global config directory paths
 DEFAULT_CONFIGS_DIR = Path(__file__).parent / 'default_configs'
 CUSTOM_CONFIGS_DIR = Path().home() / '.config/moldenViz'
@@ -23,6 +21,15 @@ ATOM_TYPES_PATH = DEFAULT_CONFIGS_DIR / 'atom_types.json'
 # Maintain backwards compatibility
 default_configs_dir = DEFAULT_CONFIGS_DIR
 custom_configs_dir = CUSTOM_CONFIGS_DIR
+
+
+class AtomType(BaseModel):
+    """Validated visualization properties for an atomic element."""
+
+    name: str = Field(..., min_length=1, max_length=3, description='Atom symbol')
+    color: str = Field(..., pattern=r'^[0-9A-Fa-f]{6}$', description='Hex color code without #')
+    radius: float = Field(..., gt=0, description='Atom radius (must be positive)')
+    max_num_bonds: int = Field(..., ge=0, description='Maximum number of bonds')
 
 
 class SphericalGridConfig(BaseModel):
