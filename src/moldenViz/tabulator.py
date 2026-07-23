@@ -80,6 +80,7 @@ class Tabulator:
 
         # Used for when exporting to cube format
         self._grid_axes: tuple[NDArray[np.floating], ...] | None = None
+        self._gtos: NDArray[np.floating] | None = None
 
     @property
     def grid(self) -> NDArray[np.floating]:
@@ -101,6 +102,9 @@ class Tabulator:
         ValueError
             If the array does not have three columns or contains no rows.
         """
+        if self._only_molecule:
+            raise _grid_creation_with_only_molecule_error()
+
         min_num_rows = 1
         num_cols = 3
         num_dim = 2
@@ -117,9 +121,6 @@ class Tabulator:
         if new_grid.shape[1] != num_cols:
             raise ValueError(f"'grid' must have exactly 3 columns, but got {new_grid.shape[1]} columns.")
 
-        if self._only_molecule:
-            raise _grid_creation_with_only_molecule_error()
-
         self._grid = new_grid
         self._grid_type = GridType.UNKNOWN
         self._grid_dimensions = (0, 0, 0)
@@ -129,7 +130,7 @@ class Tabulator:
     @property
     def has_gtos(self) -> bool:
         """Whether Gaussian-type orbitals are currently cached."""
-        return hasattr(self, '_gtos')
+        return self._gtos is not None
 
     @property
     def gtos(self) -> NDArray[np.floating]:
@@ -140,14 +141,13 @@ class Tabulator:
         RuntimeError
             If GTOs have not been tabulated or the cache was cleared.
         """
-        if not self.has_gtos:
+        if self._gtos is None:
             raise RuntimeError('GTOs are not available. Call tabulate_gtos() first.')
         return self._gtos
 
     def clear_gtos(self) -> None:
         """Release any cached Gaussian-type orbital values."""
-        if self.has_gtos:
-            del self._gtos
+        self._gtos = None
 
     def set_gtos(self, gtos: NDArray[np.floating]) -> None:
         """Install GTO values produced for the current grid.
@@ -276,9 +276,16 @@ class Tabulator:
         tabulate_gtos : bool, optional
             Whether to tabulate Gaussian-type orbitals (GTOs) after creating the grid.
             Defaults to True.
+
+        Raises
+        ------
+        ValueError
+            If ``grid_type`` is ``GridType.UNKNOWN``.
         """
         if self._only_molecule:
             raise _grid_creation_with_only_molecule_error()
+        if grid_type == GridType.UNKNOWN:
+            raise ValueError('Grid type cannot be unknown.')
 
         xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
         if grid_type == GridType.SPHERICAL:

@@ -85,6 +85,7 @@ def test_clear_gtos_releases_cache_and_reports_missing_data() -> None:
     tab.clear_gtos()
 
     assert not tab.has_gtos
+    assert tab._gtos is None  # ruff:ignore[private-member-access]
     assert tab.grid is grid
     with pytest.raises(RuntimeError, match=r'Call tabulate_gtos\(\) first'):
         _ = tab.gtos
@@ -157,6 +158,23 @@ def test_set_grid_is_the_explicit_arbitrary_grid_mutator() -> None:
     assert tab.grid_dimensions == (0, 0, 0)
     assert tab.grid_axes is None
     assert not tab.has_gtos
+
+
+def test_set_grid_exits_early_when_only_molecule_is_enabled() -> None:
+    """Molecule-only tabulators should reject grid creation before validation."""
+    tab = Tabulator(str(MOLDEN_PATH), only_molecule=True)
+
+    with pytest.raises(RuntimeError, match='Grid creation is not allowed'):
+        tab.set_grid(None)
+
+
+def test_private_set_grid_rejects_unknown_grid_type() -> None:
+    """Structured grids require a known coordinate system."""
+    tab = Tabulator(str(MOLDEN_PATH))
+    axis = np.linspace(-1.0, 1.0, 2)
+
+    with pytest.raises(ValueError, match='Grid type cannot be unknown'):
+        tab._set_grid(axis, axis, axis, GridType.UNKNOWN)  # ruff:ignore[private-member-access]
 
 
 def test_grid_property_is_read_only() -> None:
