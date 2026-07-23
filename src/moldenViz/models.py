@@ -3,18 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from importlib import import_module
 from math import gamma
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
-    from ._config_module import AtomType
-
-__all__ = ['Atom', 'AtomType', 'GaussianPrimitive', 'MolecularOrbital', 'Shell']
+__all__ = ['Atom', 'GaussianPrimitive', 'MolecularOrbital', 'Shell']
 
 
 @dataclass
@@ -92,29 +89,3 @@ class Shell:
 
         self._norm = 1 / np.sqrt(overlap)
         self._prefactor = self._norm * self._gto_norms * self._gto_coeffs
-
-
-def __getattr__(name: str) -> Any:
-    """Lazily expose GUI-specific data models.
-
-    Parameters
-    ----------
-    name : str
-        Attribute requested from the module namespace.
-
-    Returns
-    -------
-    Any
-        The requested model.
-
-    Raises
-    ------
-    AttributeError
-        If the attribute is not defined.
-    """
-    if name == 'AtomType':
-        module = import_module('moldenViz._config_module')
-        atom_type_cls = module.AtomType
-        globals()['AtomType'] = atom_type_cls
-        return atom_type_cls
-    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')

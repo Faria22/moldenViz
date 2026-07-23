@@ -17,12 +17,12 @@ Read a Molden file and access its atoms and orbitals:
    atoms = parser.atoms
    mos = parser.mos
 
-The returned objects use public model types, so they can also be imported for
-annotations or construction:
+The returned objects use public parser model types, so they can also be
+imported for annotations or construction:
 
 .. code-block:: python
 
-   from moldenViz import Atom, AtomType, GaussianPrimitive, MolecularOrbital, Shell
+   from moldenViz import Atom, GaussianPrimitive, MolecularOrbital, Shell
 
 Use ``moldenViz.parser.BOHR_PER_ANGSTROM`` when converting Angstrom coordinates
 to the Bohr units used by parsed atom positions.
@@ -67,6 +67,13 @@ The ``Plotter`` class renders atoms, bonds, and (optionally) orbital isosurfaces
 
    # Plot only the molecular structure
    Plotter('molden.inp', only_molecule=True)
+
+The visualization-specific ``AtomType`` model is available from the package
+root when you need to describe atom display properties:
+
+.. code-block:: python
+
+   from moldenViz import AtomType
 
 Interactive Controls
 ~~~~~~~~~~~~~~~~~~~~

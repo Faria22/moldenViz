@@ -14,6 +14,10 @@ The documented ``moldenViz`` command and its flags are also supported.
 The individual datasets exported by ``moldenViz.examples`` are supported.
 The internal example registry used by the command-line interface is not public.
 
+The ``moldenViz.models`` namespace is reserved for parser and core result
+types. Visualization configuration types are not exported from that module;
+``AtomType`` is supported through ``moldenViz.AtomType`` only.
+
 Private API
 -----------
 
