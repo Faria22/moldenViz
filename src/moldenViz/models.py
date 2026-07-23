@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import gamma
 from typing import TYPE_CHECKING
 
 import numpy as np
 from pydantic import BaseModel, Field
-from scipy.special import gamma
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray

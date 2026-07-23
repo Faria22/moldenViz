@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import pyvista as pv
-from scipy.spatial.distance import pdist, squareform
 
 from ._config_module import Config
 from .models import Atom as ParsedAtom
@@ -276,16 +275,24 @@ class Molecule:
             List of parsed atom objects.
         """
         atomic_numbers = [atom.atomic_number for atom in atoms]
-        atom_centers = [atom.position for atom in atoms]
+        atom_centers = np.asarray([atom.position for atom in atoms], dtype=float)
         self.atoms = list(map(Atom, atomic_numbers, atom_centers))
         self.max_radius = np.max(np.linalg.norm(atom_centers, axis=1))
 
-        distances = squareform(pdist(atom_centers))  # Compute pairwise distances
-        mask = np.triu(np.ones_like(distances, dtype=bool), k=1)  # Ensure boolean mask
-        indices = np.where((distances < self.config.molecule.bond.max_length) & mask)  # Apply mask
+        atom_a_indices, atom_b_indices = np.triu_indices(len(atom_centers), k=1)
+        pairwise_distances = np.linalg.norm(
+            atom_centers[atom_a_indices] - atom_centers[atom_b_indices],
+            axis=1,
+        )
+        within_bond_length = pairwise_distances < self.config.molecule.bond.max_length
+        bond_indices = zip(
+            atom_a_indices[within_bond_length],
+            atom_b_indices[within_bond_length],
+            strict=False,
+        )
 
         if self.config.molecule.bond.show:
-            for atom_a_ind, atom_b_ind in zip(indices[0], indices[1], strict=False):
+            for atom_a_ind, atom_b_ind in bond_indices:
                 bond = Bond(self.atoms[atom_a_ind], self.atoms[atom_b_ind], self.config)
                 self.atoms[atom_a_ind].bonds.append(bond)
                 self.atoms[atom_b_ind].bonds.append(bond)

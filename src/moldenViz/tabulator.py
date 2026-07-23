@@ -10,7 +10,6 @@ from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.special import assoc_legendre_p_all as s_plm
 
 from .models import Atom, MolecularOrbital
 from .parser import Parser
@@ -654,57 +653,6 @@ class Tabulator:
                     cube_file.write('\n')
 
     @staticmethod
-    def _tabulate_xlms(theta: NDArray[np.floating], phi: NDArray[np.floating], lmax: int) -> NDArray[np.floating]:
-        r"""Tabulate the real spherical harmonics for given theta and phi values.
-
-        We define the real spherical harmonics, Xlms
-        (see eq.6, M.A. Blanco et al./Journal of Molecular Structure (Theochem) 419 (1997) 19-27), as:
-
-        Xlms = sqrt(2)*Pl|m|s(\theta)*sin(|m|\phi), m<0
-        Xlms = sqrt(2)*Plms(\theta)*cos(m\phi), m>0
-        Xlms =         Plms             , m=0
-
-        Note: Above, the Plms are normalized, i.e, \Theta_{lm}(\theta) in eq 1 of the paper.
-
-        Parameters
-        ----------
-        theta : NDArray[np.floating]
-            Array of theta values.
-        phi : NDArray[np.floating]
-            Array of phi values.
-        lmax : int
-            Maximum angular momentum quantum number.
-
-        Returns
-        -------
-        NDArray[np.floating]
-            Tabulated real spherical harmonics.
-
-        Raises
-        ------
-        ValueError
-            If input arrays are not 1D or of the same size, or if lmax is negative.
-        """
-        if theta.ndim != 1 or phi.ndim != 1 or theta.size != phi.size or lmax < 0:
-            raise ValueError('Invalid input: theta and phi must be 1D arrays of the same size.')
-        if theta.size == 0 or phi.size == 0:
-            raise ValueError('Input arrays theta and phi must not be empty.')
-        if lmax < 0:
-            raise ValueError('lmax must be a non-negative integer.')
-
-        plms = s_plm(lmax, lmax, Tabulator._check_bounds(np.cos(theta)), norm=True)[0] / np.sqrt(2 * np.pi)
-
-        xlms = np.empty_like(plms, dtype=float)
-        xlms[:, 0, :] = plms[:, 0, :]
-
-        for m in range(1, lmax + 1):
-            factor = -1 if (m % 2) else 1  # Condon-Shortley phase
-            xlms[:, -m, :] = factor * np.sqrt(2) * plms[:, m, :] * np.sin(m * phi)
-            xlms[:, m, :] = factor * np.sqrt(2) * plms[:, m, :] * np.cos(m * phi)
-
-        return xlms
-
-    @staticmethod
     def _tabulate_real_solid_harmonics(
         centered_grid: NDArray[np.floating],
         lmax: int,
@@ -792,7 +740,7 @@ class Tabulator:
 
     @staticmethod
     def _check_bounds(x: np.ndarray) -> np.ndarray:
-        """Ensure that x is within the open interval (-1, 1) for scipy's associated Legendre polynomial.
+        """Clip values to the valid cosine interval.
 
         Parameters
         ----------
@@ -802,8 +750,6 @@ class Tabulator:
         Returns
         -------
         np.ndarray
-            Clipped array with values in the open interval (-1, 1).
+            Clipped array with values in the closed interval [-1, 1].
         """
-        min_x = np.nextafter(-1.0, 0.0)
-        max_x = np.nextafter(1.0, 0.0)
-        return np.clip(x, min_x, max_x)
+        return np.clip(x, -1.0, 1.0)
