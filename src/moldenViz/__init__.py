@@ -6,7 +6,7 @@ from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
 from .__about__ import __version__
-from .models import Atom, AtomType, GaussianPrimitive, MolecularOrbital, Shell
+from .models import Atom, GaussianPrimitive, MolecularOrbital, Shell
 from .parser import Parser
 from .tabulator import GridType, Tabulator
 
@@ -24,6 +24,7 @@ __all__ = [
 ]
 
 if TYPE_CHECKING:  # pragma: no cover - type checking helper
+    from ._config_module import AtomType as AtomType
     from .plotter import Plotter as Plotter
 
 
@@ -45,6 +46,11 @@ def __getattr__(name: str) -> Any:
     AttributeError
         If the attribute is not defined.
     """
+    if name == 'AtomType':
+        module = import_module('moldenViz._config_module')
+        atom_type_cls = module.AtomType
+        globals()['AtomType'] = atom_type_cls
+        return atom_type_cls
     if name == 'Plotter':
         module = import_module('moldenViz.plotter')
         plotter_cls = module.Plotter

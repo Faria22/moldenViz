@@ -26,9 +26,10 @@ the GUI extra:
    pip install 'moldenViz[gui]'
 
 The GUI extra uses PySide6 as the supported Qt binding. The root package keeps
-``Atom``, ``Parser``, ``Tabulator``, and the other model types as intentional
-eager imports; importing them loads NumPy and Pydantic. ``Plotter`` remains a
-lazy import, so core-only workflows do not load or require the GUI stack.
+``Atom``, ``Parser``, ``Tabulator``, and the parser result types as intentional
+eager imports; importing them loads NumPy. The visualization-specific
+``AtomType`` model and ``Plotter`` remain lazy imports, so core-only workflows
+do not load or require Pydantic or the rest of the GUI stack.
 
 Prerequisites
 -------------

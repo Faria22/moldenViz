@@ -24,12 +24,12 @@ classifiers = [
 ]
 dependencies = [
     "numpy>=2.2",
-    "pydantic>=2.12.0",
 ]
 
 [project.optional-dependencies]
 gui = [
     "matplotlib",
+    "pydantic>=2.12.0",
     "pyvista",
     "pyvistaqt",
     "PySide6>=6.10",
@@ -44,6 +44,7 @@ dev = [
 ]
 docs = [
     "matplotlib",
+    "pydantic>=2.12.0",
     "pydata-sphinx-theme>=0.16",
     "sphinx>=8.0",
     "toml>=0.10",

@@ -10,7 +10,8 @@ from typing import TYPE_CHECKING
 import moldenViz
 import moldenViz.parser as parser_module
 import moldenViz.tabulator as tabulator_module
-from moldenViz import Atom, GaussianPrimitive, MolecularOrbital, Shell, examples
+from moldenViz import Atom, AtomType, GaussianPrimitive, MolecularOrbital, Shell, examples
+from moldenViz.models import AtomType as ModelAtomType
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -76,6 +77,7 @@ gui_modules = frozenset({
     'pyvista',
     'pyvistaqt',
     'PySide6',
+    'pydantic',
     'qtpy',
     'toml',
 })
@@ -97,8 +99,14 @@ assert Atom.__module__ == 'moldenViz.models'
 assert 'moldenViz.plotter' not in sys.modules
 assert 'moldenViz._plotter_ui' not in sys.modules
 assert 'pyvista' not in sys.modules
+assert 'pydantic' not in sys.modules
 assert not (pathlib.Path.home() / '.config' / 'moldenViz').exists()
 """
     env = os.environ.copy()
     env['HOME'] = str(tmp_path)
     subprocess.run([sys.executable, '-c', script], check=True, env=env)
+
+
+def test_atom_type_remains_available_from_public_paths() -> None:
+    """The GUI model should remain available through its supported imports."""
+    assert AtomType is ModelAtomType

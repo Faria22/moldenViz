@@ -39,7 +39,7 @@ jobs:
 
         assert Parser.__module__ == "moldenViz.parser"
         assert Tabulator.__module__ == "moldenViz.tabulator"
-        for module in ("matplotlib", "pyvista", "pyvistaqt", "PySide6", "qtpy", "toml"):
+        for module in ("matplotlib", "pydantic", "pyvista", "pyvistaqt", "PySide6", "qtpy", "toml"):
             assert importlib.util.find_spec(module) is None, module
         PY
 

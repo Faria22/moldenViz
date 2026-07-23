@@ -18,7 +18,7 @@ Data models
 .. autoclass:: moldenViz.models.Atom
    :members:
 
-.. autoclass:: moldenViz.models.AtomType
+.. autoclass:: moldenViz.AtomType
    :members:
 
 .. autoclass:: moldenViz.models.GaussianPrimitive

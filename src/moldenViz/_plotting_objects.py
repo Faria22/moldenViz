@@ -9,12 +9,12 @@ from typing import TYPE_CHECKING, cast
 import numpy as np
 import pyvista as pv
 
-from ._config_module import Config
-from .models import Atom as ParsedAtom
-from .models import AtomType
+from ._config_module import AtomType, Config
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
+
+    from .models import Atom as ParsedAtom
 
 logger = logging.getLogger(__name__)
 
