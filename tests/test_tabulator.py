@@ -76,6 +76,21 @@ def test_tabulate_gtos_cached_values_cover_all_coeffs() -> None:
     assert tab.has_gtos
 
 
+def test_compute_gtos_uses_explicit_grid_without_updating_cache() -> None:
+    """Explicit-grid computation should not read or update live grid state."""
+    tab = Tabulator(str(MOLDEN_PATH))
+    live_axis = np.linspace(-1.0, 1.0, 2)
+    tab.cartesian_grid(live_axis, live_axis, live_axis, tabulate_gtos=False)
+    live_grid = tab.grid.copy()
+    snapshot = np.array([[0.0, 0.0, 0.0], [0.25, -0.5, 0.75]])
+
+    gtos = tab.compute_gtos(snapshot)
+
+    assert gtos.shape == (snapshot.shape[0], tab._parser.mo_coeffs.shape[1])  # ruff:ignore[private-member-access]
+    np.testing.assert_array_equal(tab.grid, live_grid)
+    assert not tab.has_gtos
+
+
 def test_tabulate_atom_reuses_exponentials_for_compatible_shells(monkeypatch: pytest.MonkeyPatch) -> None:
     """Compatible shells should share exponentials while retaining their prefactors."""
 
@@ -109,7 +124,7 @@ def test_tabulate_atom_reuses_exponentials_for_compatible_shells(monkeypatch: py
         return original_exp(values)
 
     monkeypatch.setattr(np, 'exp', tracked_exp)
-    tab._tabulate_atom(atom, slice(0, actual.shape[1]), actual)  # ruff:ignore[private-member-access]
+    tab._tabulate_atom(grid, atom, slice(0, actual.shape[1]), actual)  # ruff:ignore[private-member-access]
 
     r_sq = np.einsum('ij,ij->i', grid, grid)
     solid_harmonics = Tabulator._tabulate_real_solid_harmonics(grid, 2)  # ruff:ignore[private-member-access]

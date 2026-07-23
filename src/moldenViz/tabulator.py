@@ -360,6 +360,62 @@ class Tabulator:
         logger.debug('Setting spherical grid axes with lengths r=%d, theta=%d, phi=%d.', len(r), len(theta), len(phi))
         self._set_grid(r, theta, phi, GridType.SPHERICAL, tabulate_gtos)
 
+    def compute_gtos(self, grid: NDArray[np.floating]) -> NDArray[np.floating]:
+        """Compute GTO values for an explicit Cartesian grid.
+
+        This method does not read or update the Tabulator's current grid or GTO
+        cache, so it is safe to use for background work on a grid snapshot.
+
+        Parameters
+        ----------
+        grid : NDArray[np.floating]
+            Cartesian grid points with shape ``(n_points, 3)``.
+
+        Returns
+        -------
+        NDArray[np.floating]
+            Array containing the tabulated GTO data.
+
+        Raises
+        ------
+        RuntimeError
+            If the `only_molecule` flag is set to `True`.
+        """
+        if self._only_molecule:
+            raise RuntimeError('Grid creation is not allowed when `only_molecule` is set to `True`.')
+
+        total_points = grid.shape[0]
+        total_coeffs = self._parser.mo_coeffs.shape[1]
+        logger.info('Tabulating GTOs on %d grid points.', total_points)
+
+        # Having a predefined array makes it faster to fill the data
+        gto_data = np.empty((total_points, total_coeffs))
+        atom_tasks: list[tuple[Any, slice]] = []
+        idx_shell_start = 0
+
+        # Calculate the slices for each atom's shells
+        for atom in self._parser.atoms:
+            num_gtos_in_shell = sum(2 * shell.l + 1 for shell in atom.shells)
+            atom_slice = slice(idx_shell_start, idx_shell_start + num_gtos_in_shell)
+            atom_tasks.append((atom, atom_slice))
+            idx_shell_start += num_gtos_in_shell
+
+        max_workers = min(len(atom_tasks), os.cpu_count() or 1)
+        if max_workers <= 1:
+            for atom, atom_slice in atom_tasks:
+                self._tabulate_atom(grid, atom, atom_slice, gto_data)
+        else:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = [
+                    executor.submit(self._tabulate_atom, grid, atom, atom_slice, gto_data)
+                    for atom, atom_slice in atom_tasks
+                ]
+                for future in futures:
+                    future.result()
+
+        logger.debug('GTO data shape: %s', gto_data.shape)
+        return gto_data
+
     def tabulate_gtos(self) -> NDArray[np.floating]:
         """Tabulate Gaussian-type orbitals (GTOs) on the current grid.
 
@@ -380,42 +436,19 @@ class Tabulator:
         if not hasattr(self, 'grid'):
             raise RuntimeError('Grid is not defined. Please create a grid before tabulating GTOs.')
 
-        total_points = self._grid.shape[0]
-        total_coeffs = self._parser.mo_coeffs.shape[1]
-        logger.info('Tabulating GTOs on %d grid points.', total_points)
-
-        # Having a predefined array makes it faster to fill the data
-        gto_data = np.empty((total_points, total_coeffs))
-        atom_tasks: list[tuple[Any, slice]] = []
-        idx_shell_start = 0
-
-        # Calculate the slices for each atom's shells
-        for atom in self._parser.atoms:
-            num_gtos_in_shell = sum(2 * shell.l + 1 for shell in atom.shells)
-            atom_slice = slice(idx_shell_start, idx_shell_start + num_gtos_in_shell)
-            atom_tasks.append((atom, atom_slice))
-            idx_shell_start += num_gtos_in_shell
-
-        max_workers = min(len(atom_tasks), os.cpu_count() or 1)
-        if max_workers <= 1:
-            for atom, atom_slice in atom_tasks:
-                self._tabulate_atom(atom, atom_slice, gto_data)
-        else:
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = [
-                    executor.submit(self._tabulate_atom, atom, atom_slice, gto_data) for atom, atom_slice in atom_tasks
-                ]
-                for future in futures:
-                    future.result()
-
-        logger.debug('GTO data shape: %s', gto_data.shape)
-
+        gto_data = self.compute_gtos(self._grid)
         self.set_gtos(gto_data)
         return gto_data
 
-    def _tabulate_atom(self, atom: Any, atom_slice: slice, gto_data: NDArray[np.floating]) -> None:
+    def _tabulate_atom(
+        self,
+        grid: NDArray[np.floating],
+        atom: Any,
+        atom_slice: slice,
+        gto_data: NDArray[np.floating],
+    ) -> None:
         """Tabulate all shells for a single atom into the shared GTO array."""
-        centered_grid = self._grid - atom.position
+        centered_grid = grid - atom.position
         max_l = atom.shells[-1].l
         r_sq = np.einsum('ij,ij->i', centered_grid, centered_grid)
         solid_harmonics = self._tabulate_real_solid_harmonics(centered_grid, max_l)

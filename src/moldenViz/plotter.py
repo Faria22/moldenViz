@@ -245,9 +245,11 @@ class Plotter(_PlotterUI, _PlotterRendering):
         """Submit background GTO tabulation work."""
         if self._only_molecule or self._gtos_ready or self._gto_job.pending:
             return
+        grid = self.tabulator.grid.copy()
+        grid.setflags(write=False)
         logger.info('Starting background GTO tabulation...')
         self._gto_job.start(
-            self.tabulator.tabulate_gtos,
+            lambda: self.tabulator.compute_gtos(grid),
             on_success=self._apply_gtos_ready,
             on_error=self._handle_gto_error,
         )
@@ -263,6 +265,8 @@ class Plotter(_PlotterUI, _PlotterRendering):
 
     def _apply_gtos_ready(self, gtos: NDArray[np.floating], elapsed: float) -> None:
         """Store computed GTOs and update UI state."""
+        if not self._on_screen:
+            return
         self.tabulator.set_gtos(gtos)
         self._gtos_ready = True
         logger.info('GTO tabulation completed in %.2fs.', elapsed)

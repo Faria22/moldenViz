@@ -163,10 +163,10 @@ def test_plotter_defers_gto_tabulation(monkeypatch: pytest.MonkeyPatch) -> None:
     start_event = threading.Event()
     finish_event = threading.Event()
 
-    def fake_tabulate_gtos(_tabulator: plotter_module.Tabulator) -> np.ndarray:
+    def fake_compute_gtos(_tabulator: plotter_module.Tabulator, grid: np.ndarray) -> np.ndarray:
         start_event.set()
         finish_event.wait()
-        return np.ones((_tabulator.grid.shape[0], 1))
+        return np.ones((grid.shape[0], 1))
 
     original_cartesian = plotter_module.Tabulator.cartesian_grid
     cartesian_args: dict[str, bool] = {}
@@ -182,7 +182,7 @@ def test_plotter_defers_gto_tabulation(monkeypatch: pytest.MonkeyPatch) -> None:
         original_cartesian(self, x, y, z, tabulate_gtos)
 
     monkeypatch.setattr(plotter_module.Tabulator, 'cartesian_grid', fake_cartesian)
-    monkeypatch.setattr(plotter_module.Tabulator, 'tabulate_gtos', fake_tabulate_gtos)
+    monkeypatch.setattr(plotter_module.Tabulator, 'compute_gtos', fake_compute_gtos)
     monkeypatch.setattr(plotter_module.config.grid, 'default_type', 'cartesian', raising=False)
 
     plotter: plotter_module.Plotter | None = None
@@ -213,10 +213,10 @@ def test_wait_for_gtos_populates_data(monkeypatch: pytest.MonkeyPatch) -> None:
     """wait_for_gtos should block until background work finishes and expose data."""
     _configure_plotter_env(monkeypatch)
 
-    def fake_tabulate_gtos(_tabulator: plotter_module.Tabulator) -> np.ndarray:
-        return np.full((_tabulator.grid.shape[0], 1), 7.0)
+    def fake_compute_gtos(_tabulator: plotter_module.Tabulator, grid: np.ndarray) -> np.ndarray:
+        return np.full((grid.shape[0], 1), 7.0)
 
-    monkeypatch.setattr(plotter_module.Tabulator, 'tabulate_gtos', fake_tabulate_gtos)
+    monkeypatch.setattr(plotter_module.Tabulator, 'compute_gtos', fake_compute_gtos)
 
     plotter = plotter_module.Plotter(_sample_molden(), tk_root=_fake_tk_root())
     plotter.wait_for_gtos()
@@ -230,3 +230,82 @@ def test_wait_for_gtos_populates_data(monkeypatch: pytest.MonkeyPatch) -> None:
         np.full((plotter.tabulator.grid.shape[0], 1), 7.0),
     )
     assert plotter._gto_future is None
+
+
+def test_replacing_grid_discards_running_generation(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only the newest grid snapshot may update the Tabulator and UI."""
+    _configure_plotter_env(monkeypatch)
+    first_started = threading.Event()
+    release_first = threading.Event()
+    second_started = threading.Event()
+    release_second = threading.Event()
+
+    def controlled_compute(_tabulator: plotter_module.Tabulator, grid: np.ndarray) -> np.ndarray:
+        if not first_started.is_set():
+            first_started.set()
+            release_first.wait()
+            return np.full((grid.shape[0], 1), 1.0)
+        second_started.set()
+        release_second.wait()
+        return np.full((grid.shape[0], 1), 2.0)
+
+    monkeypatch.setattr(plotter_module.Tabulator, 'compute_gtos', controlled_compute)
+    plotter = plotter_module.Plotter(_sample_molden(), tk_root=_fake_tk_root())
+    assert first_started.wait(timeout=1.0)
+    selection_screen = plotter._selection_screen
+    assert isinstance(selection_screen, FakeSelectionScreen)
+    original_mesh = plotter._orb_mesh
+
+    new_axis = np.linspace(-2.0, 2.0, 3)
+    plotter._update_mesh(new_axis, new_axis, new_axis, plotter_module.GridType.CARTESIAN)
+    release_first.set()
+    assert second_started.wait(timeout=1.0)
+
+    assert not plotter.tabulator.has_gtos
+    assert plotter._orb_mesh is original_mesh
+    assert selection_screen.loading_states == [True, True]
+
+    release_second.set()
+    plotter.wait_for_gtos()
+
+    np.testing.assert_array_equal(
+        plotter.tabulator.gtos,
+        np.full((new_axis.size**3, 1), 2.0),
+    )
+    assert plotter._orb_mesh is not original_mesh
+    assert selection_screen.loading_states == [True, True, False]
+
+
+def test_closing_plotter_discards_running_generation(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A result finishing after close must not update Tabulator or UI state."""
+    _configure_plotter_env(monkeypatch)
+    started = threading.Event()
+    release = threading.Event()
+    callback_finished = threading.Event()
+
+    def controlled_compute(_tabulator: plotter_module.Tabulator, grid: np.ndarray) -> np.ndarray:
+        started.set()
+        release.wait()
+        return np.ones((grid.shape[0], 1))
+
+    class SignallingTk(FakeTk):
+        def after_idle(self, callback: object, *args: object) -> None:
+            super().after_idle(callback, *args)
+            callback_finished.set()
+
+    monkeypatch.setattr(plotter_module.Tabulator, 'compute_gtos', controlled_compute)
+    plotter = plotter_module.Plotter(_sample_molden(), tk_root=cast(Any, SignallingTk()))
+    assert started.wait(timeout=1.0)
+    selection_screen = plotter._selection_screen
+    assert isinstance(selection_screen, FakeSelectionScreen)
+    original_mesh = plotter._orb_mesh
+
+    plotter._on_screen = False
+    plotter._cancel_gto_future()
+    release.set()
+    assert callback_finished.wait(timeout=1.0)
+
+    assert not plotter.tabulator.has_gtos
+    assert plotter._gtos_ready is False
+    assert plotter._orb_mesh is original_mesh
+    assert selection_screen.loading_states == [True]
