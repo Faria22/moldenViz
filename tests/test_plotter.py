@@ -487,7 +487,7 @@ class FakeTabulator:
         self.grid_dimensions = (1, 1, 1)
         self.grid = np.zeros((1, 3))
         self.grid_axes = None
-        self._gtos = np.zeros((1, 1))
+        self._gtos: np.ndarray | None = np.zeros((1, 1))
         self._parser = SimpleNamespace(
             atoms=[SimpleNamespace(symbol='H', coords=(0.0, 0.0, 0.0))],
             mos=[SimpleNamespace(sym='s', spin='alpha', occ=2.0, energy=-0.5)],
@@ -497,11 +497,13 @@ class FakeTabulator:
 
     @property
     def gtos(self) -> np.ndarray:
+        if self._gtos is None:
+            raise RuntimeError('GTOs are not available. Call tabulate_gtos() first.')
         return self._gtos
 
     @property
     def has_gtos(self) -> bool:
-        return hasattr(self, '_gtos')
+        return self._gtos is not None
 
     @property
     def atoms(self) -> list[Any]:
@@ -513,6 +515,9 @@ class FakeTabulator:
 
     def set_gtos(self, gtos: np.ndarray) -> None:
         self._gtos = gtos
+
+    def clear_gtos(self) -> None:
+        self._gtos = None
 
     def spherical_grid(
         self,
@@ -825,7 +830,7 @@ def test_plotter_rejects_unknown_grid_type(plotter_env: Any) -> None:
 
 def test_plotter_requires_tabulated_gtos(plotter_env: Any) -> None:
     tabulator = plotter_env.make_tabulator()
-    del tabulator._gtos
+    tabulator.clear_gtos()
 
     with pytest.raises(ValueError, match='tabulated GTOs'):
         plotter_env.make_plotter(tabulator=tabulator)
