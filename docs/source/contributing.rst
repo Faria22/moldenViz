@@ -12,11 +12,13 @@ Report Issues
 Set Up a Development Environment
 --------------------------------
 
+Install uv, just 1.54 or newer, and Python 3.10 or newer. Then:
+
 .. code-block:: bash
 
    git clone https://github.com/Faria22/moldenViz.git
    cd moldenViz
-   pip install -e '.[dev,gui]'
+   just sync
 
 Run Tests and Linters
 ---------------------
@@ -25,17 +27,20 @@ Always run the test suite and static checks before pushing:
 
 .. code-block:: bash
 
-   hatch run all
+   just all
 
-The combined ``all`` script runs tests, lint, and type checks in sequence. To invoke an individual stage, use:
+The combined ``all`` recipe runs linting, type checks, tests, and the
+documentation build in sequence. To invoke an individual stage, use:
 
 .. code-block:: bash
 
-   hatch run test
-   hatch run lint
-   hatch run typecheck
+   just test
+   just lint
+   just typecheck
+   just docs
 
-Linting auto-fixes are available with ``hatch run lint --fix``.
+Linting auto-fixes are available with ``just lint --fix``. All Python commands
+run through uv with the committed lockfile.
 
 Build Documentation
 -------------------
@@ -44,7 +49,7 @@ Docs live under ``docs/`` and use Sphinx:
 
 .. code-block:: bash
 
-   make -C docs clean html
+   just docs
 
 Open ``docs/build/html/index.html`` in a browser to preview changes.
 
@@ -73,7 +78,24 @@ Pull Request Checklist
 - Reference the issue number and describe behaviour changes.
 - Mention new CLI flags or configuration keys in the docs and changelog.
 - Attach screenshots for UI tweaks.
-- Confirm ``pytest``, ``ruff check``, ``basedpyright``, and ``make -C docs html`` all succeed.
+- Confirm ``just all`` succeeds.
+
+Prepare a Release
+-----------------
+
+``pyproject.toml`` is the single source of truth for the package version. To
+preview a patch release without changing files, commits, tags, or remotes:
+
+.. code-block:: bash
+
+   just release patch -d
+
+Replace ``patch`` with another bump supported by ``uv version`` when needed.
+The long form of the flag is ``--dry-run``. Running the recipe without the
+dry-run flag requires a clean working tree. It
+updates the version and lockfile, validates the project, builds the
+distributions, commits the version bump, creates the corresponding ``v`` tag,
+and atomically pushes the commit and tag to ``origin``.
 
 Roadmap and Community
 ---------------------
