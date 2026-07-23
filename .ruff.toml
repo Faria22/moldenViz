@@ -12,6 +12,9 @@ inline-quotes = "single"
 [lint.pydocstyle]
 convention = "numpy"
 
+[lint.per-file-ignores]
+"benchmarks/**" = ["ARG002", "PLR6301"]
+
 [lint]
 select = ["ALL"]
 fixable = ["ALL"]

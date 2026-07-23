@@ -14,6 +14,7 @@ the project.
 ## Project Layout
 - `src/moldenViz/`: Core library modules (parser, tabulator, plotting widgets, configuration loader, CLI).
 - `tests/`: Pytest suites that mirror the source modules (add new tests via `test_<module>.py`).
+- `benchmarks/`: ASV performance and peak-memory suites.
 - `docs/`: Sphinx documentation project; generated HTML lives in `docs/build/html/`.
 - `dist/` & `Library/`: Build artifacts—leave untouched unless you are packaging a release.
 
@@ -22,7 +23,12 @@ the project.
 - **Static typing**: `basedpyright src tests`.
 - **Unit tests**: `pytest` (optionally `--maxfail=1 -k <pattern>` while iterating).
 - **Coverage**: `pytest --cov=moldenViz --cov-report=term-missing` before opening a PR.
+- **Benchmark smoke test**: `hatch run bench-smoke`.
+- **Current-commit benchmarks**: `hatch run bench`.
 - **Docs build**: `make -C docs clean` then `make -C docs html` when signatures or API docs change.
+
+See the [benchmark guide](https://moldenviz.readthedocs.io/en/latest/benchmarks.html)
+for the full matrix, revision comparisons, result storage, and CI policy.
 
 ## Coding Conventions
 - Follow PEP 8 with 4-space indentation; prefer explicit imports (`from moldenViz.parser import Parser`).

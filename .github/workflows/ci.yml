@@ -101,3 +101,24 @@ jobs:
 
     - name: Build documentation
       run: make -C docs html
+
+  benchmark-smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v5
+      with:
+        fetch-depth: 0
+
+    - name: Set up authoritative benchmark Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.13"
+
+    - name: Install hatch
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install hatch
+
+    - name: Validate ASV suite in an isolated environment
+      run: hatch run bench-smoke
