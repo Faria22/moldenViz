@@ -421,19 +421,33 @@ class Tabulator:
         solid_harmonics = self._tabulate_real_solid_harmonics(centered_grid, max_l)
         atom_block = gto_data[:, atom_slice]
         block_cursor = 0
+        # Group only lightweight shell metadata so each exponential block can
+        # be released before the next exact exponent sequence is evaluated.
+        shell_groups: dict[tuple[int, bytes], list[tuple[Any, slice]]] = {}
 
         for shell in atom.shells:
             l = shell.l
             num_m = 2 * l + 1
-            m_inds = np.arange(-l, l + 1)
             inner_slice = slice(block_cursor, block_cursor + num_m)
+            exponent_key = (
+                shell._gto_exps.size,  # ruff:ignore[private-member-access]
+                shell._gto_exps.tobytes(),  # ruff:ignore[private-member-access]
+            )
+            shell_groups.setdefault(exponent_key, []).append((shell, inner_slice))
+            block_cursor += num_m
 
-            contraction = shell._prefactor @ np.exp(  # ruff:ignore[private-member-access]
-                -shell._gto_exps[:, None] * r_sq[None, :],  # ruff:ignore[private-member-access]
+        for compatible_shells in shell_groups.values():
+            first_shell = compatible_shells[0][0]
+            exponentials = np.exp(
+                -first_shell._gto_exps[:, None] * r_sq[None, :],  # ruff:ignore[private-member-access]
             )
 
-            atom_block[:, inner_slice] = contraction[:, None] * solid_harmonics[l, m_inds, ...].T
-            block_cursor += num_m
+            for shell, inner_slice in compatible_shells:
+                l = shell.l
+                m_inds = np.arange(-l, l + 1)
+                contraction = shell._prefactor @ exponentials  # ruff:ignore[private-member-access]
+                atom_block[:, inner_slice] = contraction[:, None] * solid_harmonics[l, m_inds, ...].T
+            del exponentials
 
     def tabulate_mos(self, mo_inds: int | _MOIndices | None = None) -> NDArray[np.floating]:
         """Tabulate molecular orbitals (MOs) on the current grid.
