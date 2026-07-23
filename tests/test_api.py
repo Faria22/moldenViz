@@ -8,10 +8,10 @@ import sys
 from typing import TYPE_CHECKING
 
 import moldenViz
+import moldenViz.models as models_module
 import moldenViz.parser as parser_module
 import moldenViz.tabulator as tabulator_module
 from moldenViz import Atom, AtomType, GaussianPrimitive, MolecularOrbital, Shell, examples
-from moldenViz.models import AtomType as ModelAtomType
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -53,6 +53,7 @@ def test_removed_v1_names_are_not_public() -> None:
 
 def test_public_module_all_values_are_explicit() -> None:
     """Public modules should export only supported project-owned names."""
+    assert models_module.__all__ == ['Atom', 'GaussianPrimitive', 'MolecularOrbital', 'Shell']
     assert parser_module.__all__ == [
         'BOHR_PER_ANGSTROM',
         'Atom',
@@ -107,6 +108,7 @@ assert not (pathlib.Path.home() / '.config' / 'moldenViz').exists()
     subprocess.run([sys.executable, '-c', script], check=True, env=env)
 
 
-def test_atom_type_remains_available_from_public_paths() -> None:
-    """The GUI model should remain available through its supported imports."""
-    assert AtomType is ModelAtomType
+def test_atom_type_is_public_only_from_package_root() -> None:
+    """The GUI model should not be exposed alongside parser result models."""
+    assert AtomType.__module__ == 'moldenViz._config_module'
+    assert not hasattr(models_module, 'AtomType')

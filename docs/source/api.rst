@@ -12,13 +12,10 @@ Package exports
 ``GridType``, ``MolecularOrbital``, ``Parser``, ``Plotter``, ``Shell``,
 ``Tabulator``, and ``__version__``.
 
-Data models
------------
+Parser data models
+------------------
 
 .. autoclass:: moldenViz.models.Atom
-   :members:
-
-.. autoclass:: moldenViz.AtomType
    :members:
 
 .. autoclass:: moldenViz.models.GaussianPrimitive
@@ -31,6 +28,16 @@ Data models
 .. data:: moldenViz.parser.BOHR_PER_ANGSTROM
 
    Number of Bohr in one Angstrom.
+
+Visualization configuration
+---------------------------
+
+``AtomType`` is a visualization-specific model. Its supported import path is
+``moldenViz.AtomType``; it is not part of the parser-focused
+``moldenViz.models`` namespace.
+
+.. autoclass:: moldenViz.AtomType
+   :members:
 
 Parser
 ------
