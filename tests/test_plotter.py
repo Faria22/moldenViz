@@ -260,6 +260,8 @@ class DummyTk:
         self.withdrawn = False
         self.mainloop_calls = 0
         self.quit_calls = 0
+        self.after_callbacks: dict[str, tuple[object, tuple[object, ...]]] = {}
+        self._next_after_id = 0
 
     def withdraw(self) -> None:
         self.withdrawn = True
@@ -270,9 +272,14 @@ class DummyTk:
     def quit(self) -> None:
         self.quit_calls += 1
 
-    @staticmethod
-    def after_idle(callback: Any, *args: object) -> None:
-        callback(*args)
+    def after(self, _delay: int, callback: object, *args: object) -> str:
+        callback_id = f'after-{self._next_after_id}'
+        self._next_after_id += 1
+        self.after_callbacks[callback_id] = (callback, args)
+        return callback_id
+
+    def after_cancel(self, callback_id: str) -> None:
+        self.after_callbacks.pop(callback_id, None)
 
 
 class DummyWindow:
