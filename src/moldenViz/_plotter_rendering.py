@@ -48,6 +48,7 @@ class _PlotterRendering:
 
         def _cancel_gto_future(self) -> None: ...
         def _ensure_gtos_ready(self) -> bool: ...
+        def _schedule_gto_tabulation(self) -> None: ...
         def _update_settings_button_states(self) -> None: ...
 
     @staticmethod
@@ -237,9 +238,9 @@ class _PlotterRendering:
                 'Updating grid...',
             )
         if grid_type == GridType.CARTESIAN:
-            self.tabulator.cartesian_grid(i_points, j_points, k_points)
+            self.tabulator.cartesian_grid(i_points, j_points, k_points, tabulate_gtos=False)
         elif grid_type == GridType.SPHERICAL:
-            self.tabulator.spherical_grid(i_points, j_points, k_points)
+            self.tabulator.spherical_grid(i_points, j_points, k_points, tabulate_gtos=False)
         else:
             raise ValueError('The plotter only supports spherical and cartesian grids.')
 
@@ -251,9 +252,4 @@ class _PlotterRendering:
             dimensions,
         )
 
-        self._orb_mesh = self._create_mo_mesh()
-        self._gtos_ready = True
-        if self._selection_screen:
-            self._selection_screen._on_gtos_ready()  # ruff:ignore[private-member-access]
-            if self._selection_screen.current_mo_ind >= 0:
-                self.plot_orbital(self._selection_screen.current_mo_ind)
+        self._schedule_gto_tabulation()
