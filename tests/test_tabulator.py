@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import warnings
+from math import factorial
 from pathlib import Path
 from time import perf_counter
 from typing import TYPE_CHECKING
@@ -19,6 +20,46 @@ if TYPE_CHECKING:
     from pytest_benchmark.fixture import BenchmarkFixture
 
 MOLDEN_PATH = Path(__file__).with_name('sample_molden.inp')
+
+
+def _tabulate_xlms(theta: np.ndarray, phi: np.ndarray, lmax: int) -> np.ndarray:
+    """Return normalized real spherical harmonics for test comparisons.
+
+    Returns
+    -------
+    np.ndarray
+        Real spherical harmonics indexed by ``[l, m, point]``.
+    """
+    cos_theta = np.cos(theta)
+    sin_theta = np.sin(theta)
+    plms = np.zeros((lmax + 1, lmax + 1, theta.size), dtype=float)
+
+    for m in range(lmax + 1):
+        if m == 0:
+            plms[0, 0] = 1.0
+        else:
+            plms[m, m] = (2 * m - 1) * sin_theta * plms[m - 1, m - 1]
+
+        if m < lmax:
+            plms[m + 1, m] = (2 * m + 1) * cos_theta * plms[m, m]
+
+        for l in range(m + 2, lmax + 1):
+            plms[l, m] = ((2 * l - 1) * cos_theta * plms[l - 1, m] - (l + m - 1) * plms[l - 2, m]) / (l - m)
+
+    xlms = np.zeros((lmax + 1, 2 * lmax + 1, theta.size), dtype=float)
+    for l in range(lmax + 1):
+        for m in range(l + 1):
+            normalization = np.sqrt(
+                (2 * l + 1) * factorial(l - m) / (4 * np.pi * factorial(l + m)),
+            )
+            if m == 0:
+                xlms[l, 0] = normalization * plms[l, 0]
+            else:
+                scale = np.sqrt(2) * normalization * plms[l, m]
+                xlms[l, -m] = scale * np.sin(m * phi)
+                xlms[l, m] = scale * np.cos(m * phi)
+
+    return xlms
 
 
 def test_spherical_cartesian_roundtrip() -> None:
@@ -261,7 +302,7 @@ def test_tabulate_xlms_shape(lmax: int, num_points: int) -> None:
     theta = np.linspace(0.0, np.pi, num_points, dtype=float)
     phi = np.linspace(-np.pi, np.pi, num_points, dtype=float)
 
-    xlms = Tabulator._tabulate_xlms(theta, phi, lmax)  # ruff:ignore[private-member-access]
+    xlms = _tabulate_xlms(theta, phi, lmax)
 
     assert xlms.shape == (lmax + 1, 2 * lmax + 1, num_points)
 
@@ -274,7 +315,7 @@ def test_cartesian_solid_harmonics_match_spherical_kernel(l: int) -> None:
     r, theta, phi = Tabulator.cartesian_to_spherical(*points.T)
 
     actual = Tabulator._tabulate_real_solid_harmonics(points, l)  # ruff:ignore[private-member-access]
-    spherical = Tabulator._tabulate_xlms(theta, phi, l)  # ruff:ignore[private-member-access]
+    spherical = _tabulate_xlms(theta, phi, l)
 
     for m in range(-l, l + 1):
         expected = r**l * spherical[l, m]
@@ -297,7 +338,7 @@ def test_cartesian_solid_harmonics_handle_origin_and_axes() -> None:
 
     actual = Tabulator._tabulate_real_solid_harmonics(points, 4)  # ruff:ignore[private-member-access]
     r, theta, phi = Tabulator.cartesian_to_spherical(*points.T)
-    spherical = Tabulator._tabulate_xlms(theta, phi, 4)  # ruff:ignore[private-member-access]
+    spherical = _tabulate_xlms(theta, phi, 4)
 
     assert np.all(np.isfinite(actual))
     for l in range(5):
@@ -332,7 +373,7 @@ def test_cartesian_gto_tabulation_matches_spherical_implementation(
         lmax: int,
     ) -> np.ndarray:
         r, theta, phi = Tabulator.cartesian_to_spherical(*centered_grid.T)
-        xlms = Tabulator._tabulate_xlms(theta, phi, lmax)  # ruff:ignore[private-member-access]
+        xlms = _tabulate_xlms(theta, phi, lmax)
         return xlms * np.stack([r**l for l in range(lmax + 1)])[:, None, :]
 
     monkeypatch.setattr(
@@ -342,8 +383,6 @@ def test_cartesian_gto_tabulation_matches_spherical_implementation(
     )
     expected = tab.tabulate_gtos()
 
-    # The spherical reference clips cos(theta) away from +/-1, so values that
-    # are analytically zero on coordinate axes retain about 1e-8 of noise.
     np.testing.assert_allclose(actual, expected, rtol=1e-10, atol=2e-8)
 
 

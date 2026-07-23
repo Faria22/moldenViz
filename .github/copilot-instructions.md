@@ -78,7 +78,7 @@ tests/                 # Test suite
 [project]
 name = "moldenViz"
 requires-python = ">=3.8"
-dependencies = ["numpy", "pyvista", "pyvistaqt", "scipy", "PySide6", "toml"]
+dependencies = ["numpy", "pyvista", "pyvistaqt", "PySide6", "toml"]
 
 [project.scripts]
 moldenViz = "moldenViz._cli:main"
@@ -148,5 +148,5 @@ tests/test_parser.py::test_parser_invalid_input_type[None] PASSED               
 - **Plotter**: Visualizes molecules and molecular orbitals using PyVista/Qt
 - **CLI**: Provides command-line interface with example molecules and options
 - Built with modern Python packaging (pyproject.toml, hatchling)
-- Uses scientific Python stack (NumPy, SciPy) for computational core
+- Uses NumPy for the computational core
 - Uses PyVista/PySide6 for 3D visualization

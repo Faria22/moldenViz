@@ -9,7 +9,8 @@ import pytest
 import pyvista as pv
 
 from moldenViz._config_module import Config
-from moldenViz._plotting_objects import Atom, Bond
+from moldenViz._plotting_objects import Atom, Bond, Molecule
+from moldenViz.models import Atom as ParsedAtom
 
 
 def _axis_extents(mesh: pv.PolyData, origin: np.ndarray, axis: np.ndarray) -> tuple[float, float]:
@@ -104,3 +105,19 @@ def test_zero_length_bond_is_discarded_before_mesh_construction(
 
     assert bond.mesh is None
     assert 'Cannot render zero-length bond' in caplog.text
+
+
+def test_molecule_infers_bonds_from_numpy_pairwise_distances() -> None:
+    """Only atom pairs within the configured distance should be bonded."""
+    atoms = [
+        ParsedAtom('H', 1, np.array([0.0, 0.0, 0.0]), []),
+        ParsedAtom('H', 1, np.array([1.0, 0.0, 0.0]), []),
+        ParsedAtom('H', 1, np.array([10.0, 0.0, 0.0]), []),
+    ]
+
+    molecule = Molecule(atoms)
+
+    assert len(molecule.atoms[0].bonds) == 1
+    assert len(molecule.atoms[1].bonds) == 1
+    assert molecule.atoms[0].bonds[0] is molecule.atoms[1].bonds[0]
+    assert molecule.atoms[2].bonds == []
