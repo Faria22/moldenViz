@@ -6,6 +6,7 @@ from ._shared import (
     EXAMPLE_NAMES,
     GRID_EDGES,
     MO_SELECTIONS,
+    POINT_CHUNK_SIZES,
     REPRESENTATIVE_EXAMPLES,
     WORKER_COUNTS,
     MOSelection,
@@ -33,6 +34,26 @@ class TimeGTOTabulation:
     def time_tabulate_gtos(self, molecule: str, edge_size: int) -> None:
         """Tabulate every basis function on the selected grid."""
         self.tabulator.tabulate_gtos()
+
+
+class TimeGTOChunkSizes:
+    """Measure the runtime tradeoff across bounded point chunk sizes."""
+
+    params = (REPRESENTATIVE_EXAMPLES, (50, 100), POINT_CHUNK_SIZES)
+    param_names = ['molecule', 'edge_size', 'point_chunk_size']
+    number = 1
+    repeat = (3, 5, 1.0)
+    timeout = 180
+
+    def setup(self, molecule: str, edge_size: int, point_chunk_size: int | None) -> None:
+        """Create a tabulator with an uncomputed Cartesian grid."""
+        self.tabulator = Tabulator(example_source(molecule))
+        axis = grid_axis(edge_size)
+        self.tabulator.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
+
+    def time_tabulate_gtos(self, molecule: str, edge_size: int, point_chunk_size: int | None) -> None:
+        """Tabulate GTOs with the selected point-chunk bound."""
+        self.tabulator.tabulate_gtos(point_chunk_size=point_chunk_size)
 
 
 class TimeGTOWorkerScaling:

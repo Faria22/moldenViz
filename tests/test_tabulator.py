@@ -126,6 +126,55 @@ def test_compute_gtos_uses_explicit_grid_without_updating_cache() -> None:
     assert not tab.has_gtos
 
 
+@pytest.mark.parametrize('point_chunk_size', [1, 17, 10_000])
+def test_compute_gtos_chunks_match_full_grid(point_chunk_size: int) -> None:
+    """Point chunks should preserve GTO values, shape, and basis ordering."""
+    tab = Tabulator(str(MOLDEN_PATH))
+    axis = np.linspace(-1.0, 1.0, 5)
+    tab.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
+
+    expected = tab.compute_gtos(tab.grid, point_chunk_size=None)
+    actual = tab.compute_gtos(tab.grid, point_chunk_size=point_chunk_size)
+
+    np.testing.assert_allclose(actual, expected, rtol=1e-12, atol=1e-12)
+
+
+@pytest.mark.parametrize('point_chunk_size', [0, -1, True, 1.5])
+def test_compute_gtos_rejects_invalid_point_chunk_size(point_chunk_size: object) -> None:
+    """Chunk sizes must be positive integers or None."""
+    tab = Tabulator(str(MOLDEN_PATH))
+    axis = np.linspace(-1.0, 1.0, 2)
+    tab.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
+
+    with pytest.raises(ValueError, match='positive integer or None'):
+        tab.compute_gtos(tab.grid, point_chunk_size=point_chunk_size)  # type: ignore[arg-type]
+
+
+def test_compute_gtos_default_bounds_worker_point_slices(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The default policy should keep each worker task at or below 32,768 points."""
+    tab = Tabulator(str(MOLDEN_PATH))
+    grid = np.zeros((32_769, 3))
+    chunk_lengths: list[int] = []
+
+    def fake_tabulate_atom(
+        chunk: np.ndarray,
+        _atom: Atom,
+        atom_slice: slice,
+        gto_data: np.ndarray,
+    ) -> None:
+        chunk_lengths.append(chunk.shape[0])
+        gto_data[:, atom_slice] = 0.0
+
+    monkeypatch.setattr('moldenViz.tabulator.os.cpu_count', lambda: 1)
+    monkeypatch.setattr(tab, '_tabulate_atom', fake_tabulate_atom)
+
+    actual = tab.compute_gtos(grid)
+
+    num_atoms = len(tab._parser.atoms)  # ruff:ignore[private-member-access]
+    assert actual.shape == (grid.shape[0], tab._parser.mo_coeffs.shape[1])  # ruff:ignore[private-member-access]
+    assert chunk_lengths == [32_768, 1] * num_atoms
+
+
 def test_gto_worker_policy_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
     """Default and explicit worker counts should respect CPU and atom limits."""
     default_worker_count = 4
