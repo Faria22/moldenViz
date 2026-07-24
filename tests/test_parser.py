@@ -15,6 +15,11 @@ Parser = parser_module.Parser
 # utilities
 # ----------------------------------------------------------------------
 MOLDEN_PATH = Path(__file__).with_name('sample_molden.inp')
+PYSCF_SPHERICAL_PATH = Path(__file__).parent / 'fixtures/pyscf/co-cc-pvqz-spherical.molden'
+PYSCF_CARTESIAN_PATH = Path(__file__).parent / 'fixtures/pyscf/co-cc-pvqz-cartesian.molden'
+PYSCF_CARTESIAN_PATHS = tuple(sorted((Path(__file__).parent / 'fixtures/pyscf').glob('*-cartesian.molden')))
+CO_ATOM_COUNT = 2
+PYSCF_LMAX = 4
 
 
 @pytest.fixture(scope='session')
@@ -139,3 +144,43 @@ def test_only_molecule_has_stable_result_attributes() -> None:
     assert parser.shells == []
     assert parser.mos == []
     assert parser.mo_coeffs.shape == (0, 0)
+
+
+def test_pyscf_spherical_fixture() -> None:
+    """PySCF's parenthesized atom units and lowercase basis tags should parse."""
+    parser = Parser(str(PYSCF_SPHERICAL_PATH))
+
+    assert parser.basis_representation == 'spherical'
+    assert len(parser.atoms) == CO_ATOM_COUNT
+    assert max(shell.l for shell in parser.shells) == PYSCF_LMAX
+    assert parser.mo_coeffs.shape == (12, 110)
+
+
+def test_pyscf_cartesian_fixture() -> None:
+    """Cartesian 6D/10F/15G files should expose their full AO layout."""
+    parser = Parser(str(PYSCF_CARTESIAN_PATH))
+
+    assert parser.basis_representation == 'cartesian'
+    assert len(parser.atoms) == CO_ATOM_COUNT
+    assert max(shell.l for shell in parser.shells) == PYSCF_LMAX
+    assert parser.mo_coeffs.shape == (12, 140)
+    assert parser._gto_order() == list(range(140))  # ruff:ignore[private-member-access]
+
+
+@pytest.mark.parametrize('molden_path', PYSCF_CARTESIAN_PATHS)
+def test_all_pyscf_cartesian_fixtures_have_consistent_dimensions(molden_path: Path) -> None:
+    """Every bundled geometry should parse its complete Cartesian AO layout."""
+    parser = Parser(str(molden_path))
+    expected_components = sum((shell.l + 1) * (shell.l + 2) // 2 for shell in parser.shells)
+
+    assert parser.basis_representation == 'cartesian'
+    assert parser.mo_coeffs.shape == (12, expected_components)
+
+
+def test_mixed_basis_declarations_are_rejected() -> None:
+    """A file must not ambiguously declare spherical and Cartesian shells."""
+    lines = PYSCF_CARTESIAN_PATH.read_text().splitlines(True)
+    lines.append('[5d]\n')
+
+    with pytest.raises(ValueError, match='Mixed spherical and Cartesian'):
+        Parser(lines)

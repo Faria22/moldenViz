@@ -6,7 +6,7 @@ Getting Started
 What is a Molden file?
 ----------------------
 
-A Molden file stores the atomic structure and molecular orbital information produced by many quantum-chemistry codes (GAUSSIAN, ORCA, Molpro, and others). Each file contains ``[Atoms]`` coordinates, contracted Gaussian shells in ``[GTO]``, and orbital coefficients under ``[MO]``. ``moldenViz`` currently reads Molden files that use **spherical Gaussian functions**; Cartesian variants (sometimes labelled 5D/9G) raise an error during parsing. For the full format specification, refer to the `official Molden format description <https://www.theochem.ru.nl/molden/molden_format.html>`_.
+A Molden file stores the atomic structure and molecular orbital information produced by many quantum-chemistry codes (GAUSSIAN, ORCA, Molpro, and others). Each file contains ``[Atoms]`` coordinates, contracted Gaussian shells in ``[GTO]``, and orbital coefficients under ``[MO]``. ``moldenViz`` reads both spherical ``5D``/``7F``/``9G`` and Cartesian ``6D``/``10F``/``15G`` basis representations for shells from s through g. A file must declare one representation consistently. For the full format specification, refer to the `official Molden format description <https://www.theochem.ru.nl/molden/molden_format.html>`_.
 
 Installation
 ------------
