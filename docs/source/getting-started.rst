@@ -17,6 +17,12 @@ Install the core package from PyPI for parsing and tabulation:
 
    pip install moldenViz
 
+Or add it to a project with uv:
+
+.. code-block:: bash
+
+   uv add moldenViz
+
 The core package does not install Qt, PyVista, or other visualization
 dependencies. To use the interactive viewer or the ``moldenViz`` CLI, install
 the GUI extra:
@@ -24,6 +30,20 @@ the GUI extra:
 .. code-block:: bash
 
    pip install 'moldenViz[gui]'
+
+With uv:
+
+.. code-block:: bash
+
+   uv add 'moldenViz[gui]'
+
+Or install the CLI as a standalone uv tool:
+
+.. code-block:: bash
+
+   uv tool install 'moldenViz[gui]'
+
+This makes the ``moldenViz`` command available on your ``PATH``.
 
 The GUI extra uses PySide6 as the supported Qt binding. The root package keeps
 ``Atom``, ``Parser``, ``Tabulator``, and the parser result types as intentional
