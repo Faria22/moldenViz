@@ -22,11 +22,11 @@ bench revision="HEAD^!" *args:
     uv run --locked --group dev asv run {{ args }} {{ revision }}
 
 bench-check:
-    uv run --locked --group dev asv check
+    uv run --locked --group dev asv check --python=same
 
 bench-smoke:
     uv run --locked --group dev asv machine --yes
-    uv run --locked --group dev asv check
+    uv run --locked --group dev asv check --python=same
     uv run --locked --group dev asv run --quick --show-stderr --bench time_create_cartesian_grid HEAD^!
 
 cov *args:
