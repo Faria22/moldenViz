@@ -14,6 +14,7 @@ from moldenViz import Atom, GaussianPrimitive, Shell
 from moldenViz.tabulator import GridType, Tabulator
 
 MOLDEN_PATH = Path(__file__).with_name('sample_molden.inp')
+PYSCF_SPHERICAL_PATH = Path(__file__).parent / 'fixtures/pyscf/co-cc-pvqz-spherical.molden'
 
 
 def _tabulate_xlms(theta: np.ndarray, phi: np.ndarray, lmax: int) -> np.ndarray:
@@ -417,6 +418,46 @@ def test_cartesian_solid_harmonics_match_spherical_kernel(l: int) -> None:
         np.testing.assert_allclose(actual[l, m], expected, rtol=1e-11, atol=1e-11)
 
 
+@pytest.mark.parametrize('lmax', range(5))
+def test_generated_solid_harmonics_match_generic_kernel(lmax: int) -> None:
+    """Generated kernels should match the independent finite-polynomial oracle."""
+    rng = np.random.default_rng(seed=11600 + lmax)
+    random_points = rng.uniform(-4.0, 4.0, size=(500, 3))
+    edge_points = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [1e-14, 0.0, 1.0],
+            [0.0, -1e-14, -1.0],
+        ],
+    )
+    points = np.concatenate((random_points, edge_points))
+
+    actual = Tabulator._tabulate_real_solid_harmonics(points, lmax)  # ruff:ignore[private-member-access]
+    expected = Tabulator._tabulate_real_solid_harmonics_generic(  # ruff:ignore[private-member-access]
+        points,
+        lmax,
+    )
+
+    np.testing.assert_allclose(actual, expected, rtol=1e-12, atol=1e-12)
+
+
+def test_solid_harmonics_above_generated_range_use_generic_kernel() -> None:
+    """Angular momenta above g should retain the general fallback."""
+    points = np.array([[0.25, -0.5, 1.0], [-1.0, 0.5, 0.25]])
+    generated_lmax = 5
+
+    actual = Tabulator._tabulate_real_solid_harmonics(points, generated_lmax)  # ruff:ignore[private-member-access]
+    expected = Tabulator._tabulate_real_solid_harmonics_generic(  # ruff:ignore[private-member-access]
+        points,
+        generated_lmax,
+    )
+
+    np.testing.assert_array_equal(actual, expected)
+
+
 def test_cartesian_solid_harmonics_handle_origin_and_axes() -> None:
     """Every supported solid harmonic should be finite at Cartesian edge cases."""
     points = np.array(
@@ -451,6 +492,7 @@ def test_cartesian_solid_harmonics_handle_origin_and_axes() -> None:
     [
         MOLDEN_PATH,
         Path(__file__).parents[1] / 'src/moldenViz/examples/molden_files/pyridine.inp',
+        PYSCF_SPHERICAL_PATH,
     ],
 )
 def test_cartesian_gto_tabulation_matches_spherical_implementation(

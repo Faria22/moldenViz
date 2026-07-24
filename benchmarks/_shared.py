@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 
 from moldenViz import examples
+from moldenViz.tabulator import Tabulator
 
 if TYPE_CHECKING:
-    from moldenViz.tabulator import Tabulator
+    from numpy.typing import NDArray
 
 EXAMPLE_NAMES = (
     'acrolein',
@@ -27,8 +29,23 @@ POINT_CHUNK_SIZES = (8_192, 32_768, 65_536, None)
 MO_SELECTIONS = ('single', 'several', 'all')
 REPRESENTATIVE_EXAMPLES = ('h2o', 'furan', 'benzene')
 WORKER_COUNTS = (1, 4)
+PYSCF_CO_SPHERICAL = Path(__file__).parents[1] / 'tests/fixtures/pyscf/co-cc-pvqz-spherical.molden'
 
 MOSelection = Literal['single', 'several', 'all']
+
+
+class GenericSolidHarmonicTabulator(Tabulator):
+    """Tabulator using the finite-polynomial solid-harmonic oracle."""
+
+    @staticmethod
+    def _tabulate_real_solid_harmonics(
+        centered_grid: NDArray[np.floating],
+        lmax: int,
+    ) -> NDArray[np.floating]:
+        return Tabulator._tabulate_real_solid_harmonics_generic(  # ruff:ignore[private-member-access]
+            centered_grid,
+            lmax,
+        )
 
 
 def example_source(name: str) -> list[str]:

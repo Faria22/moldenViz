@@ -20,5 +20,12 @@ class TimeSolidHarmonics:
         self.points = rng.uniform(-6.0, 6.0, size=(num_points, 3))
 
     def time_real_solid_harmonics(self, num_points: int, lmax: int) -> None:
-        """Evaluate every real solid harmonic through ``lmax``."""
+        """Evaluate the adopted real solid-harmonic path through ``lmax``."""
         Tabulator._tabulate_real_solid_harmonics(self.points, lmax)  # ruff:ignore[private-member-access]
+
+    def time_real_solid_harmonics_generic(self, num_points: int, lmax: int) -> None:
+        """Evaluate the general finite-polynomial correctness oracle."""
+        Tabulator._tabulate_real_solid_harmonics_generic(  # ruff:ignore[private-member-access]
+            self.points,
+            lmax,
+        )

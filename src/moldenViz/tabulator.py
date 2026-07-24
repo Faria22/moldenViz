@@ -11,6 +11,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from ._generated_solid_harmonics import tabulate_solid_harmonics
 from .models import Atom, MolecularOrbital
 from .parser import Parser
 
@@ -24,6 +25,7 @@ _MAX_GTO_WORKERS = 4
 _PARALLEL_GTO_POINT_LIMIT = 125_000
 _S_HARMONIC_SCALE = np.sqrt(1.0 / (4.0 * np.pi))
 _P_HARMONIC_SCALE = np.sqrt(3.0 / (4.0 * np.pi))
+_GENERATED_SOLID_HARMONIC_LMAX = 4
 _GTO_EXECUTOR = ThreadPoolExecutor(
     max_workers=min(_MAX_GTO_WORKERS, os.cpu_count() or 1),
     thread_name_prefix='moldenViz-gto',
@@ -817,7 +819,53 @@ class Tabulator:
         centered_grid: NDArray[np.floating],
         lmax: int,
     ) -> NDArray[np.floating]:
-        r"""Tabulate normalized real solid harmonics directly in Cartesian coordinates.
+        """Tabulate normalized real solid harmonics in Cartesian coordinates.
+
+        Generated straight-line NumPy kernels handle the Molden-supported range
+        through ``l=4``. Higher angular momenta retain the finite-polynomial
+        implementation as a fallback.
+
+        Parameters
+        ----------
+        centered_grid : NDArray[np.floating]
+            Cartesian coordinates relative to an atom, shaped ``(n, 3)``.
+        lmax : int
+            Maximum angular momentum quantum number.
+
+        Returns
+        -------
+        NDArray[np.floating]
+            Solid harmonics indexed by ``[l, m, point]``. Negative ``m``
+            values use NumPy's negative indexing convention.
+
+        Raises
+        ------
+        ValueError
+            If the grid is not a non-empty ``(n, 3)`` array or ``lmax`` is
+            negative.
+        """
+        expected_dimensions = 2
+        cartesian_dimensions = 3
+        if (
+            centered_grid.ndim != expected_dimensions
+            or centered_grid.shape[1] != cartesian_dimensions
+            or centered_grid.shape[0] == 0
+        ):
+            raise ValueError('centered_grid must be a non-empty array shaped (n, 3).')
+        if lmax < 0:
+            raise ValueError('lmax must be a non-negative integer.')
+
+        if lmax <= _GENERATED_SOLID_HARMONIC_LMAX:
+            x, y, z = np.asarray(centered_grid, dtype=float).T
+            return tabulate_solid_harmonics(x, y, z, lmax)
+        return Tabulator._tabulate_real_solid_harmonics_generic(centered_grid, lmax)
+
+    @staticmethod
+    def _tabulate_real_solid_harmonics_generic(
+        centered_grid: NDArray[np.floating],
+        lmax: int,
+    ) -> NDArray[np.floating]:
+        r"""Tabulate solid harmonics with the general finite-polynomial kernel.
 
         The polynomial is obtained by differentiating the finite power series
         for the Legendre polynomial, following the Rodrigues formulas in
