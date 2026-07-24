@@ -19,6 +19,7 @@ __all__ = ['GridType', 'Tabulator']
 logger = logging.getLogger(__name__)
 
 _MOIndices = NDArray[np.integer] | list[int] | tuple[int, ...] | range
+_DEFAULT_POINT_CHUNK_SIZE = 32_768
 
 
 def _grid_creation_with_only_molecule_error() -> RuntimeError:
@@ -359,16 +360,27 @@ class Tabulator:
         logger.debug('Setting spherical grid axes with lengths r=%d, theta=%d, phi=%d.', len(r), len(theta), len(phi))
         self._set_grid(r, theta, phi, GridType.SPHERICAL, tabulate_gtos)
 
-    def compute_gtos(self, grid: NDArray[np.floating]) -> NDArray[np.floating]:
+    def compute_gtos(
+        self,
+        grid: NDArray[np.floating],
+        *,
+        point_chunk_size: int | None = _DEFAULT_POINT_CHUNK_SIZE,
+    ) -> NDArray[np.floating]:
         """Compute GTO values for an explicit Cartesian grid.
 
         This method does not read or update the Tabulator's current grid or GTO
         cache, so it is safe to use for background work on a grid snapshot.
+        By default, each worker evaluates at most 32,768 points at a time so
+        temporary arrays do not grow with the full grid.
 
         Parameters
         ----------
         grid : NDArray[np.floating]
             Cartesian grid points with shape ``(n_points, 3)``.
+        point_chunk_size : int or None, optional
+            Maximum number of points evaluated by one worker task. ``None``
+            evaluates each atom on the full grid and is mainly useful for
+            performance comparisons. Defaults to 32,768.
 
         Returns
         -------
@@ -379,6 +391,8 @@ class Tabulator:
         ------
         RuntimeError
             If the `only_molecule` flag is set to `True`.
+        ValueError
+            If `point_chunk_size` is not a positive integer or ``None``.
         """
         if self._only_molecule:
             raise RuntimeError('Grid creation is not allowed when `only_molecule` is set to `True`.')
@@ -386,6 +400,13 @@ class Tabulator:
         total_points = grid.shape[0]
         total_coeffs = self._parser.mo_coeffs.shape[1]
         logger.info('Tabulating GTOs on %d grid points.', total_points)
+
+        if point_chunk_size is None:
+            chunk_size = max(total_points, 1)
+        elif isinstance(point_chunk_size, bool) or not isinstance(point_chunk_size, int) or point_chunk_size <= 0:
+            raise ValueError('point_chunk_size must be a positive integer or None.')
+        else:
+            chunk_size = point_chunk_size
 
         # Having a predefined array makes it faster to fill the data
         gto_data = np.empty((total_points, total_coeffs))
@@ -399,15 +420,34 @@ class Tabulator:
             atom_tasks.append((atom, atom_slice))
             idx_shell_start += num_gtos_in_shell
 
-        max_workers = min(len(atom_tasks), os.cpu_count() or 1)
+        point_slices = [
+            slice(point_start, min(point_start + chunk_size, total_points))
+            for point_start in range(0, total_points, chunk_size)
+        ]
+        chunk_tasks = [
+            (atom, atom_slice, point_slice) for atom, atom_slice in atom_tasks for point_slice in point_slices
+        ]
+
+        max_workers = min(len(chunk_tasks), os.cpu_count() or 1)
         if max_workers <= 1:
-            for atom, atom_slice in atom_tasks:
-                self._tabulate_atom(grid, atom, atom_slice, gto_data)
+            for atom, atom_slice, point_slice in chunk_tasks:
+                self._tabulate_atom(
+                    grid[point_slice],
+                    atom,
+                    atom_slice,
+                    gto_data[point_slice],
+                )
         else:
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = [
-                    executor.submit(self._tabulate_atom, grid, atom, atom_slice, gto_data)
-                    for atom, atom_slice in atom_tasks
+                    executor.submit(
+                        self._tabulate_atom,
+                        grid[point_slice],
+                        atom,
+                        atom_slice,
+                        gto_data[point_slice],
+                    )
+                    for atom, atom_slice, point_slice in chunk_tasks
                 ]
                 for future in futures:
                     future.result()
@@ -415,8 +455,18 @@ class Tabulator:
         logger.debug('GTO data shape: %s', gto_data.shape)
         return gto_data
 
-    def tabulate_gtos(self) -> NDArray[np.floating]:
+    def tabulate_gtos(
+        self,
+        *,
+        point_chunk_size: int | None = _DEFAULT_POINT_CHUNK_SIZE,
+    ) -> NDArray[np.floating]:
         """Tabulate Gaussian-type orbitals (GTOs) on the current grid.
+
+        Parameters
+        ----------
+        point_chunk_size : int or None, optional
+            Maximum number of points evaluated by one worker task. ``None``
+            evaluates each atom on the full grid. Defaults to 32,768.
 
         Returns
         -------
@@ -435,7 +485,7 @@ class Tabulator:
         if not hasattr(self, 'grid'):
             raise RuntimeError('Grid is not defined. Please create a grid before tabulating GTOs.')
 
-        gto_data = self.compute_gtos(self._grid)
+        gto_data = self.compute_gtos(self._grid, point_chunk_size=point_chunk_size)
         self.set_gtos(gto_data)
         return gto_data
 
