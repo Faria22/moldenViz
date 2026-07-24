@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+import moldenViz.tabulator as tabulator_module
 from moldenViz import Atom, GaussianPrimitive, Shell
 from moldenViz.tabulator import GridType, Tabulator
 
@@ -123,6 +124,84 @@ def test_compute_gtos_uses_explicit_grid_without_updating_cache() -> None:
     assert gtos.shape == (snapshot.shape[0], tab._parser.mo_coeffs.shape[1])  # ruff:ignore[private-member-access]
     np.testing.assert_array_equal(tab.grid, live_grid)
     assert not tab.has_gtos
+
+
+def test_gto_worker_policy_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Default and explicit worker counts should respect CPU and atom limits."""
+    default_worker_count = 4
+    explicit_worker_count = 2
+    monkeypatch.setattr(tabulator_module.os, 'cpu_count', lambda: 64)
+
+    default_tabulator = Tabulator(str(MOLDEN_PATH))
+    explicit_tabulator = Tabulator(str(MOLDEN_PATH), max_workers=explicit_worker_count)
+    capped_tabulator = Tabulator(str(MOLDEN_PATH), max_workers=64)
+
+    assert default_tabulator.max_workers == default_worker_count
+    assert explicit_tabulator.max_workers == explicit_worker_count
+    assert capped_tabulator.max_workers == default_worker_count
+
+    monkeypatch.setattr(tabulator_module.os, 'cpu_count', lambda: 1)
+    assert default_tabulator.max_workers == 1
+    assert explicit_tabulator.max_workers == 1
+    assert capped_tabulator.max_workers == 1
+
+
+def test_default_gto_workers_switch_to_sequential_for_large_grids() -> None:
+    """Default concurrency should avoid costly large-grid memory amplification."""
+    largest_parallel_grid = 125_000
+    tabulator = Tabulator(str(MOLDEN_PATH))
+    explicit_tabulator = Tabulator(str(MOLDEN_PATH), max_workers=4)
+
+    assert tabulator._workers_for_grid(largest_parallel_grid) == tabulator.max_workers  # ruff:ignore[private-member-access]
+    assert tabulator._workers_for_grid(largest_parallel_grid + 1) == 1  # ruff:ignore[private-member-access]
+    assert (
+        explicit_tabulator._workers_for_grid(largest_parallel_grid + 1)  # ruff:ignore[private-member-access]
+        == explicit_tabulator.max_workers
+    )
+
+
+def test_gto_worker_policy_rejects_invalid_limits() -> None:
+    """Worker limits must be positive integers."""
+    with pytest.raises(TypeError, match='positive integer'):
+        Tabulator(str(MOLDEN_PATH), max_workers=True)
+    with pytest.raises(ValueError, match='at least 1'):
+        Tabulator(str(MOLDEN_PATH), max_workers=0)
+
+
+@pytest.mark.parametrize(
+    'molden_path',
+    [
+        MOLDEN_PATH,
+        Path(__file__).parents[1] / 'src/moldenViz/examples/molden_files/pyridine.inp',
+    ],
+)
+def test_parallel_and_sequential_gtos_are_equivalent(molden_path: Path) -> None:
+    """Bounded parallel work should preserve sequential numerical results."""
+    axis = np.linspace(-2.0, 2.0, 5)
+    sequential = Tabulator(str(molden_path), max_workers=1)
+    parallel = Tabulator(str(molden_path), max_workers=4)
+    sequential.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
+    parallel.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
+
+    sequential_gtos = sequential.tabulate_gtos()
+    parallel_gtos = parallel.tabulate_gtos()
+
+    np.testing.assert_array_equal(parallel_gtos, sequential_gtos)
+
+
+def test_gto_calls_reuse_process_executor(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Parallel calls should not construct a fresh executor."""
+
+    def fail_executor_creation(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError('GTO tabulation created a new executor.')
+
+    monkeypatch.setattr(tabulator_module, 'ThreadPoolExecutor', fail_executor_creation)
+    tabulator = Tabulator(str(MOLDEN_PATH), max_workers=2)
+    axis = np.linspace(-1.0, 1.0, 3)
+    tabulator.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
+
+    tabulator.tabulate_gtos()
+    tabulator.tabulate_gtos()
 
 
 def test_tabulate_atom_reuses_exponentials_for_compatible_shells(monkeypatch: pytest.MonkeyPatch) -> None:

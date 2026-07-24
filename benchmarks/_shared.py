@@ -25,6 +25,7 @@ EXAMPLE_NAMES = (
 GRID_EDGES = (10, 25, 50, 100)
 MO_SELECTIONS = ('single', 'several', 'all')
 REPRESENTATIVE_EXAMPLES = ('h2o', 'furan', 'benzene')
+WORKER_COUNTS = (1, 4)
 
 MOSelection = Literal['single', 'several', 'all']
 
