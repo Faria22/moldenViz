@@ -535,8 +535,7 @@ class Tabulator:
                 self._tabulate_atom(
                     grid[point_slice],
                     atom,
-                    atom_slice,
-                    gto_data[point_slice],
+                    gto_data[point_slice, atom_slice],
                 )
         else:
             task_batches = [chunk_tasks[index::max_workers] for index in range(max_workers)]
@@ -596,26 +595,23 @@ class Tabulator:
             self._tabulate_atom(
                 grid[point_slice],
                 atom,
-                atom_slice,
-                gto_data[point_slice],
+                gto_data[point_slice, atom_slice],
             )
 
     def _tabulate_atom(
         self,
         grid: NDArray[np.floating],
         atom: Any,
-        atom_slice: slice,
-        gto_data: NDArray[np.floating],
+        atom_block: NDArray[np.floating],
     ) -> None:
-        """Tabulate all shells for a single atom into the shared GTO array."""
+        """Tabulate all shells for a single atom into its GTO block."""
         centered_grid = grid - atom.position
         max_l = atom.shells[-1].l
         r_sq = np.einsum('ij,ij->i', centered_grid, centered_grid)
         solid_harmonics = self._tabulate_real_solid_harmonics(centered_grid, max_l)
-        atom_block = gto_data[:, atom_slice]
         block_cursor = 0
-        # Group only lightweight shell metadata so each exponential block can
-        # be released before the next exact exponent sequence is evaluated.
+        # Group only lightweight shell metadata so one exponential block can
+        # be reused for every shell with the same exact exponent sequence.
         shell_groups: dict[tuple[int, bytes], list[tuple[Any, slice]]] = {}
 
         for shell in atom.shells:
@@ -640,7 +636,6 @@ class Tabulator:
                 m_inds = np.arange(-l, l + 1)
                 contraction = shell._prefactor @ exponentials  # ruff:ignore[private-member-access]
                 atom_block[:, inner_slice] = contraction[:, None] * solid_harmonics[l, m_inds, ...].T
-            del exponentials
 
     def tabulate_mos(self, mo_inds: int | _MOIndices | None = None) -> NDArray[np.floating]:
         """Tabulate molecular orbitals (MOs) on the current grid.
