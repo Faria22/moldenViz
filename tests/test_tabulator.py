@@ -288,9 +288,9 @@ def test_tabulate_atom_reuses_exponentials_for_compatible_shells(monkeypatch: py
     original_exp = np.exp
     exponential_shapes: list[tuple[int, ...]] = []
 
-    def tracked_exp(values: np.ndarray) -> np.ndarray:
+    def tracked_exp(values: np.ndarray, *, out: np.ndarray | None = None) -> np.ndarray:
         exponential_shapes.append(values.shape)
-        return original_exp(values)
+        return original_exp(values, out=out)
 
     monkeypatch.setattr(np, 'exp', tracked_exp)
     tab._tabulate_atom(grid, atom, actual)  # ruff:ignore[private-member-access]
