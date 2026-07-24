@@ -103,16 +103,18 @@ class Parser:
         if not self._molden_lines:
             raise ValueError('The provided molden lines are empty.')
 
-        if not any('[Atoms]' in line for line in self._molden_lines):
+        uppercase_lines = [line.upper() for line in self._molden_lines]
+
+        if not any('[ATOMS]' in line for line in uppercase_lines):
             raise ValueError("No '[Atoms]' section found in the molden file.")
 
-        if not any('[GTO]' in line for line in self._molden_lines):
+        if '[GTO]' not in uppercase_lines:
             raise ValueError("No '[GTO]' section found in the molden file.")
 
-        if not any('[MO]' in line for line in self._molden_lines):
+        if '[MO]' not in uppercase_lines:
             raise ValueError("No '[MO]' section found in the molden file.")
 
-        if not any(orbs in line for orbs in ['5D', '9G'] for line in self._molden_lines):
+        if not any(orbs in line for orbs in ['5D', '9G'] for line in uppercase_lines):
             raise ValueError('Cartesian orbitals functions are not currently supported.')
 
         logger.info('Molden format check passed.')
@@ -132,16 +134,20 @@ class Parser:
 
         """
         logger.info('Dividing molden lines into sections...')
-        if '[Atoms] AU' in self._molden_lines:
-            atom_ind = self._molden_lines.index('[Atoms] AU')
-        elif '[Atoms] Angs' in self._molden_lines:
-            atom_ind = self._molden_lines.index('[Atoms] Angs')
-        else:
+        uppercase_lines = [line.upper() for line in self._molden_lines]
+        atom_ind = next(
+            (
+                index
+                for index, line in enumerate(uppercase_lines)
+                if line.startswith('[ATOMS]') and any(unit in line for unit in ('AU', 'ANGS'))
+            ),
+            None,
+        )
+        if atom_ind is None:
             raise ValueError('No (AU/Angs) in [Atoms] section found in the molden file.')
 
-        gto_ind = self._molden_lines.index('[GTO]')
-
-        mo_ind = self._molden_lines.index('[MO]')
+        gto_ind = uppercase_lines.index('[GTO]')
+        mo_ind = uppercase_lines.index('[MO]')
 
         logger.info('Finished dividing molden lines.')
         return atom_ind, gto_ind, mo_ind
@@ -157,7 +163,7 @@ class Parser:
 
         """
         logger.info('Parsing atoms...')
-        angs = 'Angs' in self._molden_lines[self._atom_ind]
+        angs = 'ANGS' in self._molden_lines[self._atom_ind].upper()
 
         atoms = []
         for line in self._molden_lines[self._atom_ind + 1 : self._gto_ind]:
