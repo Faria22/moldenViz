@@ -400,6 +400,47 @@ def test_gto_failure_is_delivered_by_tk_thread(
     assert set(root.tk_call_thread_ids) == {root.owner_thread_id}
 
 
+def test_failed_grid_replacement_preserves_previous_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed replacement should restore the previously usable grid."""
+    _configure_plotter_env(monkeypatch)
+    fail_replacement = False
+
+    def controlled_compute(_tabulator: plotter_module.Tabulator, grid: np.ndarray) -> np.ndarray:
+        if fail_replacement:
+            raise ValueError('broken replacement')
+        return np.ones((grid.shape[0], 1))
+
+    shown_errors: list[str] = []
+    monkeypatch.setattr(plotter_module.Tabulator, 'compute_gtos', controlled_compute)
+    monkeypatch.setattr(
+        plotter_module.messagebox,
+        'showerror',
+        lambda _title, message: shown_errors.append(message),
+    )
+    root = cast(FakeTk, _fake_tk_root())
+    plotter = plotter_module.Plotter(_sample_molden(), tk_root=cast(Any, root))
+    _pump_until(root, lambda: plotter._gtos_ready)
+
+    previous_grid = plotter.tabulator.grid
+    previous_gtos = plotter.tabulator.gtos
+    previous_mesh = plotter._orb_mesh
+    fail_replacement = True
+    new_axis = np.linspace(-2.0, 2.0, 3)
+
+    plotter._update_mesh(new_axis, new_axis, new_axis, plotter_module.GridType.CARTESIAN)
+    _pump_until(root, lambda: bool(shown_errors))
+
+    assert plotter._gtos_ready
+    assert plotter.tabulator.grid is previous_grid
+    assert plotter.tabulator.gtos is previous_gtos
+    assert plotter._orb_mesh is previous_mesh
+    assert isinstance(plotter._selection_screen, FakeSelectionScreen)
+    assert plotter._selection_screen.loading_states[-2:] == [True, False]
+    assert 'broken replacement' in shown_errors[0]
+
+
 def test_close_stops_gto_delivery(monkeypatch: pytest.MonkeyPatch) -> None:
     """Closing the UI should cancel polling and discard queued delivery."""
     _configure_plotter_env(monkeypatch)

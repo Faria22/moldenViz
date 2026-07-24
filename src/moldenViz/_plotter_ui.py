@@ -1264,11 +1264,6 @@ class _PlotterUI:
                 )
                 self._update_mesh(x, y, z, GridType.CARTESIAN)
 
-        # Replot the current orbital with the new grid
-        idx = self._get_current_mo_index()
-        if idx >= 0:
-            self.plot_orbital(idx)
-
     def _apply_molecule_settings(self) -> None:
         """Validate UI inputs and apply the chosen molecule rendering parameters."""
         changes: list[str] = []

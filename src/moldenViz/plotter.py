@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import tkinter as tk
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from queue import SimpleQueue
 from tkinter import messagebox
 from typing import TYPE_CHECKING
@@ -50,6 +51,16 @@ __all__ = ['Plotter']
 
 config = Config()
 _GTO_EXECUTOR = ThreadPoolExecutor(max_workers=1)
+
+
+@dataclass(frozen=True)
+class _GTOResult:
+    """GTO values and the structured grid snapshot they describe."""
+
+    grid: NDArray[np.floating]
+    axes: tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]
+    grid_type: GridType
+    gtos: NDArray[np.floating]
 
 
 class Plotter(_PlotterUI, _PlotterRendering):
@@ -117,7 +128,7 @@ class Plotter(_PlotterUI, _PlotterRendering):
 
         self._gto_completions: SimpleQueue[Callable[[], None]] = SimpleQueue()
         self._gto_completion_poll_id: str | None = None
-        self._gto_job: BackgroundJob[NDArray[np.floating]] = BackgroundJob(
+        self._gto_job: BackgroundJob[_GTOResult] = BackgroundJob(
             _GTO_EXECUTOR,
             self._dispatch_gto_completion,
         )
@@ -229,16 +240,16 @@ class Plotter(_PlotterUI, _PlotterRendering):
         if self._gto_job.future is None:
             raise RuntimeError('GTO tabulation has not been scheduled.')
         try:
-            gtos = self._gto_job.wait(timeout=timeout)
+            result = self._gto_job.wait(timeout=timeout)
         except RuntimeError:
             if self._gtos_ready:
                 return
             raise
         if not self._gtos_ready:
-            self._apply_gtos_ready(gtos, 0.0)
+            self._apply_gtos_ready(result, 0.0)
 
     @property
-    def _gto_future(self) -> Future[NDArray[np.floating]] | None:
+    def _gto_future(self) -> Future[_GTOResult] | None:
         """Compatibility view of the pending background future."""
         return self._gto_job.future
 
@@ -276,33 +287,80 @@ class Plotter(_PlotterUI, _PlotterRendering):
         while not self._gto_completions.empty():
             self._gto_completions.get_nowait()
 
-    def _schedule_gto_tabulation(self) -> None:
-        """Submit background GTO tabulation work."""
+    def _schedule_gto_tabulation(
+        self,
+        axes: tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]] | None = None,
+        grid_type: GridType | None = None,
+    ) -> None:
+        """Build a grid and tabulate its GTOs in the background."""
         if self._only_molecule or self._gtos_ready or self._gto_job.pending:
             return
-        grid = self.tabulator.grid.copy()
-        grid.setflags(write=False)
+
+        if axes is None:
+            current_axes = self.tabulator.grid_axes
+            if current_axes is None:
+                raise RuntimeError('Structured grid axes are not available.')
+            resolved_axes = (current_axes[0], current_axes[1], current_axes[2])
+            resolved_grid_type = self.tabulator.grid_type
+            current_grid = self.tabulator.grid.copy()
+        elif grid_type is None:
+            raise ValueError('Grid type is required when scheduling new axes.')
+        else:
+            resolved_axes = axes
+            resolved_grid_type = grid_type
+            current_grid = None
+
+        frozen_axes = (
+            resolved_axes[0].copy(),
+            resolved_axes[1].copy(),
+            resolved_axes[2].copy(),
+        )
+        for axis in frozen_axes:
+            axis.setflags(write=False)
+
+        def build_and_tabulate() -> _GTOResult:
+            grid = current_grid
+            if grid is None:
+                grid = Tabulator._build_grid(  # ruff:ignore[private-member-access]
+                    *frozen_axes,
+                    resolved_grid_type,
+                )
+            grid.setflags(write=False)
+            return _GTOResult(
+                grid=grid,
+                axes=frozen_axes,
+                grid_type=resolved_grid_type,
+                gtos=self.tabulator.compute_gtos(grid),
+            )
+
         logger.info('Starting background GTO tabulation...')
         self._gto_job.start(
-            lambda: self.tabulator.compute_gtos(grid),
+            build_and_tabulate,
             on_success=self._apply_gtos_ready,
             on_error=self._handle_gto_error,
         )
 
-    @staticmethod
-    def _handle_gto_error(exc: Exception) -> None:
-        """Report a failed GTO job after it returns to the UI thread."""
+    def _handle_gto_error(self, exc: Exception) -> None:
+        """Restore usable UI state and report a failed GTO job."""
+        self._gtos_ready = self.tabulator.has_gtos
+        if self._selection_screen:
+            self._selection_screen._on_gtos_ready()  # ruff:ignore[private-member-access]
         logger.error(
             'Background GTO tabulation failed.',
             exc_info=(type(exc), exc, exc.__traceback__),
         )
         messagebox.showerror('Orbital Tabulation Failed', f'Failed to tabulate orbitals:\n\n{exc!s}')
 
-    def _apply_gtos_ready(self, gtos: NDArray[np.floating], elapsed: float) -> None:
+    def _apply_gtos_ready(self, result: _GTOResult, elapsed: float) -> None:
         """Store computed GTOs and update UI state."""
         if not self._on_screen:
             return
-        self.tabulator.set_gtos(gtos)
+        self.tabulator._set_structured_grid(  # ruff:ignore[private-member-access]
+            result.grid,
+            result.axes,
+            result.grid_type,
+        )
+        self.tabulator.set_gtos(result.gtos)
         self._gtos_ready = True
         logger.info('GTO tabulation completed in %.2fs.', elapsed)
         self._orb_mesh = self._create_mo_mesh()

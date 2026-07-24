@@ -251,6 +251,73 @@ class Tabulator:
     _spherical_to_cartesian = spherical_to_cartesian
     _cartesian_to_spherical = cartesian_to_spherical
 
+    @staticmethod
+    def _build_grid(
+        x: NDArray[np.floating],
+        y: NDArray[np.floating],
+        z: NDArray[np.floating],
+        grid_type: GridType,
+    ) -> NDArray[np.floating]:
+        """Build a structured Cartesian point grid without changing state.
+
+        Parameters
+        ----------
+        x : NDArray[np.floating]
+            1D array of x (or r) coordinates.
+        y : NDArray[np.floating]
+            1D array of y (or theta) coordinates.
+        z : NDArray[np.floating]
+            1D array of z (or phi) coordinates.
+        grid_type : GridType
+            Coordinate system represented by the input axes.
+
+        Returns
+        -------
+        NDArray[np.floating]
+            Cartesian points with one XYZ coordinate per row.
+
+        Raises
+        ------
+        ValueError
+            If ``grid_type`` is ``GridType.UNKNOWN``.
+        """
+        if grid_type == GridType.UNKNOWN:
+            raise ValueError('Grid type cannot be unknown.')
+
+        xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
+        if grid_type == GridType.SPHERICAL:
+            xx, yy, zz = Tabulator.spherical_to_cartesian(xx, yy, zz)
+        return np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
+
+    def _set_structured_grid(
+        self,
+        grid: NDArray[np.floating],
+        axes: tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]],
+        grid_type: GridType,
+    ) -> None:
+        """Install a prebuilt structured grid and its coordinate metadata.
+
+        Parameters
+        ----------
+        grid : NDArray[np.floating]
+            Cartesian points built from ``axes``.
+        axes : tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]
+            Original structured-grid coordinate axes.
+        grid_type : GridType
+            Coordinate system represented by ``axes``.
+
+        Raises
+        ------
+        ValueError
+            If ``grid_type`` is ``GridType.UNKNOWN``.
+        """
+        if grid_type == GridType.UNKNOWN:
+            raise ValueError('Grid type cannot be unknown.')
+        self.set_grid(grid)
+        self._grid_type = grid_type
+        self._grid_dimensions = (len(axes[0]), len(axes[1]), len(axes[2]))
+        self._grid_axes = axes
+
     def _set_grid(
         self,
         x: NDArray[np.floating],
@@ -286,14 +353,8 @@ class Tabulator:
         if grid_type == GridType.UNKNOWN:
             raise ValueError('Grid type cannot be unknown.')
 
-        xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
-        if grid_type == GridType.SPHERICAL:
-            xx, yy, zz = self.spherical_to_cartesian(xx, yy, zz)
-
-        self.set_grid(np.column_stack((xx.ravel(), yy.ravel(), zz.ravel())))
-        self._grid_type = grid_type
-        self._grid_dimensions = (len(x), len(y), len(z))
-        self._grid_axes = (x, y, z)
+        grid = self._build_grid(x, y, z, grid_type)
+        self._set_structured_grid(grid, (x, y, z), grid_type)
         logger.info(
             'Created %s grid with %d points (%dx%dx%d).',
             grid_type.value,
