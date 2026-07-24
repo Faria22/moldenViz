@@ -7,23 +7,31 @@ sync:
     uv sync --locked --group dev
 
 format *args:
-    uv run --locked --group dev ruff format src tests {{ args }}
+    uv run --locked --group dev ruff format src tests benchmarks {{ args }}
 
 lint *args:
-    uv run --locked --group dev ruff check src tests {{ args }}
+    uv run --locked --group dev ruff check src tests benchmarks {{ args }}
 
 typecheck *args:
-    uv run --locked --group dev basedpyright src tests {{ args }}
+    uv run --locked --group dev basedpyright src tests benchmarks {{ args }}
 
 test *args:
-    uv run --locked --group dev pytest --benchmark-skip {{ args }}
+    uv run --locked --group dev pytest {{ args }}
 
-bench *args:
-    uv run --locked --group dev pytest --benchmark-only {{ args }}
+bench revision="HEAD^!" *args:
+    uv run --locked --group dev asv run {{ args }} {{ revision }}
+
+bench-check:
+    uv run --locked --group dev asv check --python=same
+
+bench-smoke:
+    uv run --locked --group dev asv machine --yes
+    uv run --locked --group dev asv check --python=same
+    uv run --locked --group dev asv run --quick --show-stderr --bench time_create_cartesian_grid HEAD^!
 
 cov *args:
     uv run --locked --group dev coverage erase
-    uv run --locked --group dev coverage run -m pytest --benchmark-skip {{ args }}
+    uv run --locked --group dev coverage run -m pytest {{ args }}
     uv run --locked --group dev coverage combine
     uv run --locked --group dev coverage report -m
 

@@ -1,0 +1,32 @@
+{
+    "version": 1,
+    "project": "moldenViz",
+    "project_url": "https://github.com/Faria22/moldenViz",
+    "repo": ".",
+    "branches": ["main"],
+    "show_commit_url": "https://github.com/Faria22/moldenViz/commit/",
+    "benchmark_dir": "benchmarks",
+    "environment_type": "virtualenv",
+    "pythons": ["3.13"],
+    "matrix": {
+        "req": {
+            "numpy": ["2.2"]
+        }
+    },
+    "build_command": [
+        "python -m pip wheel --no-deps --wheel-dir {build_cache_dir} {build_dir}"
+    ],
+    "install_command": [
+        "in-dir={env_dir} python -m pip install {wheel_file}"
+    ],
+    "env_dir": ".asv/env",
+    "results_dir": ".asv/results",
+    "html_dir": ".asv/html",
+    "build_cache_size": 2,
+    "install_timeout": 300,
+    "default_benchmark_timeout": 180,
+    "regressions_thresholds": {
+        ".*": 0.1,
+        ".*peakmem.*": 0.2
+    }
+}

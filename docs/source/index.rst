@@ -64,6 +64,7 @@ Contents
    configuration
    troubleshooting
    contributing
+   benchmarks
 
 .. toctree::
    :maxdepth: 2

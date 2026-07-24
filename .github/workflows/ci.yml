@@ -117,3 +117,32 @@ jobs:
 
     - name: Build documentation
       run: just docs
+
+  benchmark-smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v5
+      with:
+        fetch-depth: 0
+
+    - name: Set up authoritative benchmark Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.13"
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      with:
+        version: "0.11.29"
+
+    - name: Install just
+      uses: extractions/setup-just@v3
+      with:
+        just-version: "1.57.0"
+
+    - name: Sync locked development environment
+      run: uv sync --locked --group dev
+
+    - name: Validate ASV suite in an isolated environment
+      run: just bench-smoke

@@ -5,19 +5,12 @@ from __future__ import annotations
 import warnings
 from math import factorial
 from pathlib import Path
-from time import perf_counter
-from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
 
 from moldenViz import Atom, GaussianPrimitive, Shell
 from moldenViz.tabulator import GridType, Tabulator
-
-SMALL_GRID_MAX_SECONDS = 0.5
-
-if TYPE_CHECKING:
-    from pytest_benchmark.fixture import BenchmarkFixture
 
 MOLDEN_PATH = Path(__file__).with_name('sample_molden.inp')
 
@@ -204,39 +197,6 @@ def test_clear_gtos_releases_cache_and_reports_missing_data() -> None:
     tab.clear_gtos()
 
 
-def test_tabulate_gtos_performance_small_grid() -> None:
-    """Guard against regressions in tabulate_gtos runtime for modest grids."""
-    tab = Tabulator(str(MOLDEN_PATH))
-    axis = np.linspace(-2.0, 2.0, 10)
-    tab.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
-
-    start = perf_counter()
-    tab.tabulate_gtos()
-    duration = perf_counter() - start
-
-    # The modest grid should tabulate well below half a second on CI hardware.
-    assert duration < SMALL_GRID_MAX_SECONDS, f'tabulate_gtos took {duration:.3f}s'
-
-
-@pytest.mark.benchmark
-def test_tabulate_gtos_large_grid_benchmark(benchmark: BenchmarkFixture) -> None:
-    """Benchmark complete GTO tabulation on a 125,000-point grid."""
-    tab = Tabulator(str(MOLDEN_PATH))
-    axis = np.linspace(-3.0, 3.0, 50)
-    tab.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
-
-    gto_data = benchmark.pedantic(
-        tab.tabulate_gtos,
-        warmup_rounds=1,
-        rounds=5,
-        iterations=2,
-    )
-
-    expected_points = axis.size**3
-    expected_coeffs = tab._parser.mo_coeffs.shape[1]  # ruff:ignore[private-member-access]
-    assert gto_data.shape == (expected_points, expected_coeffs)
-
-
 def test_cartesian_grid_shape() -> None:
     """Test that the Cartesian grid is created with the correct shape."""
     tab = Tabulator(str(MOLDEN_PATH))
@@ -386,23 +346,6 @@ def test_cartesian_gto_tabulation_matches_spherical_implementation(
     np.testing.assert_allclose(actual, expected, rtol=1e-10, atol=2e-8)
 
 
-@pytest.mark.benchmark
-def test_cartesian_solid_harmonics_million_point_benchmark(benchmark: BenchmarkFixture) -> None:
-    """Benchmark the Cartesian solid-harmonic kernel on one million points."""
-    rng = np.random.default_rng(seed=8300)
-    points = rng.uniform(-6.0, 6.0, size=(1_000_000, 3))
-
-    solid_harmonics = benchmark.pedantic(
-        Tabulator._tabulate_real_solid_harmonics,  # ruff:ignore[private-member-access]
-        args=(points, 4),
-        warmup_rounds=1,
-        rounds=5,
-        iterations=1,
-    )
-
-    assert solid_harmonics.shape == (5, 9, points.shape[0])
-
-
 @pytest.mark.parametrize('mo_inds', [None, 0, [0], [0, 1, 2], [0, 1, 2, 3, 4], range(1, 10)])
 def test_tabulate_mos(mo_inds: int | list[int] | range | None) -> None:
     """Test that tabulate_mos returns an array of the correct shape."""
@@ -436,24 +379,6 @@ def test_tabulate_mos_matches_sum_reduction(mo_inds: int | list[int] | None) -> 
         expected = np.sum(tab.gtos[:, None, :] * mo_coeffs[None, ...], axis=2)
 
     np.testing.assert_allclose(mo_data, expected, rtol=1e-12, atol=1e-12)
-
-
-@pytest.mark.benchmark
-def test_tabulate_mos_all_benchmark(benchmark: BenchmarkFixture) -> None:
-    """Benchmark matrix-multiplication tabulation for all MOs."""
-    tab = Tabulator(str(MOLDEN_PATH))
-    axis = np.linspace(-3.0, 3.0, 20)
-    tab.cartesian_grid(axis, axis, axis)
-
-    mo_data = benchmark.pedantic(
-        tab.tabulate_mos,
-        args=(None,),
-        warmup_rounds=1,
-        rounds=5,
-        iterations=2,
-    )
-
-    assert mo_data.shape == (axis.size**3, len(tab._parser.mos))  # ruff:ignore[private-member-access]
 
 
 @pytest.mark.parametrize('mo_inds', [-1, range(0), range(-1, 1), [0, -1], [1, 2, 3, -1], [0, 178]])
