@@ -22,6 +22,8 @@ _MOIndices = NDArray[np.integer] | list[int] | tuple[int, ...] | range
 _DEFAULT_POINT_CHUNK_SIZE = 32_768
 _MAX_GTO_WORKERS = 4
 _PARALLEL_GTO_POINT_LIMIT = 125_000
+_S_HARMONIC_SCALE = np.sqrt(1.0 / (4.0 * np.pi))
+_P_HARMONIC_SCALE = np.sqrt(3.0 / (4.0 * np.pi))
 _GTO_EXECUTOR = ThreadPoolExecutor(
     max_workers=min(_MAX_GTO_WORKERS, os.cpu_count() or 1),
     thread_name_prefix='moldenViz-gto',
@@ -627,9 +629,11 @@ class Tabulator:
 
         for compatible_shells in shell_groups.values():
             first_shell = compatible_shells[0][0]
-            exponentials = np.exp(
-                -first_shell._gto_exps[:, None] * r_sq[None, :],  # ruff:ignore[private-member-access]
+            exponentials = np.multiply(
+                -first_shell._gto_exps[:, None],  # ruff:ignore[private-member-access]
+                r_sq[None, :],
             )
+            np.exp(exponentials, out=exponentials)
 
             for shell, inner_slice in compatible_shells:
                 l = shell.l
@@ -863,6 +867,15 @@ class Tabulator:
             raise ValueError('lmax must be a non-negative integer.')
 
         x, y, z = np.asarray(centered_grid, dtype=float).T
+        if lmax <= 1:
+            solid_harmonics = np.zeros((lmax + 1, 2 * lmax + 1, x.size), dtype=float)
+            solid_harmonics[0, 0, :] = _S_HARMONIC_SCALE
+            if lmax == 1:
+                solid_harmonics[1, 0, :] = _P_HARMONIC_SCALE * z
+                solid_harmonics[1, 1, :] = _P_HARMONIC_SCALE * x
+                solid_harmonics[1, -1, :] = _P_HARMONIC_SCALE * y
+            return solid_harmonics
+
         r_sq = x * x + y * y + z * z
         solid_harmonics = np.zeros((lmax + 1, 2 * lmax + 1, x.size), dtype=float)
 
