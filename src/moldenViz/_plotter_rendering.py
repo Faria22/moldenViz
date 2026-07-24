@@ -48,7 +48,11 @@ class _PlotterRendering:
 
         def _cancel_gto_future(self) -> None: ...
         def _ensure_gtos_ready(self) -> bool: ...
-        def _schedule_gto_tabulation(self) -> None: ...
+        def _schedule_gto_tabulation(
+            self,
+            axes: tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]] | None = None,
+            grid_type: GridType | None = None,
+        ) -> None: ...
         def _update_settings_button_states(self) -> None: ...
 
     @staticmethod
@@ -230,6 +234,8 @@ class _PlotterRendering:
         grid_type: GridType,
     ) -> None:
         """Update the Tabulator grid and rebuild the orbital mesh."""
+        if grid_type == GridType.UNKNOWN:
+            raise ValueError('The plotter only supports spherical and cartesian grids.')
         self._cancel_gto_future()
         self._gtos_ready = False
         if self._selection_screen:
@@ -237,19 +243,13 @@ class _PlotterRendering:
                 True,
                 'Updating grid...',
             )
-        if grid_type == GridType.CARTESIAN:
-            self.tabulator.cartesian_grid(i_points, j_points, k_points, tabulate_gtos=False)
-        elif grid_type == GridType.SPHERICAL:
-            self.tabulator.spherical_grid(i_points, j_points, k_points, tabulate_gtos=False)
-        else:
-            raise ValueError('The plotter only supports spherical and cartesian grids.')
-
-        dimensions = 'x'.join(str(val) for val in self.tabulator.grid_dimensions)
+        dimensions = 'x'.join(str(len(points)) for points in (i_points, j_points, k_points))
+        num_points = len(i_points) * len(j_points) * len(k_points)
         logger.info(
             'Rebuilt %s grid with %d points (dimensions %s).',
             grid_type.value,
-            self.tabulator.grid.shape[0],
+            num_points,
             dimensions,
         )
 
-        self._schedule_gto_tabulation()
+        self._schedule_gto_tabulation((i_points, j_points, k_points), grid_type)

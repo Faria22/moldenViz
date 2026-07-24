@@ -26,6 +26,7 @@ GRID_EDGES = (10, 25, 50, 100)
 POINT_CHUNK_SIZES = (8_192, 32_768, 65_536, None)
 MO_SELECTIONS = ('single', 'several', 'all')
 REPRESENTATIVE_EXAMPLES = ('h2o', 'furan', 'benzene')
+WORKER_COUNTS = (1, 4)
 
 MOSelection = Literal['single', 'several', 'all']
 

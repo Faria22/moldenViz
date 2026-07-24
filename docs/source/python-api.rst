@@ -203,6 +203,36 @@ When orbital rendering is enabled, pass a ``Tabulator`` only after it has a sphe
 
 The cartesian grid keeps spacing uniform—ideal for Gaussian cube exports—while the spherical grid matches the viewer defaults and keeps memory usage low for visual inspection. Pick the smallest grid that contains your molecule; doubling every axis multiplies memory use by eight.
 
+GTO Concurrency
+---------------
+
+``Tabulator`` reuses one process-wide thread pool for GTO work instead of
+constructing a pool for every grid. By default, tabulation uses no more than the
+number of atoms, available CPUs, and four workers through 125,000 points. Larger
+grids run sequentially because each concurrent atom adds large temporary arrays
+and measured peak memory rises sharply at that scale:
+
+.. code-block:: python
+
+   # Default: at most four workers.
+   tab = Tabulator('molden.inp')
+
+   # Deterministic sequential execution.
+   sequential_tab = Tabulator('molden.inp', max_workers=1)
+
+   # A lower per-tabulation concurrency limit.
+   two_worker_tab = Tabulator('molden.inp', max_workers=2)
+
+The configured ceiling is available as ``tab.max_workers``. Supplying an explicit
+value overrides the large-grid sequential policy; values above four are still
+clamped to the process-wide ceiling, and CPU and atom counts can lower it further.
+Larger worker counts can reduce runtime on smaller grids, but each active atom
+needs its own temporary coordinate, exponential, and solid-harmonic arrays. Use
+``max_workers=1`` when minimizing peak memory matters more than throughput.
+Multiple ``Tabulator`` instances share the same four-worker executor, so
+simultaneous viewer and export work cannot create nested per-call pools or exceed
+the documented process-wide concurrency bound.
+
 .. _exporting-from-python:
 
 Exporting Volumetric Data (v1.1+)

@@ -8,6 +8,7 @@ from ._shared import (
     MO_SELECTIONS,
     POINT_CHUNK_SIZES,
     REPRESENTATIVE_EXAMPLES,
+    WORKER_COUNTS,
     MOSelection,
     example_source,
     grid_axis,
@@ -53,6 +54,26 @@ class TimeGTOChunkSizes:
     def time_tabulate_gtos(self, molecule: str, edge_size: int, point_chunk_size: int | None) -> None:
         """Tabulate GTOs with the selected point-chunk bound."""
         self.tabulator.tabulate_gtos(point_chunk_size=point_chunk_size)
+
+
+class TimeGTOWorkerScaling:
+    """Compare sequential and bounded-parallel GTO tabulation."""
+
+    params = (REPRESENTATIVE_EXAMPLES, (50, 100), WORKER_COUNTS)
+    param_names = ['molecule', 'edge_size', 'max_workers']
+    number = 1
+    repeat = (3, 5, 1.0)
+    timeout = 180
+
+    def setup(self, molecule: str, edge_size: int, max_workers: int) -> None:
+        """Create an uncomputed grid with an explicit worker limit."""
+        self.tabulator = Tabulator(example_source(molecule), max_workers=max_workers)
+        axis = grid_axis(edge_size)
+        self.tabulator.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
+
+    def time_tabulate_gtos(self, molecule: str, edge_size: int, max_workers: int) -> None:
+        """Tabulate GTOs with the selected concurrency."""
+        self.tabulator.tabulate_gtos()
 
 
 class TimeMOContraction:

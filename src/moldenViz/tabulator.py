@@ -2,7 +2,7 @@
 
 import logging
 import os
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait
 from enum import Enum
 from math import factorial
 from pathlib import Path
@@ -20,6 +20,12 @@ logger = logging.getLogger(__name__)
 
 _MOIndices = NDArray[np.integer] | list[int] | tuple[int, ...] | range
 _DEFAULT_POINT_CHUNK_SIZE = 32_768
+_MAX_GTO_WORKERS = 4
+_PARALLEL_GTO_POINT_LIMIT = 125_000
+_GTO_EXECUTOR = ThreadPoolExecutor(
+    max_workers=min(_MAX_GTO_WORKERS, os.cpu_count() or 1),
+    thread_name_prefix='moldenViz-gto',
+)
 
 
 def _grid_creation_with_only_molecule_error() -> RuntimeError:
@@ -52,6 +58,12 @@ class Tabulator:
     only_molecule : bool, optional
         Only parse the atoms and skip molecular orbitals.
         Default is ``False``.
+    max_workers : int | None, optional
+        Maximum concurrent workers for GTO tabulation. ``None`` uses up to four
+        workers through 125,000 grid points and switches to sequential work for
+        larger grids. Explicit values override the grid-size policy but remain
+        capped at four and further bounded by the CPU and atom counts. Set to
+        ``1`` for sequential tabulation. Default is ``None``.
 
     Attributes
     ----------
@@ -62,17 +74,27 @@ class Tabulator:
         ``RuntimeError`` when no cache is available.
     has_gtos : bool
         Whether GTO values are currently cached.
+    max_workers : int
+        Effective GTO worker count after applying the configured policy.
     """
 
     def __init__(
         self,
         source: str | list[str],
         only_molecule: bool = False,
+        *,
+        max_workers: int | None = None,
     ) -> None:
         """Initialize the Tabulator with a Molden file or its content."""
+        if isinstance(max_workers, bool) or (max_workers is not None and not isinstance(max_workers, int)):
+            raise TypeError('max_workers must be a positive integer or None.')
+        if max_workers is not None and max_workers < 1:
+            raise ValueError('max_workers must be at least 1.')
+
         self._parser = Parser(source, only_molecule)
 
         self._only_molecule = only_molecule
+        self._configured_max_workers = max_workers
 
         self._grid: NDArray[np.floating]
         self._grid_type = GridType.UNKNOWN
@@ -148,6 +170,24 @@ class Tabulator:
     def clear_gtos(self) -> None:
         """Release any cached Gaussian-type orbital values."""
         self._gtos = None
+
+    @property
+    def max_workers(self) -> int:
+        """Configured GTO worker ceiling after CPU and atom limits."""
+        requested_workers = self._configured_max_workers or _MAX_GTO_WORKERS
+        return min(requested_workers, _MAX_GTO_WORKERS, os.cpu_count() or 1, max(1, len(self._parser.atoms)))
+
+    def _workers_for_grid(self, total_points: int) -> int:
+        """Return the effective worker count for a grid.
+
+        Returns
+        -------
+        int
+            Number of workers to use for the grid.
+        """
+        if self._configured_max_workers is None and total_points > _PARALLEL_GTO_POINT_LIMIT:
+            return 1
+        return self.max_workers
 
     def set_gtos(self, gtos: NDArray[np.floating]) -> None:
         """Install GTO values produced for the current grid.
@@ -252,6 +292,73 @@ class Tabulator:
     _spherical_to_cartesian = spherical_to_cartesian
     _cartesian_to_spherical = cartesian_to_spherical
 
+    @staticmethod
+    def _build_grid(
+        x: NDArray[np.floating],
+        y: NDArray[np.floating],
+        z: NDArray[np.floating],
+        grid_type: GridType,
+    ) -> NDArray[np.floating]:
+        """Build a structured Cartesian point grid without changing state.
+
+        Parameters
+        ----------
+        x : NDArray[np.floating]
+            1D array of x (or r) coordinates.
+        y : NDArray[np.floating]
+            1D array of y (or theta) coordinates.
+        z : NDArray[np.floating]
+            1D array of z (or phi) coordinates.
+        grid_type : GridType
+            Coordinate system represented by the input axes.
+
+        Returns
+        -------
+        NDArray[np.floating]
+            Cartesian points with one XYZ coordinate per row.
+
+        Raises
+        ------
+        ValueError
+            If ``grid_type`` is ``GridType.UNKNOWN``.
+        """
+        if grid_type == GridType.UNKNOWN:
+            raise ValueError('Grid type cannot be unknown.')
+
+        xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
+        if grid_type == GridType.SPHERICAL:
+            xx, yy, zz = Tabulator.spherical_to_cartesian(xx, yy, zz)
+        return np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
+
+    def _set_structured_grid(
+        self,
+        grid: NDArray[np.floating],
+        axes: tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]],
+        grid_type: GridType,
+    ) -> None:
+        """Install a prebuilt structured grid and its coordinate metadata.
+
+        Parameters
+        ----------
+        grid : NDArray[np.floating]
+            Cartesian points built from ``axes``.
+        axes : tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]
+            Original structured-grid coordinate axes.
+        grid_type : GridType
+            Coordinate system represented by ``axes``.
+
+        Raises
+        ------
+        ValueError
+            If ``grid_type`` is ``GridType.UNKNOWN``.
+        """
+        if grid_type == GridType.UNKNOWN:
+            raise ValueError('Grid type cannot be unknown.')
+        self.set_grid(grid)
+        self._grid_type = grid_type
+        self._grid_dimensions = (len(axes[0]), len(axes[1]), len(axes[2]))
+        self._grid_axes = axes
+
     def _set_grid(
         self,
         x: NDArray[np.floating],
@@ -287,14 +394,8 @@ class Tabulator:
         if grid_type == GridType.UNKNOWN:
             raise ValueError('Grid type cannot be unknown.')
 
-        xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
-        if grid_type == GridType.SPHERICAL:
-            xx, yy, zz = self.spherical_to_cartesian(xx, yy, zz)
-
-        self.set_grid(np.column_stack((xx.ravel(), yy.ravel(), zz.ravel())))
-        self._grid_type = grid_type
-        self._grid_dimensions = (len(x), len(y), len(z))
-        self._grid_axes = (x, y, z)
+        grid = self._build_grid(x, y, z, grid_type)
+        self._set_structured_grid(grid, (x, y, z), grid_type)
         logger.info(
             'Created %s grid with %d points (%dx%dx%d).',
             grid_type.value,
@@ -428,7 +529,7 @@ class Tabulator:
             (atom, atom_slice, point_slice) for atom, atom_slice in atom_tasks for point_slice in point_slices
         ]
 
-        max_workers = min(len(chunk_tasks), os.cpu_count() or 1)
+        max_workers = min(len(chunk_tasks), self._workers_for_grid(total_points))
         if max_workers <= 1:
             for atom, atom_slice, point_slice in chunk_tasks:
                 self._tabulate_atom(
@@ -438,19 +539,14 @@ class Tabulator:
                     gto_data[point_slice],
                 )
         else:
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = [
-                    executor.submit(
-                        self._tabulate_atom,
-                        grid[point_slice],
-                        atom,
-                        atom_slice,
-                        gto_data[point_slice],
-                    )
-                    for atom, atom_slice, point_slice in chunk_tasks
-                ]
-                for future in futures:
-                    future.result()
+            task_batches = [chunk_tasks[index::max_workers] for index in range(max_workers)]
+            futures = [
+                _GTO_EXECUTOR.submit(self._tabulate_atom_batch, grid, task_batch, gto_data)
+                for task_batch in task_batches
+            ]
+            wait(futures)
+            for future in futures:
+                future.result()
 
         logger.debug('GTO data shape: %s', gto_data.shape)
         return gto_data
@@ -488,6 +584,21 @@ class Tabulator:
         gto_data = self.compute_gtos(self._grid, point_chunk_size=point_chunk_size)
         self.set_gtos(gto_data)
         return gto_data
+
+    def _tabulate_atom_batch(
+        self,
+        grid: NDArray[np.floating],
+        chunk_tasks: list[tuple[Any, slice, slice]],
+        gto_data: NDArray[np.floating],
+    ) -> None:
+        """Tabulate a batch of atom and point-slice tasks."""
+        for atom, atom_slice, point_slice in chunk_tasks:
+            self._tabulate_atom(
+                grid[point_slice],
+                atom,
+                atom_slice,
+                gto_data[point_slice],
+            )
 
     def _tabulate_atom(
         self,

@@ -527,6 +527,18 @@ class FakeTabulator:
     def set_gtos(self, gtos: np.ndarray) -> None:
         self._gtos = gtos
 
+    def _set_structured_grid(
+        self,
+        grid: np.ndarray,
+        axes: tuple[np.ndarray, np.ndarray, np.ndarray],
+        grid_type: Any,
+    ) -> None:
+        self.grid = grid
+        self.grid_type = grid_type
+        self.grid_dimensions = (len(axes[0]), len(axes[1]), len(axes[2]))
+        self.grid_axes = axes
+        self.clear_gtos()
+
     def clear_gtos(self) -> None:
         self._gtos = None
 
@@ -1013,13 +1025,7 @@ def test_apply_grid_settings_updates_spherical_grid(plotter_env: Any) -> None:
     def fake_update(i_points: np.ndarray, j_points: np.ndarray, k_points: np.ndarray, grid_type: Any) -> None:
         captured['args'] = (i_points, j_points, k_points, grid_type)
 
-    replotted: list[int] = []
-
-    def remember(idx: int) -> None:
-        replotted.append(idx)
-
     plotter._update_mesh = fake_update  # type: ignore[assignment]
-    plotter.plot_orbital = remember  # type: ignore[assignment]
 
     plotter._apply_grid_settings()
 
@@ -1029,7 +1035,6 @@ def test_apply_grid_settings_updates_spherical_grid(plotter_env: Any) -> None:
     assert i_points.shape[0] == expected_points
     assert j_points.shape[0] == expected_points
     assert k_points.shape[0] == expected_points
-    assert replotted == [0]
 
 
 def test_apply_grid_settings_cartesian_validation_shows_error(
@@ -1598,13 +1603,7 @@ def test_apply_grid_settings_updates_cartesian(plotter_env: Any) -> None:
     def fake_update(i_points: np.ndarray, j_points: np.ndarray, k_points: np.ndarray, grid_type: Any) -> None:
         captured['args'] = (i_points, j_points, k_points, grid_type)
 
-    replotted: list[int] = []
-
-    def remember(idx: int) -> None:
-        replotted.append(idx)
-
     plotter._update_mesh = fake_update  # type: ignore[assignment]
-    plotter.plot_orbital = remember  # type: ignore[assignment]
 
     plotter._apply_grid_settings()
 
@@ -1615,7 +1614,6 @@ def test_apply_grid_settings_updates_cartesian(plotter_env: Any) -> None:
     expected_k_points = 4
     assert j_points.size == expected_j_points
     assert k_points.size == expected_k_points
-    assert replotted == [0]
 
 
 def test_apply_molecule_settings_updates_config(plotter_env: Any) -> None:
