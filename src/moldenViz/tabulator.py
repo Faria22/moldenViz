@@ -2,7 +2,7 @@
 
 import logging
 import os
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait
 from enum import Enum
 from math import factorial
 from pathlib import Path
@@ -19,6 +19,12 @@ __all__ = ['GridType', 'Tabulator']
 logger = logging.getLogger(__name__)
 
 _MOIndices = NDArray[np.integer] | list[int] | tuple[int, ...] | range
+_MAX_GTO_WORKERS = 4
+_PARALLEL_GTO_POINT_LIMIT = 125_000
+_GTO_EXECUTOR = ThreadPoolExecutor(
+    max_workers=min(_MAX_GTO_WORKERS, os.cpu_count() or 1),
+    thread_name_prefix='moldenViz-gto',
+)
 
 
 def _grid_creation_with_only_molecule_error() -> RuntimeError:
@@ -51,6 +57,12 @@ class Tabulator:
     only_molecule : bool, optional
         Only parse the atoms and skip molecular orbitals.
         Default is ``False``.
+    max_workers : int | None, optional
+        Maximum concurrent workers for GTO tabulation. ``None`` uses up to four
+        workers through 125,000 grid points and switches to sequential work for
+        larger grids. Explicit values override the grid-size policy but remain
+        capped at four and further bounded by the CPU and atom counts. Set to
+        ``1`` for sequential tabulation. Default is ``None``.
 
     Attributes
     ----------
@@ -61,17 +73,27 @@ class Tabulator:
         ``RuntimeError`` when no cache is available.
     has_gtos : bool
         Whether GTO values are currently cached.
+    max_workers : int
+        Effective GTO worker count after applying the configured policy.
     """
 
     def __init__(
         self,
         source: str | list[str],
         only_molecule: bool = False,
+        *,
+        max_workers: int | None = None,
     ) -> None:
         """Initialize the Tabulator with a Molden file or its content."""
+        if isinstance(max_workers, bool) or (max_workers is not None and not isinstance(max_workers, int)):
+            raise TypeError('max_workers must be a positive integer or None.')
+        if max_workers is not None and max_workers < 1:
+            raise ValueError('max_workers must be at least 1.')
+
         self._parser = Parser(source, only_molecule)
 
         self._only_molecule = only_molecule
+        self._configured_max_workers = max_workers
 
         self._grid: NDArray[np.floating]
         self._grid_type = GridType.UNKNOWN
@@ -147,6 +169,24 @@ class Tabulator:
     def clear_gtos(self) -> None:
         """Release any cached Gaussian-type orbital values."""
         self._gtos = None
+
+    @property
+    def max_workers(self) -> int:
+        """Configured GTO worker ceiling after CPU and atom limits."""
+        requested_workers = self._configured_max_workers or _MAX_GTO_WORKERS
+        return min(requested_workers, _MAX_GTO_WORKERS, os.cpu_count() or 1, max(1, len(self._parser.atoms)))
+
+    def _workers_for_grid(self, total_points: int) -> int:
+        """Return the effective worker count for a grid.
+
+        Returns
+        -------
+        int
+            Number of workers to use for the grid.
+        """
+        if self._configured_max_workers is None and total_points > _PARALLEL_GTO_POINT_LIMIT:
+            return 1
+        return self.max_workers
 
     def set_gtos(self, gtos: NDArray[np.floating]) -> None:
         """Install GTO values produced for the current grid.
@@ -399,18 +439,19 @@ class Tabulator:
             atom_tasks.append((atom, atom_slice))
             idx_shell_start += num_gtos_in_shell
 
-        max_workers = min(len(atom_tasks), os.cpu_count() or 1)
+        max_workers = self._workers_for_grid(total_points)
         if max_workers <= 1:
             for atom, atom_slice in atom_tasks:
                 self._tabulate_atom(grid, atom, atom_slice, gto_data)
         else:
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = [
-                    executor.submit(self._tabulate_atom, grid, atom, atom_slice, gto_data)
-                    for atom, atom_slice in atom_tasks
-                ]
-                for future in futures:
-                    future.result()
+            task_batches = [atom_tasks[index::max_workers] for index in range(max_workers)]
+            futures = [
+                _GTO_EXECUTOR.submit(self._tabulate_atom_batch, grid, task_batch, gto_data)
+                for task_batch in task_batches
+            ]
+            wait(futures)
+            for future in futures:
+                future.result()
 
         logger.debug('GTO data shape: %s', gto_data.shape)
         return gto_data
@@ -438,6 +479,16 @@ class Tabulator:
         gto_data = self.compute_gtos(self._grid)
         self.set_gtos(gto_data)
         return gto_data
+
+    def _tabulate_atom_batch(
+        self,
+        grid: NDArray[np.floating],
+        atom_tasks: list[tuple[Any, slice]],
+        gto_data: NDArray[np.floating],
+    ) -> None:
+        """Tabulate a batch of atoms into non-overlapping GTO columns."""
+        for atom, atom_slice in atom_tasks:
+            self._tabulate_atom(grid, atom, atom_slice, gto_data)
 
     def _tabulate_atom(
         self,
