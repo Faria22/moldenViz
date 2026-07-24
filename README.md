@@ -14,11 +14,31 @@ Install the core parser and tabulator:
 pip install moldenViz
 ```
 
+Or add it to a project with uv:
+
+```console
+uv add moldenViz
+```
+
 Install the interactive viewer and CLI dependencies with the GUI extra:
 
 ```console
 pip install 'moldenViz[gui]'
 ```
+
+With uv:
+
+```console
+uv add 'moldenViz[gui]'
+```
+
+Or install the CLI as a standalone uv tool:
+
+```console
+uv tool install 'moldenViz[gui]'
+```
+
+This makes the ``moldenViz`` command available on your ``PATH``.
 
 The GUI extra uses PySide6 as its supported Qt binding. ``moldenViz`` also uses
 ``tkinter``, which Python distributions commonly provide separately. If
