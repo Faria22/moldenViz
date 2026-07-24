@@ -19,6 +19,8 @@ if TYPE_CHECKING:
 
     import pytest
 
+_REAL_SELECTION_SCREEN = plotter_module._OrbitalSelectionScreen
+
 
 class DummyMesh(UserDict):
     """Stub StructuredGrid used in place of the PyVista mesh."""
@@ -34,13 +36,30 @@ class DummyMesh(UserDict):
         return self
 
 
+class FakeSignal:
+    """Record callbacks connected to a Qt-style signal."""
+
+    def __init__(self) -> None:
+        self.callbacks: list[Callable[[], None]] = []
+
+    def connect(self, callback: Callable[[], None]) -> None:
+        """Record a callback for later deterministic delivery."""
+        self.callbacks.append(callback)
+
+    def emit(self) -> None:
+        """Deliver the signal to every connected callback."""
+        for callback in self.callbacks:
+            callback()
+
+
 class FakeBackgroundPlotter:
     """Lightweight BackgroundPlotter stand-in for headless tests."""
 
     def __init__(self, *_args: object, **_kwargs: object) -> None:
-        self.app_window = SimpleNamespace(signal_close=SimpleNamespace(connect=lambda _cb: None))
+        self.app_window = SimpleNamespace(signal_close=FakeSignal())
         self.main_menu = SimpleNamespace(actions=list, addMenu=lambda *_args, **_kwargs: None)
         self._last_mesh_args: tuple[tuple[object, ...], dict[str, object]] | None = None
+        self.closed = False
 
     def set_background(self, *_args: object, **_kwargs: object) -> None:  # pragma: no cover - trivial
         """Ignore background updates for headless runs."""
@@ -64,6 +83,7 @@ class FakeBackgroundPlotter:
 
     def close(self) -> None:  # pragma: no cover - trivial
         """Simulate closing the plotter window."""
+        self.closed = True
 
     def update(self) -> None:  # pragma: no cover - trivial
         """Expose the update hook expected by Plotter."""
@@ -77,6 +97,8 @@ class FakeTk:
         self.tk_call_thread_ids: list[int] = []
         self.callbacks: dict[str, tuple[object, tuple[object, ...]]] = {}
         self._next_callback_id = 0
+        self.quit_calls = 0
+        self.destroy_calls = 0
 
     def after(self, _delay: int, callback: object, *args: object) -> str:
         """Queue callbacks for explicit execution by the owning test thread.
@@ -121,9 +143,11 @@ class FakeTk:
 
     def quit(self) -> None:  # pragma: no cover - trivial
         """Satisfy the Tk API contract for quitting."""
+        self.quit_calls += 1
 
     def destroy(self) -> None:  # pragma: no cover - trivial
         """Simulate tearing down the Tk root."""
+        self.destroy_calls += 1
 
 
 class FakeSelectionScreen:
@@ -134,6 +158,7 @@ class FakeSelectionScreen:
         self.current_mo_ind = -1
         self.loading_states: list[bool] = []
         self.messages: list[str] = []
+        self.destroyed = False
 
     def _set_loading_state(self, loading: bool, message: str = 'Tabulating orbitals...') -> None:
         """Mirror the dialog's loading indicator for assertions."""
@@ -155,10 +180,11 @@ class FakeSelectionScreen:
         bool
             True while the fake selection dialog is attached to a plotter.
         """
-        return bool(self.plotter)
+        return not self.destroyed
 
     def destroy(self) -> None:  # pragma: no cover - trivial
         """Implement the Tk destroy hook."""
+        self.destroyed = True
 
 
 def _configure_plotter_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -325,6 +351,109 @@ def test_replacing_grid_discards_running_generation(monkeypatch: pytest.MonkeyPa
     assert selection_screen.loading_states == [True, True, False]
 
 
+def test_rapid_grid_replacements_only_apply_latest(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Several running generations must leave only the newest grid installed."""
+    _configure_plotter_env(monkeypatch)
+    started = [threading.Event() for _ in range(3)]
+    releases = [threading.Event() for _ in range(3)]
+    call_lock = threading.Lock()
+    call_count = 0
+
+    def controlled_compute(_tabulator: plotter_module.Tabulator, grid: np.ndarray) -> np.ndarray:
+        nonlocal call_count
+        with call_lock:
+            call_index = call_count
+            call_count += 1
+        started[call_index].set()
+        releases[call_index].wait()
+        return np.full((grid.shape[0], 1), call_index + 1.0)
+
+    monkeypatch.setattr(plotter_module.Tabulator, 'compute_gtos', controlled_compute)
+    plotter = plotter_module.Plotter(_sample_molden(), tk_root=_fake_tk_root())
+
+    try:
+        assert started[0].wait(timeout=1.0)
+        middle_axis = np.linspace(-2.0, 2.0, 3)
+        plotter._update_mesh(
+            middle_axis,
+            middle_axis,
+            middle_axis,
+            plotter_module.GridType.CARTESIAN,
+        )
+        releases[0].set()
+        assert started[1].wait(timeout=1.0)
+
+        latest_axis = np.linspace(-3.0, 3.0, 4)
+        plotter._update_mesh(
+            latest_axis,
+            latest_axis,
+            latest_axis,
+            plotter_module.GridType.CARTESIAN,
+        )
+        releases[1].set()
+        assert started[2].wait(timeout=1.0)
+
+        assert not plotter.tabulator.has_gtos
+        releases[2].set()
+        plotter.wait_for_gtos()
+    finally:
+        for release in releases:
+            release.set()
+
+    np.testing.assert_array_equal(
+        plotter.tabulator.gtos,
+        np.full((latest_axis.size**3, 1), 3.0),
+    )
+    latest_axes = plotter.tabulator.grid_axes
+    assert latest_axes is not None
+    np.testing.assert_array_equal(latest_axes[0], latest_axis)
+    assert isinstance(plotter._selection_screen, FakeSelectionScreen)
+    assert plotter._selection_screen.loading_states == [True, True, True, False]
+
+
+def test_simultaneous_plotters_keep_results_isolated(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Independent Plotters must receive their own serialized worker results."""
+    _configure_plotter_env(monkeypatch)
+    started = [threading.Event(), threading.Event()]
+    releases = [threading.Event(), threading.Event()]
+    call_lock = threading.Lock()
+    call_count = 0
+
+    def controlled_compute(_tabulator: plotter_module.Tabulator, grid: np.ndarray) -> np.ndarray:
+        nonlocal call_count
+        with call_lock:
+            call_index = call_count
+            call_count += 1
+        started[call_index].set()
+        releases[call_index].wait()
+        return np.full((grid.shape[0], 1), call_index + 4.0)
+
+    monkeypatch.setattr(plotter_module.Tabulator, 'compute_gtos', controlled_compute)
+    first = plotter_module.Plotter(_sample_molden(), tk_root=_fake_tk_root())
+    second = plotter_module.Plotter(_sample_molden(), tk_root=_fake_tk_root())
+
+    try:
+        assert started[0].wait(timeout=1.0)
+        assert not started[1].is_set()
+        releases[0].set()
+        assert started[1].wait(timeout=1.0)
+        releases[1].set()
+        first.wait_for_gtos()
+        second.wait_for_gtos()
+    finally:
+        for release in releases:
+            release.set()
+
+    np.testing.assert_array_equal(
+        first.tabulator.gtos,
+        np.full((first.tabulator.grid.shape[0], 1), 4.0),
+    )
+    np.testing.assert_array_equal(
+        second.tabulator.gtos,
+        np.full((second.tabulator.grid.shape[0], 1), 5.0),
+    )
+
+
 def test_closing_plotter_discards_running_generation(monkeypatch: pytest.MonkeyPatch) -> None:
     """A result finishing after close must not update Tabulator or UI state."""
     _configure_plotter_env(monkeypatch)
@@ -356,6 +485,75 @@ def test_closing_plotter_discards_running_generation(monkeypatch: pytest.MonkeyP
     assert selection_screen.loading_states == [True]
 
 
+def test_selection_window_close_during_work_preserves_custom_root(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Selection-window close must discard work without owning a supplied root."""
+    _configure_plotter_env(monkeypatch)
+    started = threading.Event()
+    release = threading.Event()
+    finished = threading.Event()
+
+    def controlled_compute(_tabulator: plotter_module.Tabulator, grid: np.ndarray) -> np.ndarray:
+        started.set()
+        release.wait()
+        finished.set()
+        return np.ones((grid.shape[0], 1))
+
+    monkeypatch.setattr(plotter_module.Tabulator, 'compute_gtos', controlled_compute)
+    root = cast(FakeTk, _fake_tk_root())
+    plotter = plotter_module.Plotter(_sample_molden(), tk_root=cast(Any, root))
+
+    try:
+        assert started.wait(timeout=1.0)
+        selection_screen = cast(FakeSelectionScreen, plotter._selection_screen)
+        _REAL_SELECTION_SCREEN._on_close(cast(Any, selection_screen))
+    finally:
+        release.set()
+    assert finished.wait(timeout=1.0)
+
+    assert not plotter.tabulator.has_gtos
+    assert selection_screen.destroyed
+    assert cast(FakeBackgroundPlotter, plotter._pv_plotter).closed
+    assert root.quit_calls == 0
+    assert root.destroy_calls == 0
+
+
+def test_plotter_window_close_during_work_preserves_custom_root(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PyVista close must discard work without quitting a supplied Tk root."""
+    _configure_plotter_env(monkeypatch)
+    started = threading.Event()
+    release = threading.Event()
+    finished = threading.Event()
+
+    def controlled_compute(_tabulator: plotter_module.Tabulator, grid: np.ndarray) -> np.ndarray:
+        started.set()
+        release.wait()
+        finished.set()
+        return np.ones((grid.shape[0], 1))
+
+    monkeypatch.setattr(plotter_module.Tabulator, 'compute_gtos', controlled_compute)
+    root = cast(FakeTk, _fake_tk_root())
+    plotter = plotter_module.Plotter(_sample_molden(), tk_root=cast(Any, root))
+    plotter_module._PlotterRendering._connect_pv_plotter_close_signal(plotter)
+
+    try:
+        assert started.wait(timeout=1.0)
+        signal = cast(FakeSignal, plotter._pv_plotter.app_window.signal_close)
+        signal.emit()
+    finally:
+        release.set()
+    assert finished.wait(timeout=1.0)
+
+    assert not plotter.tabulator.has_gtos
+    assert isinstance(plotter._selection_screen, FakeSelectionScreen)
+    assert plotter._selection_screen.destroyed
+    assert root.quit_calls == 0
+    assert root.destroy_calls == 0
+
+
 def test_gto_success_is_delivered_by_tk_thread(monkeypatch: pytest.MonkeyPatch) -> None:
     """A worker should publish data without making any Tk calls."""
     _configure_plotter_env(monkeypatch)
@@ -374,6 +572,43 @@ def test_gto_success_is_delivered_by_tk_thread(monkeypatch: pytest.MonkeyPatch) 
     assert worker_thread_ids
     assert worker_thread_ids[0] != root.owner_thread_id
     assert set(root.tk_call_thread_ids) == {root.owner_thread_id}
+
+
+def test_gto_success_is_delivered_by_real_tcl_event_loop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A headless Tcl event loop should deliver completion on its owner thread."""
+    _configure_plotter_env(monkeypatch)
+    delivery_thread_ids: list[int] = []
+    owner_thread_id = threading.get_ident()
+    original_apply = plotter_module.Plotter._apply_gtos_ready
+
+    def fake_compute_gtos(_tabulator: plotter_module.Tabulator, grid: np.ndarray) -> np.ndarray:
+        return np.ones((grid.shape[0], 1))
+
+    def record_apply(
+        self: plotter_module.Plotter,
+        result: plotter_module._GTOResult,
+        elapsed: float,
+    ) -> None:
+        delivery_thread_ids.append(threading.get_ident())
+        original_apply(self, result, elapsed)
+
+    monkeypatch.setattr(plotter_module.Tabulator, 'compute_gtos', fake_compute_gtos)
+    monkeypatch.setattr(plotter_module.Plotter, '_apply_gtos_ready', record_apply)
+    root = cast(Any, plotter_module.tk.Tcl())
+    plotter = plotter_module.Plotter(_sample_molden(), tk_root=root)
+
+    try:
+        deadline = time.monotonic() + 1.0
+        while not plotter._gtos_ready:
+            assert time.monotonic() < deadline
+            root.dooneevent(0)
+    finally:
+        plotter._on_screen = False
+        plotter._cancel_gto_future()
+
+    assert delivery_thread_ids == [owner_thread_id]
 
 
 def test_gto_failure_is_delivered_by_tk_thread(
