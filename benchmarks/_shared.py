@@ -22,7 +22,7 @@ EXAMPLE_NAMES = (
     'prismane',
     'pyridine',
 )
-GRID_EDGES = (10, 25, 50)
+GRID_EDGES = (10, 25, 50, 100)
 MO_SELECTIONS = ('single', 'several', 'all')
 REPRESENTATIVE_EXAMPLES = ('h2o', 'furan', 'benzene')
 

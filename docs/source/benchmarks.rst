@@ -60,7 +60,7 @@ Runtime coverage includes:
 
 * parsing every bundled molecule;
 * Cartesian grid construction at edge sizes 10, 25, 50, and 100;
-* GTO tabulation for every molecule on 10³, 25³, and 50³ point grids;
+* GTO tabulation for every molecule on 10³, 25³, 50³, and 100³ point grids;
 * single, five, and all-MO contractions for every molecule on those grids; and
 * Cartesian real solid harmonics for 10,000, 125,000, and 1,000,000 points
   through angular momenta 0, 2, and 4.
