@@ -1,8 +1,63 @@
 """Peak-memory benchmarks for representative tabulation workloads."""
 
+import numpy as np
+
 from moldenViz.tabulator import Tabulator
 
-from ._shared import POINT_CHUNK_SIZES, REPRESENTATIVE_EXAMPLES, WORKER_COUNTS, example_source, grid_axis
+from ._shared import (
+    POINT_CHUNK_SIZES,
+    PYSCF_CO_SPHERICAL,
+    REPRESENTATIVE_EXAMPLES,
+    WORKER_COUNTS,
+    GenericSolidHarmonicTabulator,
+    example_source,
+    grid_axis,
+)
+
+
+class PeakMemorySolidHarmonics:
+    """Compare generated and generic solid-harmonic temporary memory."""
+
+    params = ((125_000, 1_000_000), (2, 4), ('generated', 'generic'))
+    param_names = ['num_points', 'lmax', 'implementation']
+    timeout = 180
+
+    def setup(self, num_points: int, lmax: int, implementation: str) -> None:
+        """Create deterministic Cartesian points."""
+        rng = np.random.default_rng(seed=116)
+        self.points = rng.uniform(-6.0, 6.0, size=(num_points, 3))
+
+    def peakmem_solid_harmonics(self, num_points: int, lmax: int, implementation: str) -> None:
+        """Measure peak RSS for the selected harmonic implementation."""
+        if implementation == 'generated':
+            Tabulator._tabulate_real_solid_harmonics(  # ruff:ignore[private-member-access]
+                self.points,
+                lmax,
+            )
+        else:
+            Tabulator._tabulate_real_solid_harmonics_generic(  # ruff:ignore[private-member-access]
+                self.points,
+                lmax,
+            )
+
+
+class PeakMemoryHighAngularMomentumGTOTabulation:
+    """Compare full cc-pVQZ GTO-tabulation peak memory."""
+
+    params = ((25, 50), ('generated', 'generic'))
+    param_names = ['edge_size', 'implementation']
+    timeout = 180
+
+    def setup(self, edge_size: int, implementation: str) -> None:
+        """Create a sequential cc-pVQZ tabulator with an uncomputed grid."""
+        tabulator_class = GenericSolidHarmonicTabulator if implementation == 'generic' else Tabulator
+        self.tabulator = tabulator_class(str(PYSCF_CO_SPHERICAL), max_workers=1)
+        axis = grid_axis(edge_size)
+        self.tabulator.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
+
+    def peakmem_tabulate_gtos(self, edge_size: int, implementation: str) -> None:
+        """Measure peak RSS while tabulating every cc-pVQZ basis function."""
+        self.tabulator.tabulate_gtos()
 
 
 class PeakMemoryGTOTabulation:

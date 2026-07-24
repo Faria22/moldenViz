@@ -7,13 +7,36 @@ from ._shared import (
     GRID_EDGES,
     MO_SELECTIONS,
     POINT_CHUNK_SIZES,
+    PYSCF_CO_SPHERICAL,
     REPRESENTATIVE_EXAMPLES,
     WORKER_COUNTS,
+    GenericSolidHarmonicTabulator,
     MOSelection,
     example_source,
     grid_axis,
     mo_indices,
 )
+
+
+class TimeHighAngularMomentumGTOTabulation:
+    """Compare generated and generic kernels in a cc-pVQZ tabulation."""
+
+    params = ((25, 50), ('generated', 'generic'))
+    param_names = ['edge_size', 'implementation']
+    number = 1
+    repeat = (3, 5, 1.0)
+    timeout = 180
+
+    def setup(self, edge_size: int, implementation: str) -> None:
+        """Create a sequential cc-pVQZ tabulator with an uncomputed grid."""
+        tabulator_class = GenericSolidHarmonicTabulator if implementation == 'generic' else Tabulator
+        self.tabulator = tabulator_class(str(PYSCF_CO_SPHERICAL), max_workers=1)
+        axis = grid_axis(edge_size)
+        self.tabulator.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
+
+    def time_tabulate_gtos(self, edge_size: int, implementation: str) -> None:
+        """Tabulate every cc-pVQZ basis function."""
+        self.tabulator.tabulate_gtos()
 
 
 class TimeGTOTabulation:
