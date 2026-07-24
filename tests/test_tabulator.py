@@ -155,15 +155,16 @@ def test_compute_gtos_default_bounds_worker_point_slices(monkeypatch: pytest.Mon
     tab = Tabulator(str(MOLDEN_PATH))
     grid = np.zeros((32_769, 3))
     chunk_lengths: list[int] = []
+    block_shapes: list[tuple[int, int]] = []
 
     def fake_tabulate_atom(
         chunk: np.ndarray,
         _atom: Atom,
-        atom_slice: slice,
-        gto_data: np.ndarray,
+        atom_block: np.ndarray,
     ) -> None:
         chunk_lengths.append(chunk.shape[0])
-        gto_data[:, atom_slice] = 0.0
+        block_shapes.append(atom_block.shape)
+        atom_block[:] = 0.0
 
     monkeypatch.setattr('moldenViz.tabulator.os.cpu_count', lambda: 1)
     monkeypatch.setattr(tab, '_tabulate_atom', fake_tabulate_atom)
@@ -171,8 +172,14 @@ def test_compute_gtos_default_bounds_worker_point_slices(monkeypatch: pytest.Mon
     actual = tab.compute_gtos(grid)
 
     num_atoms = len(tab._parser.atoms)  # ruff:ignore[private-member-access]
+    expected_block_shapes = [
+        (chunk_length, sum(2 * shell.l + 1 for shell in atom.shells))
+        for atom in tab._parser.atoms  # ruff:ignore[private-member-access]
+        for chunk_length in (32_768, 1)
+    ]
     assert actual.shape == (grid.shape[0], tab._parser.mo_coeffs.shape[1])  # ruff:ignore[private-member-access]
     assert chunk_lengths == [32_768, 1] * num_atoms
+    assert block_shapes == expected_block_shapes
 
 
 def test_gto_worker_policy_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -286,7 +293,7 @@ def test_tabulate_atom_reuses_exponentials_for_compatible_shells(monkeypatch: py
         return original_exp(values)
 
     monkeypatch.setattr(np, 'exp', tracked_exp)
-    tab._tabulate_atom(grid, atom, slice(0, actual.shape[1]), actual)  # ruff:ignore[private-member-access]
+    tab._tabulate_atom(grid, atom, actual)  # ruff:ignore[private-member-access]
 
     r_sq = np.einsum('ij,ij->i', grid, grid)
     solid_harmonics = Tabulator._tabulate_real_solid_harmonics(grid, 2)  # ruff:ignore[private-member-access]
