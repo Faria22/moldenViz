@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import warnings
 from math import factorial
 from pathlib import Path
@@ -14,6 +15,9 @@ from moldenViz import Atom, GaussianPrimitive, Shell
 from moldenViz.tabulator import GridType, Tabulator
 
 MOLDEN_PATH = Path(__file__).with_name('sample_molden.inp')
+PYSCF_CARTESIAN_PATH = Path(__file__).parent / 'fixtures/pyscf/co-cc-pvqz-cartesian.molden'
+PYSCF_CARTESIAN_REFERENCE_PATH = Path(__file__).parent / 'fixtures/pyscf/co-cc-pvqz-cartesian-reference.json'
+PYSCF_CARTESIAN_PATHS = tuple(sorted((Path(__file__).parent / 'fixtures/pyscf').glob('*-cartesian.molden')))
 
 
 def _tabulate_xlms(theta: np.ndarray, phi: np.ndarray, lmax: int) -> np.ndarray:
@@ -446,6 +450,48 @@ def test_cartesian_solid_harmonics_handle_origin_and_axes() -> None:
     np.testing.assert_allclose(actual[1, 0], np.sqrt(3 / (4 * np.pi)) * points[:, 2])
 
 
+def test_cartesian_basis_tabulation_matches_pyscf_reference() -> None:
+    """Normalized 6D/10F/15G AOs should match PySCF in Molden order."""
+    reference = json.loads(PYSCF_CARTESIAN_REFERENCE_PATH.read_text())
+    points = np.asarray(reference['points_bohr'], dtype=float)
+    expected = np.asarray(reference['ao_values_molden_order'], dtype=float)
+    tabulator = Tabulator(str(PYSCF_CARTESIAN_PATH), max_workers=1)
+    tabulator.set_grid(points)
+
+    actual = tabulator.tabulate_gtos()
+
+    assert tabulator.basis_representation == 'cartesian'
+    assert actual.shape == expected.shape
+    np.testing.assert_allclose(actual, expected, rtol=2e-11, atol=2e-12)
+
+
+def test_cartesian_basis_mo_contraction_matches_pyscf_reference() -> None:
+    """Cartesian MO contraction should match PySCF through the public API."""
+    reference = json.loads(PYSCF_CARTESIAN_REFERENCE_PATH.read_text())
+    points = np.asarray(reference['points_bohr'], dtype=float)
+    expected = np.asarray(reference['mo_values'], dtype=float)
+    tabulator = Tabulator(str(PYSCF_CARTESIAN_PATH), max_workers=1)
+    tabulator.set_grid(points)
+    tabulator.tabulate_gtos()
+
+    actual = tabulator.tabulate_mos()
+
+    np.testing.assert_allclose(actual, expected, rtol=2e-11, atol=2e-12)
+
+
+@pytest.mark.parametrize('molden_path', PYSCF_CARTESIAN_PATHS)
+def test_all_pyscf_cartesian_fixtures_tabulate(molden_path: Path) -> None:
+    """Every bundled Cartesian geometry should tabulate finite s-through-g AOs."""
+    points = np.array([[0.0, 0.0, 0.0], [0.25, -0.5, 1.0]])
+    tabulator = Tabulator(str(molden_path), max_workers=1)
+    tabulator.set_grid(points)
+
+    actual = tabulator.tabulate_gtos()
+
+    assert actual.shape == (len(points), tabulator._parser.mo_coeffs.shape[1])  # ruff:ignore[private-member-access]
+    assert np.all(np.isfinite(actual))
+
+
 @pytest.mark.parametrize(
     'molden_path',
     [
@@ -526,9 +572,10 @@ def test_invalid_mo_inds(mo_inds: int | list[int] | range | None) -> None:
         tab.tabulate_mos(mo_inds)
 
 
-def test_export_cube_creates_file(tmp_path: Path) -> None:
+@pytest.mark.parametrize('molden_path', [MOLDEN_PATH, PYSCF_CARTESIAN_PATH])
+def test_export_cube_creates_file(tmp_path: Path, molden_path: Path) -> None:
     """Ensure exporting a cube file writes the expected artifact."""
-    tab = Tabulator(str(MOLDEN_PATH))
+    tab = Tabulator(str(molden_path))
     axis = np.linspace(-1.0, 1.0, 2)
     tab.cartesian_grid(axis, axis, axis)
 
@@ -564,11 +611,12 @@ def test_export_cube_requires_mo_index(tmp_path: Path) -> None:
         tab.export(tmp_path / 'orbital.cube')
 
 
-def test_export_vtk_writes_multiblock(tmp_path: Path) -> None:
+@pytest.mark.parametrize('molden_path', [MOLDEN_PATH, PYSCF_CARTESIAN_PATH])
+def test_export_vtk_writes_multiblock(tmp_path: Path, molden_path: Path) -> None:
     """VTK export should emit a multiblock file with molecule and atom data."""
     pv = pytest.importorskip('pyvista')
 
-    tab = Tabulator(str(MOLDEN_PATH))
+    tab = Tabulator(str(molden_path))
     axis = np.linspace(-0.5, 0.5, 2)
     tab.cartesian_grid(axis, axis, axis)
 

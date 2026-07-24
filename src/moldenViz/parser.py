@@ -32,6 +32,8 @@ class Parser:
 
     Attributes
     ----------
+    basis_representation : {'spherical', 'cartesian'}
+        Basis-function representation declared by the Molden file.
     atoms : list[Atom]
         A list of Atom objects containing the label, atomic number,
         and position for each atom.
@@ -114,8 +116,20 @@ class Parser:
         if '[MO]' not in uppercase_lines:
             raise ValueError("No '[MO]' section found in the molden file.")
 
-        if not any(orbs in line for orbs in ['5D', '9G'] for line in uppercase_lines):
-            raise ValueError('Cartesian orbitals functions are not currently supported.')
+        spherical_tags = {'[5D]', '[7F]', '[9G]'}
+        cartesian_tags = {'[6D]', '[10F]', '[15G]'}
+        has_spherical_tags = any(line in spherical_tags for line in uppercase_lines)
+        has_cartesian_tags = any(line in cartesian_tags for line in uppercase_lines)
+        if has_spherical_tags and has_cartesian_tags:
+            raise ValueError('Mixed spherical and Cartesian basis declarations are not supported.')
+        if has_spherical_tags:
+            self.basis_representation: Literal['spherical', 'cartesian'] = 'spherical'
+        elif has_cartesian_tags:
+            self.basis_representation = 'cartesian'
+        else:
+            raise ValueError(
+                'No supported spherical (5D/7F/9G) or Cartesian (6D/10F/15G) basis declaration found.',
+            )
 
         logger.info('Molden format check passed.')
 
@@ -248,7 +262,7 @@ class Parser:
         """
         logger.info('Parsing MO coefficients...')
 
-        num_total_gtos = sum(2 * gto.l + 1 for gto in self.shells)
+        num_total_gtos = sum(self._num_shell_components(shell.l) for shell in self.shells)
 
         order = self._gto_order()
 
@@ -313,6 +327,10 @@ class Parser:
             The order of the atomic orbitals.
 
         """
+        if self.basis_representation == 'cartesian':
+            num_total_gtos = sum(self._num_shell_components(shell.l) for shell in self.shells)
+            return list(range(num_total_gtos))
+
         order = []
         ind = 0
         for shell in self.shells:
@@ -325,3 +343,15 @@ class Parser:
             ind += 2 * l + 1
 
         return order
+
+    def _num_shell_components(self, l: int) -> int:
+        """Return the basis-function count for an angular momentum shell.
+
+        Returns
+        -------
+        int
+            Number of spherical or Cartesian components.
+        """
+        if self.basis_representation == 'cartesian':
+            return (l + 1) * (l + 2) // 2
+        return 2 * l + 1

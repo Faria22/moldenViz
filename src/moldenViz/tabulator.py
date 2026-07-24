@@ -4,9 +4,9 @@ import logging
 import os
 from concurrent.futures import ThreadPoolExecutor, wait
 from enum import Enum
-from math import factorial
+from math import factorial, gamma
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 from numpy.typing import NDArray
@@ -24,6 +24,51 @@ _MAX_GTO_WORKERS = 4
 _PARALLEL_GTO_POINT_LIMIT = 125_000
 _S_HARMONIC_SCALE = np.sqrt(1.0 / (4.0 * np.pi))
 _P_HARMONIC_SCALE = np.sqrt(3.0 / (4.0 * np.pi))
+_CARTESIAN_POWERS = (
+    ((0, 0, 0),),
+    ((1, 0, 0), (0, 1, 0), (0, 0, 1)),
+    ((2, 0, 0), (0, 2, 0), (0, 0, 2), (1, 1, 0), (1, 0, 1), (0, 1, 1)),
+    (
+        (3, 0, 0),
+        (0, 3, 0),
+        (0, 0, 3),
+        (1, 2, 0),
+        (2, 1, 0),
+        (2, 0, 1),
+        (1, 0, 2),
+        (0, 1, 2),
+        (0, 2, 1),
+        (1, 1, 1),
+    ),
+    (
+        (4, 0, 0),
+        (0, 4, 0),
+        (0, 0, 4),
+        (3, 1, 0),
+        (3, 0, 1),
+        (1, 3, 0),
+        (0, 3, 1),
+        (1, 0, 3),
+        (0, 1, 3),
+        (2, 2, 0),
+        (2, 0, 2),
+        (0, 2, 2),
+        (2, 1, 1),
+        (1, 2, 1),
+        (1, 1, 2),
+    ),
+)
+_CARTESIAN_ANGULAR_SCALES = tuple(
+    np.array(
+        [
+            np.sqrt(
+                gamma(l + 1.5) / (2 * gamma(x_power + 0.5) * gamma(y_power + 0.5) * gamma(z_power + 0.5)),
+            )
+            for x_power, y_power, z_power in powers
+        ],
+    )
+    for l, powers in enumerate(_CARTESIAN_POWERS)
+)
 _GTO_EXECUTOR = ThreadPoolExecutor(
     max_workers=min(_MAX_GTO_WORKERS, os.cpu_count() or 1),
     thread_name_prefix='moldenViz-gto',
@@ -215,6 +260,11 @@ class Tabulator:
     def atoms(self) -> list[Atom]:
         """Atoms parsed from the Molden source."""
         return self._parser.atoms
+
+    @property
+    def basis_representation(self) -> Literal['spherical', 'cartesian']:
+        """Basis-function representation declared by the Molden source."""
+        return self._parser.basis_representation
 
     @property
     def molecular_orbitals(self) -> list[MolecularOrbital]:
@@ -518,7 +568,7 @@ class Tabulator:
 
         # Calculate the slices for each atom's shells
         for atom in self._parser.atoms:
-            num_gtos_in_shell = sum(2 * shell.l + 1 for shell in atom.shells)
+            num_gtos_in_shell = sum(self._num_shell_components(shell.l) for shell in atom.shells)
             atom_slice = slice(idx_shell_start, idx_shell_start + num_gtos_in_shell)
             atom_tasks.append((atom, atom_slice))
             idx_shell_start += num_gtos_in_shell
@@ -610,7 +660,11 @@ class Tabulator:
         centered_grid = grid - atom.position
         max_l = atom.shells[-1].l
         r_sq = np.einsum('ij,ij->i', centered_grid, centered_grid)
-        solid_harmonics = self._tabulate_real_solid_harmonics(centered_grid, max_l)
+        if self._parser.basis_representation == 'cartesian':
+            angular_functions = self._tabulate_cartesian_angular_functions(centered_grid, max_l)
+        else:
+            solid_harmonics = self._tabulate_real_solid_harmonics(centered_grid, max_l)
+            angular_functions = tuple(solid_harmonics[l, np.arange(-l, l + 1), ...] for l in range(max_l + 1))
         block_cursor = 0
         # Group only lightweight shell metadata so one exponential block can
         # be reused for every shell with the same exact exponent sequence.
@@ -618,14 +672,14 @@ class Tabulator:
 
         for shell in atom.shells:
             l = shell.l
-            num_m = 2 * l + 1
-            inner_slice = slice(block_cursor, block_cursor + num_m)
+            num_components = self._num_shell_components(l)
+            inner_slice = slice(block_cursor, block_cursor + num_components)
             exponent_key = (
                 shell._gto_exps.size,  # ruff:ignore[private-member-access]
                 shell._gto_exps.tobytes(),  # ruff:ignore[private-member-access]
             )
             shell_groups.setdefault(exponent_key, []).append((shell, inner_slice))
-            block_cursor += num_m
+            block_cursor += num_components
 
         for compatible_shells in shell_groups.values():
             first_shell = compatible_shells[0][0]
@@ -637,9 +691,20 @@ class Tabulator:
 
             for shell, inner_slice in compatible_shells:
                 l = shell.l
-                m_inds = np.arange(-l, l + 1)
                 contraction = shell._prefactor @ exponentials  # ruff:ignore[private-member-access]
-                atom_block[:, inner_slice] = contraction[:, None] * solid_harmonics[l, m_inds, ...].T
+                atom_block[:, inner_slice] = contraction[:, None] * angular_functions[l].T
+
+    def _num_shell_components(self, l: int) -> int:
+        """Return the basis-function count for an angular momentum shell.
+
+        Returns
+        -------
+        int
+            Number of spherical or Cartesian components.
+        """
+        if self._parser.basis_representation == 'cartesian':
+            return (l + 1) * (l + 2) // 2
+        return 2 * l + 1
 
     def tabulate_mos(self, mo_inds: int | _MOIndices | None = None) -> NDArray[np.floating]:
         """Tabulate molecular orbitals (MOs) on the current grid.
@@ -811,6 +876,70 @@ class Tabulator:
                         if iz % cube_values_per_line == (cube_values_per_line - 1):
                             cube_file.write('\n')
                     cube_file.write('\n')
+
+    @staticmethod
+    def _tabulate_cartesian_angular_functions(
+        centered_grid: NDArray[np.floating],
+        lmax: int,
+    ) -> tuple[NDArray[np.floating], ...]:
+        """Tabulate normalized Cartesian monomials in Molden component order.
+
+        Parameters
+        ----------
+        centered_grid : NDArray[np.floating]
+            Cartesian coordinates relative to an atom, shaped ``(n, 3)``.
+        lmax : int
+            Maximum angular momentum quantum number.
+
+        Returns
+        -------
+        tuple[NDArray[np.floating], ...]
+            One array per angular momentum, each shaped
+            ``(num_components, num_points)``.
+
+        Raises
+        ------
+        ValueError
+            If the grid is not a non-empty ``(n, 3)`` array or ``lmax`` is
+            outside the supported s-through-g range.
+        """
+        expected_dimensions = 2
+        cartesian_dimensions = 3
+        if (
+            centered_grid.ndim != expected_dimensions
+            or centered_grid.shape[1] != cartesian_dimensions
+            or centered_grid.shape[0] == 0
+        ):
+            raise ValueError('centered_grid must be a non-empty array shaped (n, 3).')
+        if lmax < 0 or lmax >= len(_CARTESIAN_POWERS):
+            raise ValueError('Cartesian angular functions support lmax from 0 through 4.')
+
+        x, y, z = np.asarray(centered_grid, dtype=float).T
+        coordinates = (x, y, z)
+        coordinate_powers = []
+        for coordinate in coordinates:
+            powers = [np.ones_like(coordinate)]
+            if lmax:
+                powers.append(coordinate)
+            for _ in range(2, lmax + 1):
+                powers.append(powers[-1] * coordinate)
+            coordinate_powers.append(powers)
+
+        angular_functions = []
+        for powers, scales in zip(
+            _CARTESIAN_POWERS[: lmax + 1],
+            _CARTESIAN_ANGULAR_SCALES[: lmax + 1],
+            strict=True,
+        ):
+            components = [
+                scale
+                * coordinate_powers[0][component_powers[0]]
+                * coordinate_powers[1][component_powers[1]]
+                * coordinate_powers[2][component_powers[2]]
+                for component_powers, scale in zip(powers, scales, strict=True)
+            ]
+            angular_functions.append(np.stack(components))
+        return tuple(angular_functions)
 
     @staticmethod
     def _tabulate_real_solid_harmonics(

@@ -32,3 +32,11 @@ uv run --with pyscf==2.14.0 python scripts/generate_pyscf_molden.py \
 ```
 
 Existing files are left untouched unless `--overwrite` is passed.
+
+The Cartesian AO reference used by the issue 117 end-to-end test applies
+PySCF's own Molden normalization and component reordering:
+
+```console
+uv run --with pyscf==2.14.0 python \
+  scripts/generate_pyscf_cartesian_reference.py
+```

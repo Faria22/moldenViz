@@ -6,7 +6,8 @@ Use this page to diagnose common issues when running ``moldenViz``.
 Parser Exceptions
 -----------------
 
-- ``ValueError: Unsupported basis functions`` – the parser only accepts spherical Gaussian functions. Re-export your Molden file with spherical GTOs enabled.
+- ``ValueError: Mixed spherical and Cartesian basis declarations are not supported.`` – the file contains both spherical ``5D``/``7F``/``9G`` and Cartesian ``6D``/``10F``/``15G`` markers. Re-export it with one consistent basis representation.
+- ``ValueError: No supported ... basis declaration found.`` – add the standard Molden spherical or Cartesian basis markers emitted by your quantum-chemistry producer.
 - ``ValueError: Invalid shell label`` – occurs when the ``[GTO]`` section contains unexpected angular momentum labels. Confirm the file adheres to the `Molden format specification <https://www.theochem.ru.nl/molden/molden_format.html>`_.
 - ``RuntimeError: Grid creation is not allowed when `only_molecule` is set to `True`.`` – raised if you request grids or exports while skipping orbitals. Re-run without ``--only-molecule``.
 

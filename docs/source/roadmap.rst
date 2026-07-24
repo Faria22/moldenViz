@@ -16,10 +16,10 @@ Shipped
 - **v0.2** – PyVista-based 3D plotter with Tkinter controls.
 - **v0.1** – Initial parser and Python API.
 
-Planned
--------
+In Progress
+-----------
 
-- **v2.0: Cartesian basis functions** – expand the parser and tabulator to accept cartesian (5D/9G) shells.
+- **v2.0: Basis-format compatibility** – spherical ``5D``/``7F``/``9G`` and Cartesian ``6D``/``10F``/``15G`` parsing and tabulation are implemented; producer-specific validation and compatibility work continues.
 
 How to Influence the Roadmap
 ----------------------------
