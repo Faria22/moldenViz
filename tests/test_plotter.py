@@ -122,6 +122,9 @@ class DummyBackgroundPlotter:
         self.saved_graphic: str | None = None
         self.screenshot_calls: list[tuple[str, bool]] = []
         self.update_count = 0
+        self.callbacks: list[tuple[object, int]] = []
+        self.app = SimpleNamespace(exec_calls=0)
+        self.app.exec = lambda: setattr(self.app, 'exec_calls', self.app.exec_calls + 1)
         self.app_window = SimpleNamespace(signal_close=DummySignal())
         self.main_menu = DummyMenuBar()
 
@@ -141,6 +144,9 @@ class DummyBackgroundPlotter:
 
     def update(self) -> None:  # pragma: no cover - noop stub
         self.update_count += 1
+
+    def add_callback(self, callback: object, interval: int) -> None:
+        self.callbacks.append((callback, interval))
 
     def save_graphic(self, path: str) -> None:
         self.saved_graphic = path
@@ -260,6 +266,7 @@ class DummyTk:
         self.withdrawn = False
         self.mainloop_calls = 0
         self.quit_calls = 0
+        self.idle_callbacks: list[tuple[object, tuple[object, ...]]] = []
         self.after_callbacks: dict[str, tuple[object, tuple[object, ...]]] = {}
         self._next_after_id = 0
 
@@ -271,6 +278,13 @@ class DummyTk:
 
     def quit(self) -> None:
         self.quit_calls += 1
+
+    def update(self) -> None:  # pragma: no cover - noop stub
+        pass
+
+    def after_idle(self, callback: object, *args: object) -> str:
+        self.idle_callbacks.append((callback, args))
+        return f'idle-{len(self.idle_callbacks) - 1}'
 
     def after(self, _delay: int, callback: object, *args: object) -> str:
         callback_id = f'after-{self._next_after_id}'
@@ -894,7 +908,9 @@ def test_export_image_dialog_builds_controls(monkeypatch: pytest.MonkeyPatch, pl
 
 
 @pytest.mark.usefixtures('plotter_env')
-def test_plotter_creates_internal_tk_root(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_plotter_uses_qt_event_loop_for_internal_tk_root_on_macos(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     created: list[DummyTk] = []
 
     def fake_tk() -> DummyTk:
@@ -904,13 +920,36 @@ def test_plotter_creates_internal_tk_root(monkeypatch: pytest.MonkeyPatch) -> No
 
     monkeypatch.setattr(plotter_module, 'Tabulator', RecordingTabulator)
     monkeypatch.setattr(plotter_module.tk, 'Tk', fake_tk)
+    monkeypatch.setattr(plotter_module.sys, 'platform', 'darwin')
 
     plotter = plotter_module.Plotter('dummy', only_molecule=True)
 
     assert created
     assert created[0].withdrawn
-    assert created[0].mainloop_calls == 1
+    assert plotter._pv_plotter.app.exec_calls == 1
+    assert plotter._pv_plotter.callbacks == [(created[0].update, plotter._TK_UPDATE_MS)]
+    assert created[0].mainloop_calls == 0
     assert plotter._selection_screen is None
+
+
+@pytest.mark.usefixtures('plotter_env')
+def test_plotter_preserves_tk_event_loop_off_macos(monkeypatch: pytest.MonkeyPatch) -> None:
+    created: list[DummyTk] = []
+
+    def fake_tk() -> DummyTk:
+        root = DummyTk()
+        created.append(root)
+        return root
+
+    monkeypatch.setattr(plotter_module, 'Tabulator', RecordingTabulator)
+    monkeypatch.setattr(plotter_module.tk, 'Tk', fake_tk)
+    monkeypatch.setattr(plotter_module.sys, 'platform', 'linux')
+
+    plotter = plotter_module.Plotter('dummy', only_molecule=True)
+
+    assert created[0].mainloop_calls == 1
+    assert plotter._pv_plotter.app.exec_calls == 0
+    assert plotter._pv_plotter.callbacks == []
 
 
 def test_plotter_generates_default_spherical_grid(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
@@ -975,13 +1014,24 @@ def test_plotter_builds_menus_and_overrides_clear(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(_plotter_ui_module, 'QAction', FakeQAction)
     monkeypatch.setattr(_plotter_ui_module, 'isValid', lambda _action: True)
 
-    plotter = plotter_module.Plotter('dummy', tk_root=DummyTk())
+    root = DummyTk()
+    plotter = plotter_module.Plotter('dummy', tk_root=root)
 
     main_menu = plotter._pv_plotter.main_menu
     assert [menu.title for menu in main_menu.menus] == ['Settings', 'Export']
     settings_action_texts = [action.text() for action in main_menu.menus[0].actions()]
     assert {'Grid Settings', 'MO Settings', 'Molecule Settings'} <= set(settings_action_texts)
     assert main_menu.clear_action.triggered.callbacks[-1] == plotter._clear_all
+
+    opened: list[str] = []
+    plotter._mo_settings_screen = lambda: opened.append('mo')  # type: ignore[method-assign]
+    mo_action = next(action for action in main_menu.menus[0].actions() if action.text() == 'MO Settings')
+    mo_action.triggered.callbacks[0]()
+
+    assert opened == []
+    callback, args = root.idle_callbacks.pop()
+    callback(*args)  # type: ignore[operator]
+    assert opened == ['mo']
 
 
 def test_plotter_does_not_access_private_axis_validation(

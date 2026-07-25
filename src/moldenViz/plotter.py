@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 import tkinter as tk
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -104,6 +105,7 @@ class Plotter(_PlotterUI, _PlotterRendering):
     _SPHERICAL_GRID_SETTINGS_WINDOW_SIZE = '400x350'
     _CARTESIAN_GRID_SETTINGS_WINDOW_SIZE = '650x400'
     _GTO_COMPLETION_POLL_MS = 10
+    _TK_UPDATE_MS = 10
 
     def __init__(
         self,
@@ -205,8 +207,7 @@ class Plotter(_PlotterUI, _PlotterRendering):
         if only_molecule:
             logger.info('Running in molecule-only mode; skipping orbital mesh creation.')
             if self._no_prev_tk_root:
-                logger.debug('Entering Tk main loop for molecule-only display.')
-                self._tk_root.mainloop()
+                self._run_internal_event_loop()
             return
 
         self._orb_mesh = self._create_mo_mesh()
@@ -230,8 +231,21 @@ class Plotter(_PlotterUI, _PlotterRendering):
                 self._selection_screen._set_loading_state(True)  # ruff:ignore[private-member-access]
 
         if self._no_prev_tk_root:
-            logger.debug('Entering Tk main loop for full Plotter UI.')
+            self._run_internal_event_loop()
+
+    def _run_internal_event_loop(self) -> None:
+        """Run the native GUI loop for a Plotter-owned Tk root."""
+        if sys.platform != 'darwin':
+            logger.debug('Entering Tk main loop.')
             self._tk_root.mainloop()
+            return
+
+        logger.debug('Entering Qt main loop and polling Tk events on macOS.')
+        self._pv_plotter.add_callback(
+            self._tk_root.update,
+            interval=self._TK_UPDATE_MS,
+        )
+        self._pv_plotter.app.exec()
 
     def wait_for_gtos(self, timeout: float | None = None) -> None:
         """Block until the background GTO tabulation finishes."""

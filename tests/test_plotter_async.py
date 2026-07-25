@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import gc
 import threading
 import time
 from collections import UserDict
@@ -604,11 +605,14 @@ def test_gto_success_is_delivered_by_real_tcl_event_loop(
         while not plotter._gtos_ready:
             assert time.monotonic() < deadline
             root.dooneevent(0)
+        assert delivery_thread_ids == [owner_thread_id]
     finally:
         plotter._on_screen = False
         plotter._cancel_gto_future()
-
-    assert delivery_thread_ids == [owner_thread_id]
+        plotter._selection_screen = None
+        del plotter
+        del root
+        gc.collect()
 
 
 def test_gto_failure_is_delivered_by_tk_thread(
