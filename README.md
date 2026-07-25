@@ -82,14 +82,12 @@ Latest docs: https://moldenviz.readthedocs.io/en/latest/
 
 ## Roadmap
 
-Major milestones and planned features are tracked in the [Roadmap](https://moldenviz.readthedocs.io/en/latest/roadmap.html). Highlights:
+GitHub milestones are the source of truth for release scope and progress:
 
-- ✅ v1.11 – Public tabulator exporters, lazy plotter imports, and numerical hardening.
-- ✅ v1.10 – Responsive background orbital tabulation and expanded plotter coverage.
-- ✅ v1.9 – CLI version and logging controls with coloured progress messages.
-- ✅ v1.8 – Image export (PNG, JPEG, SVG, PDF) and enhanced GUI export dialogs.
-- ✅ v1.1 – VTK/cube export, expanded CLI reference, richer docs.
-- ▶️ v2.0 – Cartesian basis support
+- [v2.0](https://github.com/Faria22/moldenViz/milestone/1) is the next release, bringing together the recent performance, responsiveness, reliability, API, packaging, and developer-tooling improvements.
+- [v3.0](https://github.com/Faria22/moldenViz/milestone/2) is planned to add reading and tabulation of Cartesian-basis Molden files.
+
+See the [documentation roadmap](https://moldenviz.readthedocs.io/en/latest/roadmap.html) for a high-level summary.
 
 ## Contributing
 
