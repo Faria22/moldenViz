@@ -4,12 +4,16 @@ Run from the repository root with::
 
     uv run --with pyscf==2.14.0 python scripts/generate_pyscf_molden.py
 
-The generated files use cc-pVQZ because every bundled molecule then contains
-shells through ``l=4``. The orbitals diagonalize PySCF's one-electron core
-Hamiltonian; an SCF calculation is intentionally unnecessary for parser and
-tabulator fixtures. Only a window around the occupied/virtual boundary is
-written to keep the files reasonably small; every retained orbital still has a
-coefficient for every atomic orbital.
+The generated files use cc-pVQZ because every molecule then contains shells
+through ``l=4``. By default, the script writes the committed spherical CO,
+water, and benzene fixtures. Pass explicit molecule names or ``all`` and select
+another representation when generating development data for other work.
+
+The orbitals diagonalize PySCF's one-electron core Hamiltonian; an SCF
+calculation is intentionally unnecessary for parser and tabulator fixtures.
+Only a window around the occupied/virtual boundary is written to keep the files
+reasonably small; every retained orbital still has a coefficient for every
+atomic orbital.
 """
 
 from __future__ import annotations
@@ -33,6 +37,7 @@ EXAMPLE_DIR = Path('src/moldenViz/examples/molden_files')
 LMAX = 4
 O2_TRIPLET_SPIN = 2
 REPRESENTATIONS = ('spherical', 'cartesian')
+DEFAULT_MOLECULES = ('co', 'h2o', 'benzene')
 
 
 def _parse_args() -> argparse.Namespace:
@@ -40,7 +45,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         'molecules',
         nargs='*',
-        help='Example names to generate (default: every bundled example).',
+        help='Example names to generate (default: co, h2o, and benzene; use "all" for every example).',
     )
     parser.add_argument(
         '--output-dir',
@@ -51,8 +56,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         '--representation',
         choices=(*REPRESENTATIONS, 'both'),
-        default='both',
-        help='Basis representation to write (default: both).',
+        default='spherical',
+        help='Basis representation to write (default: spherical).',
     )
     parser.add_argument(
         '--max-orbitals',
@@ -71,6 +76,10 @@ def _parse_args() -> argparse.Namespace:
 def _example_paths(names: Sequence[str]) -> list[Path]:
     available = {path.stem: path for path in sorted(EXAMPLE_DIR.glob('*.inp'))}
     if not names:
+        names = DEFAULT_MOLECULES
+    elif 'all' in names:
+        if len(names) != 1:
+            raise ValueError('"all" cannot be combined with individual example names.')
         return list(available.values())
 
     unknown = sorted(set(names) - available.keys())

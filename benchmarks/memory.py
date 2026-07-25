@@ -6,12 +6,13 @@ from moldenViz.tabulator import Tabulator
 
 from ._shared import (
     POINT_CHUNK_SIZES,
-    PYSCF_CO_SPHERICAL,
+    PYSCF_SPHERICAL_EXAMPLES,
     REPRESENTATIVE_EXAMPLES,
     WORKER_COUNTS,
     GenericSolidHarmonicTabulator,
     example_source,
     grid_axis,
+    pyscf_spherical_path,
 )
 
 
@@ -44,18 +45,18 @@ class PeakMemorySolidHarmonics:
 class PeakMemoryHighAngularMomentumGTOTabulation:
     """Compare full cc-pVQZ GTO-tabulation peak memory."""
 
-    params = ((25, 50), ('generated', 'generic'))
-    param_names = ['edge_size', 'implementation']
+    params = (PYSCF_SPHERICAL_EXAMPLES, (25, 50), ('generated', 'generic'))
+    param_names = ['molecule', 'edge_size', 'implementation']
     timeout = 180
 
-    def setup(self, edge_size: int, implementation: str) -> None:
+    def setup(self, molecule: str, edge_size: int, implementation: str) -> None:
         """Create a sequential cc-pVQZ tabulator with an uncomputed grid."""
         tabulator_class = GenericSolidHarmonicTabulator if implementation == 'generic' else Tabulator
-        self.tabulator = tabulator_class(str(PYSCF_CO_SPHERICAL), max_workers=1)
+        self.tabulator = tabulator_class(str(pyscf_spherical_path(molecule)), max_workers=1)
         axis = grid_axis(edge_size)
         self.tabulator.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
 
-    def peakmem_tabulate_gtos(self, edge_size: int, implementation: str) -> None:
+    def peakmem_tabulate_gtos(self, molecule: str, edge_size: int, implementation: str) -> None:
         """Measure peak RSS while tabulating every cc-pVQZ basis function."""
         self.tabulator.tabulate_gtos()
 
