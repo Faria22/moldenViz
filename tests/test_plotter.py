@@ -12,7 +12,7 @@ from unittest.mock import Mock
 
 import numpy as np
 import pytest
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtWidgets import QAbstractSpinBox, QApplication, QWidget
 
 import moldenViz.qt as qt_module
 from moldenViz.plotter import Plotter
@@ -143,10 +143,7 @@ def test_orbital_columns_fit_their_contents_with_padding() -> None:
     viewer = OrbitalViewer(str(MOLDEN_PATH), only_molecule=False)
     table = viewer.controls.orbital_table
 
-    assert all(
-        table.columnWidth(column) > table.sizeHintForColumn(column)
-        for column in range(table.columnCount())
-    )
+    assert all(table.columnWidth(column) > table.sizeHintForColumn(column) for column in range(table.columnCount()))
     viewer.close()
 
 
@@ -165,6 +162,73 @@ def test_orbital_navigation_is_above_table() -> None:
     assert previous_item is not None
     assert previous_item.widget() is viewer.controls.previous_button
     assert table_item.widget() is viewer.controls.orbital_table
+    viewer.close()
+
+
+def test_control_tabs_follow_workflow_order() -> None:
+    viewer = OrbitalViewer()
+
+    assert [viewer.controls.tabs.tabText(index) for index in range(viewer.controls.tabs.count())] == [
+        'Orbitals',
+        'Appearance',
+        'Grid',
+        'Export',
+    ]
+    viewer.close()
+
+
+def test_appearance_control_steps_and_contour_buttons() -> None:
+    viewer = OrbitalViewer()
+    controls = viewer.controls
+
+    assert controls.mo_opacity.singleStep() == pytest.approx(0.1)
+    assert controls.molecule_opacity.singleStep() == pytest.approx(0.1)
+    assert controls.bond_radius.singleStep() == pytest.approx(0.05)
+    assert controls.contour.buttonSymbols() is QAbstractSpinBox.ButtonSymbols.NoButtons
+    viewer.close()
+
+
+def test_color_fields_follow_appearance_selections() -> None:
+    viewer = OrbitalViewer()
+    controls = viewer.controls
+
+    controls.color_scheme.setCurrentText('coolwarm')
+    assert controls.negative_color.text() == '#3b4cc0'
+    assert controls.positive_color.text() == '#b40426'
+    assert not controls.negative_color.isEnabled()
+    assert not controls.positive_color.isEnabled()
+
+    controls.color_scheme.setCurrentText('custom')
+    assert controls.negative_color.isEnabled()
+    assert controls.positive_color.isEnabled()
+
+    controls.bond_color_type.setCurrentText('split')
+    assert controls.bond_color_label.isHidden()
+    assert controls.bond_color.isHidden()
+    controls.bond_color_type.setCurrentText('uniform')
+    assert not controls.bond_color_label.isHidden()
+    assert not controls.bond_color.isHidden()
+    viewer.close()
+
+
+def test_background_color_presets_and_custom_field() -> None:
+    viewer = OrbitalViewer()
+    controls = viewer.controls
+
+    assert controls.background_color_choice.currentData() == 'white'
+    assert controls.background_color.isHidden()
+
+    controls.background_color_choice.setCurrentText('Dark gray')
+    assert controls.selected_background_color == '#202124'
+
+    controls.background_color_choice.setCurrentText('Custom')
+    controls.background_color.setText('#123456')
+    assert not controls.background_color.isHidden()
+    assert controls.selected_background_color == '#123456'
+
+    viewer.set_background_color('navy')
+    assert controls.background_color_choice.currentText() == 'Custom'
+    assert controls.background_color.text() == 'navy'
     viewer.close()
 
 

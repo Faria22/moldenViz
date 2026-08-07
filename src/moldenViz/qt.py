@@ -13,6 +13,7 @@ import numpy as np
 from PySide6.QtCore import QObject, Qt, Signal, Slot
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QAbstractSpinBox,
     QApplication,
     QCheckBox,
     QComboBox,
@@ -56,6 +57,12 @@ __all__ = ['OrbitalViewer', 'ViewerConfig']
 
 _GTO_EXECUTOR = ThreadPoolExecutor(max_workers=1)
 _MO_COLOR_SCHEMES = ['bwr', 'RdBu', 'seismic', 'coolwarm', 'PiYG']
+_BACKGROUND_COLORS = (
+    ('White', 'white'),
+    ('Black', 'black'),
+    ('Light gray', 'lightgray'),
+    ('Dark gray', '#202124'),
+)
 _ORBITAL_COLUMN_PADDING = 8
 _CUSTOM_COLOR_COUNT = 2
 
@@ -158,8 +165,8 @@ class OrbitalControlPanel(QWidget):
         self.tabs = QTabWidget(self)
         layout.addWidget(self.tabs)
         self._build_orbitals_tab()
-        self._build_grid_tab()
         self._build_appearance_tab()
+        self._build_grid_tab()
         self._build_export_tab()
 
     def _build_orbitals_tab(self) -> None:
@@ -197,6 +204,7 @@ class OrbitalControlPanel(QWidget):
 
     def _build_grid_tab(self) -> None:
         tab = QWidget(self)
+        self.grid_tab = tab
         layout = QVBoxLayout(tab)
         form = QFormLayout()
         self.grid_type = QComboBox(tab)
@@ -251,8 +259,8 @@ class OrbitalControlPanel(QWidget):
 
         self.orbital_group = QGroupBox('Molecular orbital', tab)
         orbital_form = QFormLayout(self.orbital_group)
-        self.contour = self._double_spin(1e-6, 1e6, 0.1, decimals=6)
-        self.mo_opacity = self._double_spin(0.0, 1.0, 1.0)
+        self.contour = self._double_spin(1e-6, 1e6, 0.1, decimals=6, show_buttons=False)
+        self.mo_opacity = self._double_spin(0.0, 1.0, 1.0, step=0.1)
         self.color_scheme = QComboBox(tab)
         self.color_scheme.addItems([*_MO_COLOR_SCHEMES, 'custom'])
         self.negative_color = QLineEdit('blue', tab)
@@ -267,31 +275,36 @@ class OrbitalControlPanel(QWidget):
 
         molecule_group = QGroupBox('Molecule', tab)
         molecule_form = QFormLayout(molecule_group)
-        self.molecule_opacity = self._double_spin(0.0, 1.0, 1.0)
+        self.molecule_opacity = self._double_spin(0.0, 1.0, 1.0, step=0.1)
         self.show_atoms = QCheckBox('Show atoms', tab)
         self.show_bonds = QCheckBox('Show bonds', tab)
         self.bond_max_length = self._double_spin(0.001, 1_000.0, 4.0)
-        self.bond_radius = self._double_spin(0.001, 100.0, 0.15)
+        self.bond_radius = self._double_spin(0.001, 100.0, 0.15, step=0.05)
         self.bond_color_type = QComboBox(tab)
         self.bond_color_type.addItems(['uniform', 'split'])
         self.bond_color = QLineEdit('grey', tab)
-        self.bond_color_type.currentTextChanged.connect(
-            lambda color_type: self.bond_color.setEnabled(color_type == 'uniform'),
-        )
+        self.bond_color_type.currentTextChanged.connect(self._update_bond_color_visibility)
         molecule_form.addRow('Opacity', self.molecule_opacity)
         molecule_form.addRow(self.show_atoms)
         molecule_form.addRow(self.show_bonds)
         molecule_form.addRow('Bond max length', self.bond_max_length)
         molecule_form.addRow('Bond radius', self.bond_radius)
         molecule_form.addRow('Bond colors', self.bond_color_type)
-        molecule_form.addRow('Uniform color', self.bond_color)
+        self.bond_color_label = QLabel('Uniform color', tab)
+        molecule_form.addRow(self.bond_color_label, self.bond_color)
         layout.addWidget(molecule_group)
 
-        background_row = QHBoxLayout()
+        background_form = QFormLayout()
+        self.background_color_choice = QComboBox(tab)
+        for label, color in _BACKGROUND_COLORS:
+            self.background_color_choice.addItem(label, color)
+        self.background_color_choice.addItem('Custom', None)
         self.background_color = QLineEdit('white', tab)
-        background_row.addWidget(self.background_color)
-        layout.addWidget(QLabel('Background color', tab))
-        layout.addLayout(background_row)
+        self.background_color_label = QLabel('Custom background', tab)
+        background_form.addRow('Background color', self.background_color_choice)
+        background_form.addRow(self.background_color_label, self.background_color)
+        self.background_color_choice.currentIndexChanged.connect(self._update_background_color_visibility)
+        layout.addLayout(background_form)
 
         buttons = QHBoxLayout()
         apply_button = QPushButton('Apply', tab)
@@ -306,6 +319,8 @@ class OrbitalControlPanel(QWidget):
         layout.addLayout(buttons)
         layout.addStretch()
         self.tabs.addTab(tab, 'Appearance')
+        self._update_bond_color_visibility(self.bond_color_type.currentText())
+        self._update_background_color_visibility()
 
     def _build_export_tab(self) -> None:
         tab = QWidget(self)
@@ -332,10 +347,22 @@ class OrbitalControlPanel(QWidget):
         self.tabs.addTab(tab, 'Export')
 
     @staticmethod
-    def _double_spin(minimum: float, maximum: float, value: float, *, decimals: int = 3) -> QDoubleSpinBox:
+    def _double_spin(
+        minimum: float,
+        maximum: float,
+        value: float,
+        *,
+        decimals: int = 3,
+        step: float | None = None,
+        show_buttons: bool = True,
+    ) -> QDoubleSpinBox:
         widget = QDoubleSpinBox()
         widget.setRange(minimum, maximum)
         widget.setDecimals(decimals)
+        if step is not None:
+            widget.setSingleStep(step)
+        if not show_buttons:
+            widget.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         widget.setValue(value)
         return widget
 
@@ -391,13 +418,14 @@ class OrbitalControlPanel(QWidget):
         self.bond_radius.setValue(config.molecule.bond.radius)
         self.bond_color_type.setCurrentText(config.molecule.bond.color_type)
         self.bond_color.setText(config.molecule.bond.color)
-        self.background_color.setText(config.background_color)
+        self.set_background_color(config.background_color)
         self._update_custom_color_visibility(self.color_scheme.currentText())
+        self._update_bond_color_visibility(self.bond_color_type.currentText())
 
     def set_molecule_only(self, only_molecule: bool) -> None:
         """Hide controls that require molecular orbitals."""
         self.tabs.setTabVisible(self.tabs.indexOf(self.orbitals_tab), not only_molecule)
-        self.tabs.setTabVisible(1, not only_molecule)
+        self.tabs.setTabVisible(self.tabs.indexOf(self.grid_tab), not only_molecule)
         self.orbital_group.setVisible(not only_molecule)
         self.data_format.setEnabled(not only_molecule)
         self.data_scope.setEnabled(not only_molecule)
@@ -487,7 +515,8 @@ class OrbitalControlPanel(QWidget):
         custom_colors = [self.negative_color.text(), self.positive_color.text()]
         if self.color_scheme.currentText() == 'custom' and not all(map(_is_color_like, custom_colors)):
             raise ValueError('Both custom molecular-orbital colors must be valid colors.')
-        if not _is_color_like(self.background_color.text()):
+        background_color = self.selected_background_color
+        if not _is_color_like(background_color):
             raise ValueError('Background color must be a valid color.')
         if self.bond_color_type.currentText() == 'uniform' and not _is_color_like(self.bond_color.text()):
             raise ValueError('Uniform bond color must be a valid color.')
@@ -503,7 +532,7 @@ class OrbitalControlPanel(QWidget):
             'bond_radius': self.bond_radius.value(),
             'bond_color_type': self.bond_color_type.currentText(),
             'bond_color': self.bond_color.text(),
-            'background_color': self.background_color.text(),
+            'background_color': background_color,
         }
 
     def _save_settings(self) -> None:
@@ -515,8 +544,38 @@ class OrbitalControlPanel(QWidget):
 
     def _update_custom_color_visibility(self, scheme: str) -> None:
         custom = scheme == 'custom'
+        if not custom:
+            colors = import_module('matplotlib.colors')
+            colormap = import_module('matplotlib').colormaps[scheme]
+            self.negative_color.setText(colors.to_hex(colormap(0.0)))
+            self.positive_color.setText(colors.to_hex(colormap(1.0)))
         self.negative_color.setEnabled(custom)
         self.positive_color.setEnabled(custom)
+
+    def _update_bond_color_visibility(self, color_type: str) -> None:
+        uniform = color_type == 'uniform'
+        self.bond_color_label.setVisible(uniform)
+        self.bond_color.setVisible(uniform)
+
+    def _update_background_color_visibility(self) -> None:
+        custom = self.background_color_choice.currentData() is None
+        self.background_color_label.setVisible(custom)
+        self.background_color.setVisible(custom)
+
+    def set_background_color(self, color: str) -> None:
+        """Synchronize the background preset and custom color controls."""
+        index = self.background_color_choice.findData(color)
+        if index < 0:
+            index = self.background_color_choice.count() - 1
+            self.background_color.setText(color)
+        self.background_color_choice.setCurrentIndex(index)
+        self._update_background_color_visibility()
+
+    @property
+    def selected_background_color(self) -> str:
+        """Background color selected by the controls."""
+        selected = self.background_color_choice.currentData()
+        return self.background_color.text() if selected is None else str(selected)
 
     def _update_export_scope(self, file_format: str) -> None:
         enabled = file_format != 'cube'
@@ -913,9 +972,7 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         self._opacity = mo_opacity
         self._molecule_opacity = molecule_opacity
         self._cmap = (
-            self._custom_cmap_from_colors(custom_colors)
-            if custom_colors and color_scheme == 'custom'
-            else color_scheme
+            self._custom_cmap_from_colors(custom_colors) if custom_colors and color_scheme == 'custom' else color_scheme
         )
         self.interactor.set_background(background_color)
         if hasattr(self, 'tabulator'):
@@ -1006,7 +1063,7 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         if not _is_color_like(color):
             raise ValueError(f'Invalid background color: {color}')
         self._config.config.background_color = color
-        self.controls.background_color.setText(color)
+        self.controls.set_background_color(color)
         self.interactor.set_background(color)
 
     def export_data(self, path: str | Path, *, file_format: str, scope: str = 'current') -> None:
