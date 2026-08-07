@@ -170,16 +170,6 @@ class OrbitalControlPanel(QWidget):
         self.loading_label.hide()
         layout.addWidget(self.loading_label)
 
-        self.orbital_table = QTableWidget(0, 5, tab)
-        self.orbital_table.setHorizontalHeaderLabels(['#', 'Sym', 'Spin', 'Occ', 'Energy'])
-        self.orbital_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.orbital_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.orbital_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.orbital_table.verticalHeader().hide()
-        self.orbital_table.itemSelectionChanged.connect(self._on_orbital_selected)
-        layout.addWidget(self.orbital_table)
-        self._fit_orbital_columns()
-
         nav = QHBoxLayout()
         self.previous_button = QPushButton('Previous', tab)
         self.clear_button = QPushButton('Clear orbital', tab)
@@ -191,6 +181,17 @@ class OrbitalControlPanel(QWidget):
         nav.addWidget(self.clear_button)
         nav.addWidget(self.next_button)
         layout.addLayout(nav)
+
+        self.orbital_table = QTableWidget(0, 5, tab)
+        self.orbital_table.setHorizontalHeaderLabels(['#', 'Sym', 'Spin', 'Occ', 'Energy'])
+        self.orbital_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.orbital_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.orbital_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.orbital_table.verticalHeader().hide()
+        self.orbital_table.itemSelectionChanged.connect(self._on_orbital_selected)
+        layout.addWidget(self.orbital_table)
+        self._fit_orbital_columns()
+
         self.tabs.addTab(tab, 'Orbitals')
         self.update_nav_button_states()
 

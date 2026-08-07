@@ -150,6 +150,24 @@ def test_orbital_columns_fit_their_contents_with_padding() -> None:
     viewer.close()
 
 
+def test_orbital_navigation_is_above_table() -> None:
+    viewer = OrbitalViewer()
+    layout = viewer.controls.orbitals_tab.layout()
+
+    assert layout is not None
+    navigation_item = layout.itemAt(1)
+    table_item = layout.itemAt(2)
+    assert navigation_item is not None
+    assert table_item is not None
+    navigation = navigation_item.layout()
+    assert navigation is not None
+    previous_item = navigation.itemAt(0)
+    assert previous_item is not None
+    assert previous_item.widget() is viewer.controls.previous_button
+    assert table_item.widget() is viewer.controls.orbital_table
+    viewer.close()
+
+
 def test_viewers_have_isolated_configuration() -> None:
     first = OrbitalViewer(config={'background_color': '#112233'})
     second = OrbitalViewer(config={'background_color': '#abcdef'})
