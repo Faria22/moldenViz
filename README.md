@@ -82,6 +82,16 @@ ownership of their existing Qt event loop.
   viewer.set_source('my.molden')
   ```
 
+  A host-owned dashboard can hide the built-in controls and drive the public
+  viewer API directly:
+
+  ```python
+  viewer = OrbitalViewer('my.molden', parent=page, show_controls=False)
+  viewer.show_orbital(0)
+  viewer.update_appearance(contour=0.05, mo_opacity=0.8)
+  viewer.set_controls_visible(True)  # Restore the built-in panel when needed.
+  ```
+
 Full CLI usage, configuration examples, and API walkthroughs live in the docs.
 
 ## Documentation

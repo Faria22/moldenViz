@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import cast
 from unittest.mock import Mock
 
+import numpy as np
 import pytest
 from PySide6.QtWidgets import QApplication, QWidget
 
@@ -125,6 +126,19 @@ def test_viewer_is_parentable_and_does_not_show_itself(qapplication: QApplicatio
     viewer.close()
 
 
+def test_viewer_can_hide_and_restore_builtin_controls() -> None:
+    viewer = OrbitalViewer(show_controls=False)
+
+    assert not viewer.controls_visible
+    assert viewer.controls.isHidden()
+
+    viewer.set_controls_visible(True)
+
+    assert viewer.controls_visible
+    assert not viewer.controls.isHidden()
+    viewer.close()
+
+
 def test_orbital_columns_fit_their_contents_with_padding() -> None:
     viewer = OrbitalViewer(str(MOLDEN_PATH), only_molecule=False)
     table = viewer.controls.orbital_table
@@ -181,7 +195,78 @@ def test_orbital_source_tabulation_and_selection() -> None:
 
     assert viewer.gtos_ready
     assert changes == [0, -1]
+    assert viewer.current_orbital_index == -1
+    assert viewer.molecular_orbitals == tuple(viewer.tabulator.molecular_orbitals)
     assert viewer.controls.current_mo_ind == -1
+    viewer.close()
+
+
+def test_partial_appearance_updates_do_not_require_controls() -> None:
+    viewer = OrbitalViewer(show_controls=False)
+    contour = 0.25
+    opacity = 0.7
+
+    viewer.update_appearance(contour=contour, mo_opacity=opacity, background_color='#123456')
+
+    assert viewer.config.mo.contour == pytest.approx(contour)
+    assert viewer.config.mo.opacity == pytest.approx(opacity)
+    assert viewer.config.molecule.opacity == pytest.approx(1.0)
+    assert viewer.interactor.background == '#123456'
+    assert viewer.controls.contour.value() == pytest.approx(contour)
+    with pytest.raises(ValueError, match='between 0 and 1'):
+        viewer.update_appearance(mo_opacity=2.0)
+    viewer.close()
+
+
+def test_dashboard_grid_convenience_methods(monkeypatch: pytest.MonkeyPatch) -> None:
+    viewer = OrbitalViewer(show_controls=False)
+    viewer.tabulator = Mock()
+    update_grid = Mock()
+    x_points = 3
+    monkeypatch.setattr(viewer, 'update_grid', update_grid)
+
+    viewer.set_spherical_grid(radius=4.0, radial_points=x_points, theta_points=4, phi_points=5)
+
+    spherical_axes, spherical_type = update_grid.call_args.args
+    assert spherical_type == qt_module.GridType.SPHERICAL
+    np.testing.assert_allclose(spherical_axes[0], [0.0, 2.0, 4.0])
+    assert tuple(map(len, spherical_axes)) == (3, 4, 5)
+    assert viewer.config.grid.default_type == 'spherical'
+    assert viewer.config.grid.spherical.num_r_points == x_points
+
+    viewer.set_cartesian_grid(
+        x_range=(-1.0, 1.0),
+        y_range=(-2.0, 2.0),
+        z_range=(-3.0, 3.0),
+        x_points=x_points,
+        y_points=4,
+        z_points=5,
+    )
+
+    cartesian_axes, cartesian_type = update_grid.call_args.args
+    assert cartesian_type == qt_module.GridType.CARTESIAN
+    np.testing.assert_allclose(cartesian_axes[0], [-1.0, 0.0, 1.0])
+    assert tuple(map(len, cartesian_axes)) == (3, 4, 5)
+    assert viewer.config.grid.default_type == 'cartesian'
+    assert viewer.config.grid.cartesian.num_x_points == x_points
+    with pytest.raises(ValueError, match='minimum'):
+        viewer.set_cartesian_grid(
+            x_range=(1.0, -1.0),
+            y_range=(-1.0, 1.0),
+            z_range=(-1.0, 1.0),
+            x_points=3,
+            y_points=3,
+            z_points=3,
+        )
+    viewer.close()
+
+
+def test_grid_update_requires_a_source() -> None:
+    viewer = OrbitalViewer(show_controls=False)
+
+    with pytest.raises(RuntimeError, match='Load a source'):
+        viewer.set_spherical_grid(radius=4.0, radial_points=3, theta_points=4, phi_points=5)
+
     viewer.close()
 
 
@@ -217,14 +302,23 @@ def test_errors_are_emitted_without_dialogs() -> None:
 
 
 def test_exports_use_explicit_paths(tmp_path: Path) -> None:
-    viewer = OrbitalViewer()
+    viewer = OrbitalViewer(
+        str(MOLDEN_PATH),
+        config={
+            'grid': {
+                'spherical': {'num_r_points': 3, 'num_theta_points': 3, 'num_phi_points': 3},
+            },
+        },
+        show_controls=False,
+    )
+    viewer.wait_for_gtos(timeout=5)
+    viewer.show_orbital(0)
     viewer.tabulator = Mock()
-    viewer.controls.current_mo_ind = 2
 
     viewer.export_data(tmp_path / 'orbital', file_format='vtk', scope='current')
     viewer.export_image(tmp_path / 'scene', file_format='png', transparent=True)
 
-    viewer.tabulator.export.assert_called_once_with(tmp_path / 'orbital.vtk', mo_index=2)
+    viewer.tabulator.export.assert_called_once_with(tmp_path / 'orbital.vtk', mo_index=0)
     assert viewer.interactor.saved_screenshot == (tmp_path / 'scene.png', True)
     viewer.close()
 

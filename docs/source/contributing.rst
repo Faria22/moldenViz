@@ -61,6 +61,8 @@ Keep changes to the interactive plotter within these boundaries:
 - ``qt.py`` owns the embeddable ``OrbitalViewer``, Qt controls, queued result
   delivery, per-viewer state, and explicit render-window teardown. It must not
   create ``QApplication``, start an event loop, show itself, or open dialogs.
+  Viewer state and operations must remain usable when the built-in control
+  panel is hidden; the panel mirrors the viewer rather than owning selection.
 - ``plotter.py`` owns the free-floating ``QMainWindow``, application/event-loop
   ownership, native file dialogs, message boxes, and menu shortcuts.
 - ``_plotter_rendering.py`` owns PyVista scene and orbital rendering.

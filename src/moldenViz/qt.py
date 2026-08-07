@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 import matplotlib.colors as mcolors
 import numpy as np
+from matplotlib import colormaps
 from PySide6.QtCore import QObject, Qt, Signal, Slot
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -56,6 +57,7 @@ ViewerConfig = MainConfig
 _GTO_EXECUTOR = ThreadPoolExecutor(max_workers=1)
 _MO_COLOR_SCHEMES = ['bwr', 'RdBu', 'seismic', 'coolwarm', 'PiYG']
 _ORBITAL_COLUMN_PADDING = 8
+_CUSTOM_COLOR_COUNT = 2
 
 
 @dataclass(frozen=True)
@@ -503,6 +505,22 @@ class OrbitalViewer(QWidget, _PlotterRendering):
 
     The host must create and run :class:`QApplication`. Constructing this
     widget never starts an event loop or shows a top-level window.
+
+    Parameters
+    ----------
+    source : str | list[str], optional
+        Molden path or raw Molden lines.
+    only_molecule : bool, optional
+        Skip molecular-orbital parsing and controls.
+    tabulator : Tabulator, optional
+        Existing structured-grid tabulator with cached GTO values.
+    config : Config | MainConfig | Mapping, optional
+        Per-viewer configuration overrides.
+    show_controls : bool, optional
+        Show the built-in control panel. Disable it when the host supplies
+        its own dashboard.
+    parent : QWidget, optional
+        Parent widget supplied by the host application.
     """
 
     loading_changed = Signal(bool)
@@ -518,6 +536,7 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         only_molecule: bool = False,
         tabulator: Tabulator | None = None,
         config: Config | MainConfig | Mapping[str, Any] | None = None,
+        show_controls: bool = True,
         parent: QWidget | None = None,
     ) -> None:
         application = QApplication.instance()
@@ -533,6 +552,8 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         self._closed = False
         self._only_molecule = only_molecule
         self._gtos_ready = only_molecule
+        self._current_orbital_index = -1
+        self._controls_visible = show_controls
         self._selection_screen: OrbitalControlPanel | None = None
         self._orb_actor: pv.Actor | None = None
         self._molecule_actors: list[Any] = []
@@ -556,6 +577,7 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(splitter)
         self.controls.sync_from_viewer()
+        self.set_controls_visible(show_controls)
 
         if source is not None or tabulator is not None:
             self.set_source(source, tabulator=tabulator, only_molecule=only_molecule)
@@ -569,6 +591,23 @@ class OrbitalViewer(QWidget, _PlotterRendering):
     def gtos_ready(self) -> bool:
         """Whether orbital data can be rendered."""
         return self._gtos_ready
+
+    @property
+    def controls_visible(self) -> bool:
+        """Whether the built-in control panel is enabled for display."""
+        return self._controls_visible
+
+    @property
+    def current_orbital_index(self) -> int:
+        """Currently displayed orbital index, or ``-1`` when cleared."""
+        return self._current_orbital_index
+
+    @property
+    def molecular_orbitals(self) -> tuple[MolecularOrbital, ...]:
+        """Molecular orbitals available to host-provided controllers."""
+        if not hasattr(self, 'tabulator'):
+            return ()
+        return tuple(self.tabulator.molecular_orbitals)
 
     @property
     def _gto_future(self) -> Future[_GTOResult] | None:
@@ -589,6 +628,7 @@ class OrbitalViewer(QWidget, _PlotterRendering):
             raise ValueError('source is required when tabulator is not provided.')
         self._cancel_gto_future()
         self._clear_scene()
+        self._current_orbital_index = -1
         if only_molecule is not None:
             self._only_molecule = only_molecule
 
@@ -662,13 +702,19 @@ class OrbitalViewer(QWidget, _PlotterRendering):
 
     def show_orbital(self, index: int) -> None:
         """Show one orbital, or clear it when ``index`` is ``-1``."""
-        if index < -1 or index >= len(self.tabulator.molecular_orbitals):
+        if index < -1 or index >= len(self.molecular_orbitals):
             raise IndexError(f'Orbital index out of range: {index}')
         self.plot_orbital(index)
+        self._current_orbital_index = index
         self.controls.current_mo_ind = index
         self.controls.highlight_orbital(index)
         self.controls.update_nav_button_states()
         self.orbital_changed.emit(index)
+
+    def set_controls_visible(self, visible: bool) -> None:
+        """Show or hide the built-in control panel."""
+        self._controls_visible = visible
+        self.controls.setVisible(visible)
 
     def update_grid(
         self,
@@ -676,9 +722,97 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         grid_type: GridType,
     ) -> None:
         """Replace the structured grid and schedule fresh GTO tabulation."""
+        self._ensure_grid_update_supported()
+        self._update_mesh(*axes, grid_type)
+
+    def _ensure_grid_update_supported(self) -> None:
         if self._only_molecule:
             raise RuntimeError('Molecule-only viewers do not have an orbital grid.')
-        self._update_mesh(*axes, grid_type)
+        if not hasattr(self, 'tabulator'):
+            raise RuntimeError('Load a source before updating the orbital grid.')
+
+    def set_spherical_grid(
+        self,
+        *,
+        radius: float,
+        radial_points: int,
+        theta_points: int,
+        phi_points: int,
+    ) -> None:
+        """Build and apply a spherical grid from dashboard-friendly values."""
+        if radius <= 0:
+            raise ValueError('radius must be greater than zero.')
+        self._validate_grid_points(
+            radial_points=radial_points,
+            theta_points=theta_points,
+            phi_points=phi_points,
+        )
+        self._ensure_grid_update_supported()
+        self.controls.grid_type.setCurrentText('spherical')
+        self.controls.radius.setValue(radius)
+        self.controls.radius_points.setValue(radial_points)
+        self.controls.theta_points.setValue(theta_points)
+        self.controls.phi_points.setValue(phi_points)
+        self._config.config.grid.default_type = 'spherical'
+        self._config.config.grid.spherical.num_r_points = radial_points
+        self._config.config.grid.spherical.num_theta_points = theta_points
+        self._config.config.grid.spherical.num_phi_points = phi_points
+        self.update_grid(
+            (
+                np.linspace(0, radius, radial_points),
+                np.linspace(0, np.pi, theta_points),
+                np.linspace(0, 2 * np.pi, phi_points),
+            ),
+            GridType.SPHERICAL,
+        )
+
+    def set_cartesian_grid(
+        self,
+        *,
+        x_range: tuple[float, float],
+        y_range: tuple[float, float],
+        z_range: tuple[float, float],
+        x_points: int,
+        y_points: int,
+        z_points: int,
+    ) -> None:
+        """Build and apply a Cartesian grid from bounds and point counts."""
+        self._validate_grid_points(x_points=x_points, y_points=y_points, z_points=z_points)
+        ranges = {'x': x_range, 'y': y_range, 'z': z_range}
+        for axis, bounds in ranges.items():
+            if bounds[0] >= bounds[1]:
+                raise ValueError(f'{axis}_range minimum must be smaller than its maximum.')
+        self._ensure_grid_update_supported()
+
+        self.controls.grid_type.setCurrentText('cartesian')
+        for axis, bounds, points in zip(
+            'xyz',
+            (x_range, y_range, z_range),
+            (x_points, y_points, z_points),
+            strict=True,
+        ):
+            minimum, maximum, point_widget = self.controls.cartesian_fields[axis]
+            minimum.setValue(bounds[0])
+            maximum.setValue(bounds[1])
+            point_widget.setValue(points)
+        self._config.config.grid.default_type = 'cartesian'
+        self._config.config.grid.cartesian.num_x_points = x_points
+        self._config.config.grid.cartesian.num_y_points = y_points
+        self._config.config.grid.cartesian.num_z_points = z_points
+        self.update_grid(
+            (
+                np.linspace(*x_range, x_points),
+                np.linspace(*y_range, y_points),
+                np.linspace(*z_range, z_points),
+            ),
+            GridType.CARTESIAN,
+        )
+
+    @staticmethod
+    def _validate_grid_points(**point_counts: int) -> None:
+        for name, count in point_counts.items():
+            if count < 1:
+                raise ValueError(f'{name} must be at least 1.')
 
     def apply_appearance(
         self,
@@ -686,7 +820,7 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         contour: float,
         mo_opacity: float,
         color_scheme: str,
-        custom_colors: list[str],
+        custom_colors: list[str] | None,
         molecule_opacity: float,
         show_atoms: bool,
         show_bonds: bool,
@@ -697,6 +831,18 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         background_color: str,
     ) -> None:
         """Apply validated appearance settings to this viewer instance."""
+        self._validate_appearance(
+            contour=contour,
+            mo_opacity=mo_opacity,
+            color_scheme=color_scheme,
+            custom_colors=custom_colors,
+            molecule_opacity=molecule_opacity,
+            bond_max_length=bond_max_length,
+            bond_radius=bond_radius,
+            bond_color_type=bond_color_type,
+            bond_color=bond_color,
+            background_color=background_color,
+        )
         self._config.config.mo.contour = contour
         self._config.config.mo.opacity = mo_opacity
         self._config.config.mo.color_scheme = color_scheme if color_scheme != 'custom' else 'bwr'
@@ -712,13 +858,94 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         self._contour = contour
         self._opacity = mo_opacity
         self._molecule_opacity = molecule_opacity
-        self._cmap = self._custom_cmap_from_colors(custom_colors) if color_scheme == 'custom' else color_scheme
+        self._cmap = (
+            self._custom_cmap_from_colors(custom_colors)
+            if custom_colors and color_scheme == 'custom'
+            else color_scheme
+        )
         self.interactor.set_background(background_color)
         if hasattr(self, 'tabulator'):
             self._load_molecule(self._config)
-            if not self._only_molecule and self.controls.current_mo_ind >= 0 and self._gtos_ready:
-                self.plot_orbital(self.controls.current_mo_ind)
+            if not self._only_molecule and self._current_orbital_index >= 0 and self._gtos_ready:
+                self.plot_orbital(self._current_orbital_index)
         self.interactor.update()
+
+    def update_appearance(
+        self,
+        *,
+        contour: float | None = None,
+        mo_opacity: float | None = None,
+        color_scheme: str | None = None,
+        custom_colors: list[str] | None = None,
+        molecule_opacity: float | None = None,
+        show_atoms: bool | None = None,
+        show_bonds: bool | None = None,
+        bond_max_length: float | None = None,
+        bond_radius: float | None = None,
+        bond_color_type: str | None = None,
+        bond_color: str | None = None,
+        background_color: str | None = None,
+    ) -> None:
+        """Apply a partial appearance update for host-provided controllers."""
+        config = self._config
+        resolved_custom_colors = custom_colors if custom_colors is not None else config.mo.custom_colors
+        resolved_color_scheme = color_scheme
+        if resolved_color_scheme is None:
+            resolved_color_scheme = (
+                'custom' if custom_colors is not None or config.mo.custom_colors else config.mo.color_scheme
+            )
+        self.apply_appearance(
+            contour=config.mo.contour if contour is None else contour,
+            mo_opacity=config.mo.opacity if mo_opacity is None else mo_opacity,
+            color_scheme=resolved_color_scheme,
+            custom_colors=resolved_custom_colors,
+            molecule_opacity=config.molecule.opacity if molecule_opacity is None else molecule_opacity,
+            show_atoms=config.molecule.atom.show if show_atoms is None else show_atoms,
+            show_bonds=config.molecule.bond.show if show_bonds is None else show_bonds,
+            bond_max_length=config.molecule.bond.max_length if bond_max_length is None else bond_max_length,
+            bond_radius=config.molecule.bond.radius if bond_radius is None else bond_radius,
+            bond_color_type=config.molecule.bond.color_type if bond_color_type is None else bond_color_type,
+            bond_color=config.molecule.bond.color if bond_color is None else bond_color,
+            background_color=config.background_color if background_color is None else background_color,
+        )
+        self.controls.sync_from_viewer()
+
+    @staticmethod
+    def _validate_appearance(
+        *,
+        contour: float,
+        mo_opacity: float,
+        color_scheme: str,
+        custom_colors: list[str] | None,
+        molecule_opacity: float,
+        bond_max_length: float,
+        bond_radius: float,
+        bond_color_type: str,
+        bond_color: str,
+        background_color: str,
+    ) -> None:
+        if contour <= 0:
+            raise ValueError('contour must be greater than zero.')
+        if not 0 <= mo_opacity <= 1 or not 0 <= molecule_opacity <= 1:
+            raise ValueError('opacity values must be between 0 and 1.')
+        if color_scheme == 'custom':
+            valid_custom_colors = (
+                custom_colors is not None
+                and len(custom_colors) == _CUSTOM_COLOR_COUNT
+                and all(map(mcolors.is_color_like, custom_colors))
+            )
+            if not valid_custom_colors:
+                raise ValueError('custom_colors must contain exactly two valid colors.')
+        elif color_scheme not in colormaps:
+            raise ValueError(f'Unknown color scheme: {color_scheme}')
+        if bond_max_length <= 0 or bond_radius <= 0:
+            raise ValueError('bond dimensions must be greater than zero.')
+        if bond_color_type not in {'uniform', 'split'}:
+            raise ValueError(f'Unknown bond color type: {bond_color_type}')
+        if bond_color_type == 'uniform' and not mcolors.is_color_like(bond_color):
+            raise ValueError(f'Invalid bond color: {bond_color}')
+        if not mcolors.is_color_like(background_color):
+            raise ValueError(f'Invalid background color: {background_color}')
 
     def set_background_color(self, color: str) -> None:
         """Set this viewer's render background color."""
@@ -736,7 +963,7 @@ class OrbitalViewer(QWidget, _PlotterRendering):
             raise ValueError(f'Unsupported orbital export scope: {scope}')
         if file_format == 'cube' and scope == 'all':
             raise ValueError('Cube format only supports one orbital.')
-        index = self.controls.current_mo_ind
+        index = self._current_orbital_index
         if scope == 'current' and index < 0:
             raise ValueError('No orbital is currently selected.')
         destination = Path(path)
@@ -835,8 +1062,8 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         self._gtos_ready = True
         self._orb_mesh = self._create_mo_mesh()
         self.controls.on_gtos_ready()
-        if self.controls.current_mo_ind >= 0:
-            self.plot_orbital(self.controls.current_mo_ind)
+        if self._current_orbital_index >= 0:
+            self.plot_orbital(self._current_orbital_index)
         self.loading_changed.emit(False)
         logger.info('GTO tabulation completed in %.2fs.', elapsed)
 

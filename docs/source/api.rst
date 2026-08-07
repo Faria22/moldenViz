@@ -71,7 +71,7 @@ OrbitalViewer
 -------------
 
 .. autoclass:: moldenViz.qt.OrbitalViewer
-   :members: set_source, show_orbital, update_grid, apply_appearance, set_background_color, export_data, export_image, save_settings, wait_for_gtos, close
+   :members: config, gtos_ready, controls_visible, current_orbital_index, molecular_orbitals, set_source, show_orbital, set_controls_visible, update_grid, set_spherical_grid, set_cartesian_grid, apply_appearance, update_appearance, set_background_color, export_data, export_image, save_settings, wait_for_gtos, close
    :member-order: bysource
    :show-inheritance:
 

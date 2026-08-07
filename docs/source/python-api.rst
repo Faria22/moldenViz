@@ -96,9 +96,43 @@ and event loop:
    app.exec()
 
 Constructing ``OrbitalViewer`` never creates an application, opens a window,
-or starts an event loop. Its public ``controls`` and ``interactor`` child
-widgets can be styled or hidden by the host. Call ``viewer.close()`` before a
-page containing it is discarded so the VTK render window is released promptly.
+or starts an event loop. Call ``viewer.close()`` before a page containing it is
+discarded so the VTK render window is released promptly.
+
+Host-provided Controls
+~~~~~~~~~~~~~~~~~~~~~~
+
+Hide the built-in panel when the host application supplies its own controls.
+The viewer remains a single widget, but its selection, grid, appearance, and
+export operations do not depend on the panel being visible:
+
+.. code-block:: python
+
+   viewer = OrbitalViewer('molden.inp', parent=page, show_controls=False)
+
+   # Populate a host-owned orbital picker.
+   for index, orbital in enumerate(viewer.molecular_orbitals):
+       host_picker.addItem(f'{index + 1}: {orbital.sym}')
+
+   host_picker.currentIndexChanged.connect(viewer.show_orbital)
+   viewer.update_appearance(contour=0.05, mo_opacity=0.8)
+   viewer.set_spherical_grid(
+       radius=5.0,
+       radial_points=100,
+       theta_points=60,
+       phi_points=120,
+   )
+
+``current_orbital_index`` reports the current selection, with ``-1`` meaning
+that no orbital is displayed. ``orbital_changed``, ``loading_changed``, and
+``source_ready`` let host controls follow viewer state. Appearance updates are
+partial: omitted values retain their current per-viewer setting. Cartesian
+grids can be configured with ``set_cartesian_grid``; callers with pre-built
+NumPy axes can use ``update_grid`` directly.
+
+The built-in panel can be restored later with
+``viewer.set_controls_visible(True)``. It remains synchronized with changes
+made through the public viewer API.
 
 For a free-floating viewer inside an application whose event loop is already
 running, use ``window = Plotter('molden.inp')``. This is the PySide6 replacement

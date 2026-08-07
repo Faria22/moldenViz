@@ -167,7 +167,7 @@ class Plotter(QMainWindow):
     def _export_data(self, options: Mapping[str, Any]) -> None:
         file_format = str(options.get('format', 'vtk'))
         scope = str(options.get('scope', 'current'))
-        if scope == 'current' and self.viewer.controls.current_mo_ind < 0:
+        if scope == 'current' and self.viewer.current_orbital_index < 0:
             self._show_error('Export failed', ValueError('No orbital is currently selected.'))
             return
         suffix = f'.{file_format}'
