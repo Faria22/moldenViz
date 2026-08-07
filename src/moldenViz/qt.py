@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QPushButton,
@@ -121,6 +122,7 @@ class OrbitalControlPanel(QWidget):
 
         self.orbital_table = QTableWidget(0, 5, tab)
         self.orbital_table.setHorizontalHeaderLabels(['#', 'Sym', 'Spin', 'Occ', 'Energy'])
+        self.orbital_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self.orbital_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.orbital_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.orbital_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)

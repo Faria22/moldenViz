@@ -11,7 +11,7 @@ from typing import cast
 from unittest.mock import Mock
 
 import pytest
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtWidgets import QApplication, QHeaderView, QWidget
 
 import moldenViz.qt as qt_module
 from moldenViz.plotter import Plotter
@@ -122,6 +122,17 @@ def test_viewer_is_parentable_and_does_not_show_itself(qapplication: QApplicatio
     assert not viewer.isVisible()
     assert QApplication.instance() is qapplication
 
+    viewer.close()
+
+
+def test_orbital_columns_fit_their_contents() -> None:
+    viewer = OrbitalViewer()
+    header = viewer.controls.orbital_table.horizontalHeader()
+
+    assert all(
+        header.sectionResizeMode(column) == QHeaderView.ResizeMode.ResizeToContents
+        for column in range(header.count())
+    )
     viewer.close()
 
 
