@@ -229,7 +229,18 @@ class OrbitalControlPanel(QWidget):
             self._spherical_rows.append((label, widget))
 
         self.cartesian_fields: dict[str, tuple[QDoubleSpinBox, QDoubleSpinBox, QSpinBox]] = {}
+        self.cartesian_header = QWidget(tab)
+        header_layout = QHBoxLayout(self.cartesian_header)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        self.cartesian_column_labels = [QLabel(text, self.cartesian_header) for text in ('Min', 'Max', 'Num points')]
+        for label in self.cartesian_column_labels:
+            label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            header_layout.addWidget(label, 1)
+        self.cartesian_header_label = QLabel('', tab)
+        form.addRow(self.cartesian_header_label, self.cartesian_header)
+
         self._cartesian_rows: list[tuple[QLabel, QWidget]] = []
+        self.cartesian_axis_labels: dict[str, QLabel] = {}
         for axis in 'xyz':
             row = QWidget(tab)
             row_layout = QHBoxLayout(row)
@@ -237,12 +248,13 @@ class OrbitalControlPanel(QWidget):
             minimum = self._double_spin(-1_000.0, 1_000.0, -5.0)
             maximum = self._double_spin(-1_000.0, 1_000.0, 5.0)
             points = self._int_spin(1, 10_000, 100)
-            row_layout.addWidget(minimum)
-            row_layout.addWidget(maximum)
-            row_layout.addWidget(points)
-            label = QLabel(f'{axis.upper()} min / max / points', tab)
+            row_layout.addWidget(minimum, 1)
+            row_layout.addWidget(maximum, 1)
+            row_layout.addWidget(points, 1)
+            label = QLabel(axis.upper(), tab)
             form.addRow(label, row)
             self.cartesian_fields[axis] = (minimum, maximum, points)
+            self.cartesian_axis_labels[axis] = label
             self._cartesian_rows.append((label, row))
 
         layout.addLayout(form)
@@ -475,6 +487,8 @@ class OrbitalControlPanel(QWidget):
         for label, widget in self._spherical_rows:
             label.setVisible(spherical)
             widget.setVisible(spherical)
+        self.cartesian_header_label.setVisible(not spherical)
+        self.cartesian_header.setVisible(not spherical)
         for label, row in self._cartesian_rows:
             label.setVisible(not spherical)
             row.setVisible(not spherical)

@@ -177,6 +177,19 @@ def test_control_tabs_follow_workflow_order() -> None:
     viewer.close()
 
 
+def test_cartesian_grid_uses_column_headers_and_axis_row_labels() -> None:
+    viewer = OrbitalViewer()
+    controls = viewer.controls
+
+    assert [label.text() for label in controls.cartesian_column_labels] == ['Min', 'Max', 'Num points']
+    assert [controls.cartesian_axis_labels[axis].text() for axis in 'xyz'] == ['X', 'Y', 'Z']
+
+    controls.grid_type.setCurrentText('cartesian')
+    assert not controls.cartesian_header.isHidden()
+    assert all(not controls.cartesian_axis_labels[axis].isHidden() for axis in 'xyz')
+    viewer.close()
+
+
 def test_appearance_control_steps_and_contour_buttons() -> None:
     viewer = OrbitalViewer()
     controls = viewer.controls
