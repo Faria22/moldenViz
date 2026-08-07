@@ -185,7 +185,7 @@ def test_cartesian_grid_uses_column_headers_and_axis_row_labels() -> None:
     assert [controls.cartesian_axis_labels[axis].text() for axis in 'xyz'] == ['X', 'Y', 'Z']
 
     controls.grid_type.setCurrentText('cartesian')
-    assert not controls.cartesian_header.isHidden()
+    assert not controls.cartesian_grid.isHidden()
     assert all(not controls.cartesian_axis_labels[axis].isHidden() for axis in 'xyz')
     viewer.close()
 
