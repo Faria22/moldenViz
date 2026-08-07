@@ -7,8 +7,8 @@ from types import SimpleNamespace
 from typing import Any, Literal
 
 import matplotlib.colors as mcolors
-import matplotlib.pyplot as plt
 import toml
+from matplotlib import colormaps
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # Global config directory paths
@@ -96,12 +96,9 @@ class MOConfig(BaseModel):
         ValueError
             If the color scheme is not a valid matplotlib colormap.
         """
-        try:
-            plt.get_cmap(v)
-        except ValueError as e:
-            raise ValueError(f'Color scheme must be a valid matplotlib colormap. Got: {v}') from e
-        else:
-            return v
+        if v not in colormaps:
+            raise ValueError(f'Color scheme must be a valid matplotlib colormap. Got: {v}')
+        return v
 
     @field_validator('custom_colors')
     @classmethod

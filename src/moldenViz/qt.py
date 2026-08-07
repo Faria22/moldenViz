@@ -5,12 +5,11 @@ from __future__ import annotations
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from importlib import import_module
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
-import matplotlib.colors as mcolors
 import numpy as np
-from matplotlib import colormaps
 from PySide6.QtCore import QObject, Qt, Signal, Slot
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -32,9 +31,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from pyvistaqt import QtInteractor
 
-from ._config_module import Config, MainConfig
 from ._plotter_jobs import BackgroundJob
 from ._plotter_rendering import _PlotterRendering
 from .tabulator import GridType, Tabulator
@@ -46,18 +43,69 @@ if TYPE_CHECKING:
     import pyvista as pv
     from numpy.typing import NDArray
     from PySide6.QtGui import QCloseEvent
+    from pyvistaqt import QtInteractor
 
+    from ._config_module import Config, MainConfig
     from .models import MolecularOrbital
+
+    ViewerConfig = MainConfig
 
 logger = logging.getLogger(__name__)
 
 __all__ = ['OrbitalViewer', 'ViewerConfig']
 
-ViewerConfig = MainConfig
 _GTO_EXECUTOR = ThreadPoolExecutor(max_workers=1)
 _MO_COLOR_SCHEMES = ['bwr', 'RdBu', 'seismic', 'coolwarm', 'PiYG']
 _ORBITAL_COLUMN_PADDING = 8
 _CUSTOM_COLOR_COUNT = 2
+
+
+def __getattr__(name: str) -> Any:
+    """Load the public configuration model only when it is requested.
+
+    Returns
+    -------
+    Any
+        Requested module attribute.
+    """
+    if name == 'ViewerConfig':
+        viewer_config = import_module('moldenViz._config_module').MainConfig
+        globals()[name] = viewer_config
+        return viewer_config
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
+
+
+def _load_qt_interactor() -> type[QtInteractor]:
+    """Load the VTK-backed Qt widget when a viewer is constructed.
+
+    Returns
+    -------
+    type[QtInteractor]
+        PyVista's Qt interactor class.
+    """
+    return import_module('pyvistaqt').QtInteractor
+
+
+def _is_color_like(color: object) -> bool:
+    """Return whether Matplotlib accepts a color specification.
+
+    Returns
+    -------
+    bool
+        Whether ``color`` is valid.
+    """
+    return bool(import_module('matplotlib.colors').is_color_like(color))
+
+
+def _has_colormap(name: str) -> bool:
+    """Return whether Matplotlib provides a named colormap.
+
+    Returns
+    -------
+    bool
+        Whether ``name`` identifies an available colormap.
+    """
+    return name in import_module('matplotlib').colormaps
 
 
 @dataclass(frozen=True)
@@ -436,11 +484,11 @@ class OrbitalControlPanel(QWidget):
 
     def _appearance_values(self) -> dict[str, Any]:
         custom_colors = [self.negative_color.text(), self.positive_color.text()]
-        if self.color_scheme.currentText() == 'custom' and not all(map(mcolors.is_color_like, custom_colors)):
+        if self.color_scheme.currentText() == 'custom' and not all(map(_is_color_like, custom_colors)):
             raise ValueError('Both custom molecular-orbital colors must be valid colors.')
-        if not mcolors.is_color_like(self.background_color.text()):
+        if not _is_color_like(self.background_color.text()):
             raise ValueError('Background color must be a valid color.')
-        if self.bond_color_type.currentText() == 'uniform' and not mcolors.is_color_like(self.bond_color.text()):
+        if self.bond_color_type.currentText() == 'uniform' and not _is_color_like(self.bond_color.text()):
             raise ValueError('Uniform bond color must be a valid color.')
         return {
             'contour': self.contour.value(),
@@ -543,10 +591,14 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         if application is None or not application.inherits('QApplication'):
             raise RuntimeError('OrbitalViewer requires an existing QApplication.')
         super().__init__(parent)
-        if isinstance(config, Config):
-            self._config = Config(config._pydantic_config.model_dump(by_alias=True))  # ruff:ignore[private-member-access]
+        config_class = import_module('moldenViz._config_module').Config
+        if isinstance(config, config_class):
+            current_config = cast(Any, config)
+            self._config = config_class(
+                current_config._pydantic_config.model_dump(by_alias=True),  # ruff:ignore[private-member-access]
+            )
         else:
-            self._config = Config(config)
+            self._config = config_class(config)
 
         self._on_screen = True
         self._closed = False
@@ -562,7 +614,8 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         self._dispatcher = _CompletionDispatcher(self)
         self._gto_job: BackgroundJob[_GTOResult] = BackgroundJob(_GTO_EXECUTOR, self._dispatcher.dispatch)
 
-        self.interactor = QtInteractor(self, auto_update=5.0)
+        interactor_class = _load_qt_interactor()
+        self.interactor = interactor_class(self, auto_update=5.0)
         self._pv_plotter = self.interactor
         self.interactor.set_background(self._config.background_color)
         self.interactor.show_axes()
@@ -932,24 +985,24 @@ class OrbitalViewer(QWidget, _PlotterRendering):
             valid_custom_colors = (
                 custom_colors is not None
                 and len(custom_colors) == _CUSTOM_COLOR_COUNT
-                and all(map(mcolors.is_color_like, custom_colors))
+                and all(map(_is_color_like, custom_colors))
             )
             if not valid_custom_colors:
                 raise ValueError('custom_colors must contain exactly two valid colors.')
-        elif color_scheme not in colormaps:
+        elif not _has_colormap(color_scheme):
             raise ValueError(f'Unknown color scheme: {color_scheme}')
         if bond_max_length <= 0 or bond_radius <= 0:
             raise ValueError('bond dimensions must be greater than zero.')
         if bond_color_type not in {'uniform', 'split'}:
             raise ValueError(f'Unknown bond color type: {bond_color_type}')
-        if bond_color_type == 'uniform' and not mcolors.is_color_like(bond_color):
+        if bond_color_type == 'uniform' and not _is_color_like(bond_color):
             raise ValueError(f'Invalid bond color: {bond_color}')
-        if not mcolors.is_color_like(background_color):
+        if not _is_color_like(background_color):
             raise ValueError(f'Invalid background color: {background_color}')
 
     def set_background_color(self, color: str) -> None:
         """Set this viewer's render background color."""
-        if not mcolors.is_color_like(color):
+        if not _is_color_like(color):
             raise ValueError(f'Invalid background color: {color}')
         self._config.config.background_color = color
         self.controls.background_color.setText(color)

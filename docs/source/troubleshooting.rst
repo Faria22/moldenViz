@@ -53,7 +53,8 @@ Grids With ``only_molecule=True``
 Configuration Errors
 --------------------
 
-Invalid entries in ``~/.config/moldenViz/config.toml`` raise ``ValueError`` the next time you import plotting classes:
+Invalid entries in ``~/.config/moldenViz/config.toml`` raise ``ValueError`` the
+next time you construct a viewer:
 
 .. code-block:: python
 
@@ -64,6 +65,23 @@ Invalid entries in ``~/.config/moldenViz/config.toml`` raise ``ValueError`` the 
    except ValueError as exc:
        print(f'Configuration error: {exc}')
        print('Review your TOML configuration and try again')
+
+Repeated Slow Startup
+---------------------
+
+PyVista uses Matplotlib for colors and text. The first launch may take longer
+while Matplotlib creates its font cache, but later launches should reuse it. If
+every launch prints ``Matplotlib is building the font cache`` or a fontconfig
+error, configure a persistent writable cache directory before starting
+``moldenViz``:
+
+.. code-block:: bash
+
+   export MPLCONFIGDIR=/path/to/a/writable/matplotlib-cache
+
+Use a directory owned by the current user and keep it between launches. A
+temporary directory avoids the write error but forces the cache to be rebuilt
+when that directory is removed.
 
 Qt Application Errors
 ---------------------

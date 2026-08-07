@@ -105,7 +105,7 @@ def fake_interactor(monkeypatch: pytest.MonkeyPatch, qapplication: QApplication)
     """Avoid creating native VTK windows in unit tests."""
     del qapplication
     FakeInteractor.instances.clear()
-    monkeypatch.setattr(qt_module, 'QtInteractor', FakeInteractor)
+    monkeypatch.setattr(qt_module, '_load_qt_interactor', lambda: FakeInteractor)
 
 
 def test_viewer_requires_existing_qapplication(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -334,7 +334,7 @@ def test_cube_export_rejects_all_orbitals(tmp_path: Path) -> None:
 
 
 def test_plotter_returns_inside_existing_application(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(qt_module, 'QtInteractor', FakeInteractor)
+    monkeypatch.setattr(qt_module, '_load_qt_interactor', lambda: FakeInteractor)
     window = Plotter(str(MOLDEN_PATH), only_molecule=True)
 
     assert window.viewer.isVisible()
@@ -349,7 +349,7 @@ import moldenViz.qt as qt_module
 from moldenViz.plotter import Plotter
 from tests.test_plotter import FakeInteractor
 
-qt_module.QtInteractor = FakeInteractor
+qt_module._load_qt_interactor = lambda: FakeInteractor
 original_show = Plotter.show
 def show_then_close(window):
     original_show(window)

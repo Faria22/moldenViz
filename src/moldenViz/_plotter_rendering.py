@@ -3,20 +3,18 @@
 from __future__ import annotations
 
 import logging
+from importlib import import_module
 from typing import TYPE_CHECKING, Any
-
-import pyvista as pv
-from matplotlib.colors import LinearSegmentedColormap
-
-from ._plotting_objects import Molecule
-from .tabulator import GridType
 
 if TYPE_CHECKING:
     import numpy as np
+    import pyvista as pv
+    from matplotlib.colors import LinearSegmentedColormap
     from numpy.typing import NDArray
 
     from ._config_module import Config
-    from .tabulator import Tabulator
+    from ._plotting_objects import Molecule
+    from .tabulator import GridType, Tabulator
 
 logger = logging.getLogger(__name__)
 
@@ -61,11 +59,13 @@ class _PlotterRendering:
         LinearSegmentedColormap
             Colormap interpolating between the supplied colors.
         """
-        return LinearSegmentedColormap.from_list('custom_mo', colors)
+        colormap_class = import_module('matplotlib.colors').LinearSegmentedColormap
+        return colormap_class.from_list('custom_mo', colors)
 
     def _load_molecule(self, current_config: Config) -> None:
         """Reload the molecule from parsed atom data."""
-        self._molecule = Molecule(self.tabulator.atoms, current_config)
+        molecule_class = import_module('moldenViz._plotting_objects').Molecule
+        self._molecule = molecule_class(self.tabulator.atoms, current_config)
         logger.info('Loaded molecule with %d atoms.', len(self._molecule.atoms))
 
         for actor in self._molecule_actors if hasattr(self, '_molecule_actors') else []:
@@ -206,6 +206,7 @@ class _PlotterRendering:
         pv.StructuredGrid
             Mesh configured from the current Tabulator grid.
         """
+        pv = import_module('pyvista')
         mesh = pv.StructuredGrid()
         mesh.points = pv.pyvista_ndarray(self.tabulator.grid)  # pyright: ignore[reportCallIssue]
         mesh.dimensions = self.tabulator.grid_dimensions[::-1]
@@ -219,7 +220,8 @@ class _PlotterRendering:
         grid_type: GridType,
     ) -> None:
         """Update the Tabulator grid and rebuild the orbital mesh."""
-        if grid_type == GridType.UNKNOWN:
+        grid_type_class = import_module('moldenViz.tabulator').GridType
+        if grid_type == grid_type_class.UNKNOWN:
             raise ValueError('The plotter only supports spherical and cartesian grids.')
         self._cancel_gto_future()
         self._gtos_ready = False
