@@ -16,6 +16,8 @@ from ._config_module import Config
 from .tabulator import GridType, Tabulator
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from .models import MolecularOrbital
     from .plotter import Plotter
 
@@ -99,6 +101,10 @@ class _PlotterUI:
         def toggle_molecule(self) -> None: ...
         def _update_mesh(self, i_points: Any, j_points: Any, k_points: Any, grid_type: GridType) -> None: ...
 
+    def _queue_tk_callback(self, callback: Callable[[], None]) -> None:
+        """Queue work from a Qt signal on Tk's event loop."""
+        self._tk_root.after_idle(callback)
+
     def _override_clear_all_button(self) -> None:
         """Override the default "Clear All" action in the PyVista plotter's View menu."""
         view_menu = None
@@ -129,25 +135,35 @@ class _PlotterUI:
         # Add Settings submenu items
         if not self._only_molecule:
             grid_settings_action = QAction('Grid Settings', self._pv_plotter.app_window)
-            grid_settings_action.triggered.connect(self._grid_settings_screen)
+            grid_settings_action.triggered.connect(
+                lambda: self._queue_tk_callback(self._grid_settings_screen),
+            )
             settings_menu.addAction(grid_settings_action)
 
             mo_settings_action = QAction('MO Settings', self._pv_plotter.app_window)
-            mo_settings_action.triggered.connect(self._mo_settings_screen)
+            mo_settings_action.triggered.connect(
+                lambda: self._queue_tk_callback(self._mo_settings_screen),
+            )
             settings_menu.addAction(mo_settings_action)
 
         molecule_settings_action = QAction('Molecule Settings', self._pv_plotter.app_window)
-        molecule_settings_action.triggered.connect(self._molecule_settings_screen)
+        molecule_settings_action.triggered.connect(
+            lambda: self._queue_tk_callback(self._molecule_settings_screen),
+        )
         settings_menu.addAction(molecule_settings_action)
 
         color_settings_action = QAction('Color Settings', self._pv_plotter.app_window)
-        color_settings_action.triggered.connect(self._color_settings_screen)
+        color_settings_action.triggered.connect(
+            lambda: self._queue_tk_callback(self._color_settings_screen),
+        )
         settings_menu.addAction(color_settings_action)
 
         settings_menu.addSeparator()
 
         save_settings_action = QAction('Save Settings', self._pv_plotter.app_window)
-        save_settings_action.triggered.connect(self._save_settings)
+        save_settings_action.triggered.connect(
+            lambda: self._queue_tk_callback(self._save_settings),
+        )
         settings_menu.addAction(save_settings_action)
 
         # Create Export menu with dropdown
@@ -156,11 +172,15 @@ class _PlotterUI:
         # Add Export submenu items
         if not self._only_molecule:
             export_data_action = QAction('Data', self._pv_plotter.app_window)
-            export_data_action.triggered.connect(self._export_orbitals_dialog)
+            export_data_action.triggered.connect(
+                lambda: self._queue_tk_callback(self._export_orbitals_dialog),
+            )
             export_menu.addAction(export_data_action)
 
         export_image_action = QAction('Image', self._pv_plotter.app_window)
-        export_image_action.triggered.connect(self._export_image_dialog)
+        export_image_action.triggered.connect(
+            lambda: self._queue_tk_callback(self._export_image_dialog),
+        )
         export_menu.addAction(export_image_action)
 
         # Add menus to main menu bar
