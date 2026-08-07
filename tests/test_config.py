@@ -120,6 +120,29 @@ def test_valid_grid_type_cartesian() -> None:
     assert grid_config.default_type == 'cartesian'
 
 
+def test_valid_grid_type_adaptive() -> None:
+    """Test that 'adaptive' is accepted as a valid grid type."""
+    grid_config = config_module.GridConfig(default_type='adaptive')
+    assert grid_config.default_type == 'adaptive'
+    assert grid_config.adaptive.num_x_points == 21  # ruff: ignore[magic-value-comparison]
+    assert grid_config.adaptive.scale == pytest.approx(5.0)
+
+
+def test_adaptive_scale_accepts_scalar_and_tuple() -> None:
+    """Adaptive scale supports fractional scalar and per-axis values."""
+    scalar = config_module.AdaptiveGridConfig(scale=1.5)
+    anisotropic = config_module.AdaptiveGridConfig(scale=[1.5, 2.0, 3.0])
+    assert scalar.scale == pytest.approx(1.5)
+    assert anisotropic.scale == (1.5, 2.0, 3.0)
+
+
+@pytest.mark.parametrize('scale', [0.5, [1.0, 0.5, 2.0]])
+def test_adaptive_scale_rejects_values_below_one(scale: object) -> None:
+    """Adaptive scales cannot make the selected coarse cells less dense."""
+    with pytest.raises(ValidationError, match='greater than or equal to 1'):
+        config_module.AdaptiveGridConfig(scale=scale)
+
+
 def test_invalid_grid_type_raises_error() -> None:
     """Test that invalid grid type raises ValidationError."""
     with pytest.raises(ValidationError, match='Input should be'):

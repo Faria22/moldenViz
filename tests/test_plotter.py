@@ -587,8 +587,10 @@ class FakeTabulator:
         if tabulate_gtos:
             self._gtos = np.zeros((self.grid.shape[0], 1))
 
-    def tabulate_mos(self, _orb_ind: int) -> np.ndarray:
-        return np.arange(self.grid.shape[0], dtype=float)
+    def tabulate_mos(self, orb_ind: int | None = None, *, gtos: np.ndarray | None = None) -> np.ndarray:
+        num_points = self.grid.shape[0] if gtos is None else gtos.shape[0]
+        values = np.arange(num_points, dtype=float)
+        return values[:, None] if orb_ind is None else values
 
     def export(self, path: str, mo_index: int | None) -> None:
         self.export_calls.append((path, mo_index))
@@ -1168,6 +1170,25 @@ def test_mo_settings_screen_initializes_controls(monkeypatch: pytest.MonkeyPatch
     assert hasattr(plotter, 'opacity_scale')
 
 
+def test_selecting_adaptive_mode_uses_coarse_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+    plotter_env: Any,
+) -> None:
+    """Switching from a uniform Cartesian grid should not retain its dense counts."""
+    install_fake_tk_widgets(monkeypatch)
+    tabulator = plotter_env.make_tabulator()
+    seed_tabulator_with_cartesian_grid(tabulator)
+    plotter = plotter_env.make_plotter(tabulator=tabulator)
+    plotter._grid_settings_screen()
+
+    plotter.grid_type_radio_var.set('adaptive')
+    plotter._place_grid_params_frame()
+
+    assert int(plotter.x_num_points_entry.get()) == plotter_module.config.grid.adaptive.num_x_points
+    assert int(plotter.y_num_points_entry.get()) == plotter_module.config.grid.adaptive.num_y_points
+    assert int(plotter.z_num_points_entry.get()) == plotter_module.config.grid.adaptive.num_z_points
+
+
 def test_molecule_settings_screen_initializes_entries(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
     install_fake_tk_widgets(monkeypatch)
     plotter = plotter_env.make_plotter()
@@ -1366,6 +1387,37 @@ def test_apply_mo_contour_replots_current(plotter_env: Any) -> None:
     plotter._apply_mo_contour()
     assert plotter._contour == pytest.approx(0.25)
     assert replotted == [1]
+
+
+def test_apply_mo_contour_rebuilds_adaptive_cache(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
+    """Changing adaptive contour invalidates the all-MO refinement cache."""
+    plotter = plotter_env.make_plotter()
+    plotter._grid_mode = 'adaptive'
+    plotter.contour_entry = DummyEntry('0.25')
+    rebuilds: list[bool] = []
+    monkeypatch.setattr(
+        plotter,
+        '_invalidate_adaptive_grid',
+        lambda *, rebuild=False: rebuilds.append(rebuild),
+    )
+
+    plotter._apply_mo_contour()
+
+    assert plotter._contour == pytest.approx(0.25)
+    assert rebuilds == [True]
+
+
+def test_plot_orbital_uses_cached_adaptive_gtos(plotter_env: Any) -> None:
+    """Orbital switches contract the cached fine GTOs without rebuilding them."""
+    plotter = plotter_env.make_plotter()
+    plotter._grid_mode = 'adaptive'
+    plotter._adaptive_ready = True
+    plotter._adaptive_gtos = np.ones((3, 1))
+    plotter._adaptive_mesh = DummyStructuredGrid()
+
+    plotter.plot_orbital(0)
+
+    np.testing.assert_array_equal(plotter._adaptive_mesh.arrays['orbital'], np.arange(3, dtype=float))
 
 
 def test_apply_custom_mo_color_settings_updates_scheme(plotter_env: Any) -> None:

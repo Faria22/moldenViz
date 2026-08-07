@@ -7,6 +7,7 @@ import gc
 import threading
 import time
 from collections import UserDict
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, cast
@@ -678,6 +679,38 @@ def test_failed_grid_replacement_preserves_previous_state(
     assert isinstance(plotter._selection_screen, FakeSelectionScreen)
     assert plotter._selection_screen.loading_states[-2:] == [True, False]
     assert 'broken replacement' in shown_errors[0]
+
+
+def test_adaptive_job_caches_one_fine_gto_matrix() -> None:
+    """All coarse MOs should produce one reusable fine-grid GTO cache."""
+    tabulator = plotter_module.Tabulator(_sample_molden())
+    axis = np.linspace(-2.0, 2.0, 7)
+    tabulator.cartesian_grid(axis, axis, axis)
+    original_cache = tabulator.gtos.copy()
+
+    plotter = object.__new__(plotter_module.Plotter)
+    plotter.tabulator = tabulator
+    plotter._only_molecule = False
+    plotter._grid_mode = 'adaptive'
+    plotter._gtos_ready = True
+    plotter._adaptive_ready = False
+    plotter._adaptive_scale = 1.5
+    plotter._adaptive_gtos = None
+    plotter._adaptive_mesh = plotter_module.pv.UnstructuredGrid()
+    plotter._contour = 0.1
+    plotter._selection_screen = None
+    plotter._on_screen = True
+
+    callbacks: list[Callable[[], None]] = []
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        plotter._adaptive_job = plotter_module.BackgroundJob(executor, callbacks.append)
+        plotter._schedule_adaptive_tabulation()
+        plotter._adaptive_job.wait(timeout=10)
+
+    assert plotter._adaptive_ready
+    assert plotter._adaptive_gtos is not None
+    assert plotter._adaptive_gtos.shape[0] == plotter._adaptive_mesh.n_points
+    np.testing.assert_array_equal(tabulator.gtos, original_cache)
 
 
 def test_close_stops_gto_delivery(monkeypatch: pytest.MonkeyPatch) -> None:

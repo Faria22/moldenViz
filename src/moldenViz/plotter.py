@@ -12,8 +12,10 @@ from tkinter import messagebox
 from typing import TYPE_CHECKING
 
 import numpy as np
+import pyvista as pv
 from pyvistaqt import BackgroundPlotter
 
+from ._adaptive_grid import AdaptiveScale, crossed_cell_ids, normalize_scale, refined_grid
 from ._config_module import Config
 from ._plotter_jobs import BackgroundJob
 from ._plotter_rendering import _PlotterRendering
@@ -24,7 +26,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from concurrent.futures import Future
 
-    import pyvista as pv
     from numpy.typing import NDArray
 
 
@@ -62,6 +63,15 @@ class _GTOResult:
     axes: tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]
     grid_type: GridType
     gtos: NDArray[np.floating]
+
+
+@dataclass(frozen=True)
+class _AdaptiveResult:
+    """Refined contour grid and its reusable GTO cache."""
+
+    mesh: pv.UnstructuredGrid
+    gtos: NDArray[np.floating]
+    crossed_cells: int
 
 
 class Plotter(_PlotterUI, _PlotterRendering):
@@ -120,6 +130,12 @@ class Plotter(_PlotterUI, _PlotterRendering):
         self._only_molecule = only_molecule
         self._selection_screen: _OrbitalSelectionScreen | None = None
         self._gtos_ready = only_molecule
+        self._grid_mode = tabulator.grid_type.value if tabulator is not None else config.grid.default_type
+        self._adaptive_scale: AdaptiveScale = config.grid.adaptive.scale
+        self._adaptive_ready = False
+        self._adaptive_mesh = pv.UnstructuredGrid()
+        self._adaptive_gtos: NDArray[np.floating] | None = None
+        self._contour = config.mo.contour
 
         self._tk_root = tk_root
         self._no_prev_tk_root = self._tk_root is None
@@ -131,6 +147,10 @@ class Plotter(_PlotterUI, _PlotterRendering):
         self._gto_completions: SimpleQueue[Callable[[], None]] = SimpleQueue()
         self._gto_completion_poll_id: str | None = None
         self._gto_job: BackgroundJob[_GTOResult] = BackgroundJob(
+            _GTO_EXECUTOR,
+            self._dispatch_gto_completion,
+        )
+        self._adaptive_job: BackgroundJob[_AdaptiveResult] = BackgroundJob(
             _GTO_EXECUTOR,
             self._dispatch_gto_completion,
         )
@@ -167,7 +187,7 @@ class Plotter(_PlotterUI, _PlotterRendering):
 
         # If no tabulator was passed, create default grid
         if not only_molecule and not tabulator:
-            if config.grid.default_type == 'spherical':
+            if self._grid_mode == 'spherical':
                 logger.info(
                     'Generating default spherical grid with %dx%dx%d samples.',
                     config.grid.spherical.num_r_points,
@@ -184,19 +204,21 @@ class Plotter(_PlotterUI, _PlotterRendering):
                     np.linspace(0, 2 * np.pi, config.grid.spherical.num_phi_points),
                     tabulate_gtos=False,
                 )
-            else:  # cartesian
+            else:  # cartesian or adaptive
                 r = max(config.grid.max_radius_multiplier * self._molecule.max_radius, config.grid.min_radius)
+                grid_config = config.grid.adaptive if self._grid_mode == 'adaptive' else config.grid.cartesian
                 logger.info(
-                    'Generating default cartesian grid spanning ±%.2f with %dx%dx%d samples.',
+                    'Generating default %s Cartesian grid spanning ±%.2f with %dx%dx%d samples.',
+                    self._grid_mode,
                     r,
-                    config.grid.cartesian.num_x_points,
-                    config.grid.cartesian.num_y_points,
-                    config.grid.cartesian.num_z_points,
+                    grid_config.num_x_points,
+                    grid_config.num_y_points,
+                    grid_config.num_z_points,
                 )
                 self.tabulator.cartesian_grid(
-                    np.linspace(-r, r, config.grid.cartesian.num_x_points),
-                    np.linspace(-r, r, config.grid.cartesian.num_y_points),
-                    np.linspace(-r, r, config.grid.cartesian.num_z_points),
+                    np.linspace(-r, r, grid_config.num_x_points),
+                    np.linspace(-r, r, grid_config.num_y_points),
+                    np.linspace(-r, r, grid_config.num_z_points),
                     tabulate_gtos=False,
                 )
             self._gtos_ready = False
@@ -214,7 +236,6 @@ class Plotter(_PlotterUI, _PlotterRendering):
         self._orb_actor: pv.Actor | None = None
 
         # Values for MO, not the molecule
-        self._contour = config.mo.contour
         self._opacity = config.mo.opacity
 
         # Set colormap based on configuration
@@ -261,6 +282,17 @@ class Plotter(_PlotterUI, _PlotterRendering):
             raise
         if not self._gtos_ready:
             self._apply_gtos_ready(result, 0.0)
+
+    def wait_for_adaptive_grid(self, timeout: float | None = None) -> None:
+        """Block until adaptive-grid tabulation finishes."""
+        if self._grid_mode != 'adaptive' or self._adaptive_ready:
+            return
+        future = self._adaptive_job.future
+        if future is None:
+            raise RuntimeError('Adaptive-grid tabulation has not been scheduled.')
+        result = self._adaptive_job.wait(timeout=timeout)
+        if not self._adaptive_ready:
+            self._apply_adaptive_ready(result, 0.0)
 
     @property
     def _gto_future(self) -> Future[_GTOResult] | None:
@@ -378,10 +410,79 @@ class Plotter(_PlotterUI, _PlotterRendering):
         self._gtos_ready = True
         logger.info('GTO tabulation completed in %.2fs.', elapsed)
         self._orb_mesh = self._create_mo_mesh()
+        if self._grid_mode == 'adaptive':
+            self._schedule_adaptive_tabulation()
+            return
         if self._selection_screen:
             self._selection_screen._on_gtos_ready()  # ruff:ignore[private-member-access]
             if self._selection_screen.current_mo_ind >= 0:
                 self.plot_orbital(self._selection_screen.current_mo_ind)
+
+    def _schedule_adaptive_tabulation(self) -> None:
+        """Build the union of all coarse MO contours and tabulate it once."""
+        if self._only_molecule or self._grid_mode != 'adaptive' or not self._gtos_ready or self._adaptive_job.pending:
+            return
+        if self.tabulator.grid_type != GridType.CARTESIAN:
+            raise RuntimeError('Adaptive grids require a Cartesian coarse grid.')
+
+        coarse_grid = self._create_mo_mesh()
+        coarse_mos = self.tabulator.tabulate_mos()
+        contour = self._contour
+        scale = normalize_scale(self._adaptive_scale)
+
+        def build_and_tabulate() -> _AdaptiveResult:
+            cell_ids = crossed_cell_ids(coarse_grid, coarse_mos, contour)
+            mesh = refined_grid(coarse_grid, cell_ids, scale)
+            gtos = self.tabulator.compute_gtos(np.asarray(mesh.points))
+            return _AdaptiveResult(mesh=mesh, gtos=gtos, crossed_cells=len(cell_ids))
+
+        self._adaptive_ready = False
+        if self._selection_screen:
+            self._selection_screen._set_loading_state(  # ruff:ignore[private-member-access]
+                True,
+                'Refining contour grid...',
+            )
+        logger.info('Starting adaptive-grid tabulation for all molecular orbitals...')
+        self._adaptive_job.start(
+            build_and_tabulate,
+            on_success=self._apply_adaptive_ready,
+            on_error=self._handle_adaptive_error,
+        )
+
+    def _apply_adaptive_ready(self, result: _AdaptiveResult, elapsed: float) -> None:
+        """Install the reusable adaptive grid and GTO cache."""
+        if not self._on_screen or self._grid_mode != 'adaptive':
+            return
+        self._adaptive_mesh = result.mesh
+        self._adaptive_gtos = result.gtos
+        self._adaptive_ready = True
+        logger.info(
+            'Adaptive-grid tabulation completed in %.2fs from %d crossed coarse cells (%d fine points).',
+            elapsed,
+            result.crossed_cells,
+            result.mesh.n_points,
+        )
+        if self._selection_screen:
+            self._selection_screen._on_gtos_ready()  # ruff:ignore[private-member-access]
+            if self._selection_screen.current_mo_ind >= 0:
+                self.plot_orbital(self._selection_screen.current_mo_ind)
+
+    def _handle_adaptive_error(self, exc: Exception) -> None:
+        """Keep the previous actor and report failed adaptive tabulation."""
+        self._adaptive_ready = False
+        if self._selection_screen:
+            self._selection_screen._on_gtos_ready()  # ruff:ignore[private-member-access]
+        logger.error('Adaptive-grid tabulation failed.', exc_info=(type(exc), exc, exc.__traceback__))
+        messagebox.showerror('Adaptive Grid Failed', f'Failed to refine orbital grid:\n\n{exc!s}')
+
+    def _invalidate_adaptive_grid(self, *, rebuild: bool = False) -> None:
+        """Discard adaptive cache and optionally rebuild it from the coarse grid."""
+        self._adaptive_job.cancel()
+        self._adaptive_ready = False
+        self._adaptive_mesh = pv.UnstructuredGrid()
+        self._adaptive_gtos = None
+        if rebuild:
+            self._schedule_adaptive_tabulation()
 
     def _ensure_gtos_ready(self) -> bool:
         """Return True if GTO data are ready for orbital operations.
@@ -391,7 +492,7 @@ class Plotter(_PlotterUI, _PlotterRendering):
         bool
             True when orbital plots can be rendered immediately.
         """
-        if self._gtos_ready:
+        if self._gtos_ready and (self._grid_mode != 'adaptive' or self._adaptive_ready):
             return True
         logger.debug('Ignoring orbital request while GTOs are loading.')
         return False
@@ -400,9 +501,8 @@ class Plotter(_PlotterUI, _PlotterRendering):
         """Cancel any pending GTO computation."""
         if not self._on_screen:
             self._stop_gto_completion_poll()
-        if not self._gto_job.pending:
-            return
-        future = self._gto_job.future
-        if future is not None and not future.done():
-            logger.info('Cancelling pending GTO tabulation job.')
-        self._gto_job.cancel()
+        for label, job in (('GTO', self._gto_job), ('adaptive-grid', self._adaptive_job)):
+            future = job.future
+            if future is not None and not future.done():
+                logger.info('Cancelling pending %s tabulation job.', label)
+            job.cancel()

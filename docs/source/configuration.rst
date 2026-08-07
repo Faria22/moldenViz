@@ -81,7 +81,7 @@ Control the grid used when tabulating molecular orbitals:
    [grid]
    min_radius = 5
    max_radius_multiplier = 2
-   default_type = 'spherical'  # 'spherical' or 'cartesian'
+   default_type = 'spherical'  # 'spherical', 'cartesian', or 'adaptive'
 
    [grid.spherical]
    num_r_points = 100
@@ -93,10 +93,18 @@ Control the grid used when tabulating molecular orbitals:
    num_y_points = 100
    num_z_points = 100
 
+   [grid.adaptive]
+   num_x_points = 21
+   num_y_points = 21
+   num_z_points = 21
+   scale = 5.0
+
 The ``default_type`` option determines which grid type is used when the plotter is first loaded:
 
 - ``'spherical'`` (default): Uses spherical coordinates (r, theta, phi)
 - ``'cartesian'``: Uses Cartesian coordinates (x, y, z)
+- ``'adaptive'``: Uses a coarse Cartesian grid to locate contour-crossed cells,
+  then tabulates a finer grid only within the union of those cells
 
 Users can switch between grid types within the plotter interface, but this setting controls the initial grid type.
 
@@ -115,6 +123,108 @@ Increase the resolution in the cartesian grid only:
    num_x_points = 150
    num_y_points = 150
    num_z_points = 150
+
+Adaptive Cartesian Grids
+------------------------
+
+Adaptive mode first contours every available molecular orbital on a coarse
+Cartesian grid. PyVista maps the generated contour faces back to the coarse
+cells they cross. moldenViz takes the union of those cells, refines that cell
+set, and tabulates one reusable fine-grid GTO cache. Changing molecular
+orbitals then uses the same inexpensive matrix contraction as a single grid;
+it does not repeat GTO tabulation.
+
+Select adaptive mode and configure its coarse resolution and fine scale:
+
+.. code-block:: toml
+
+   [grid]
+   default_type = 'adaptive'
+
+   [grid.adaptive]
+   num_x_points = 21
+   num_y_points = 21
+   num_z_points = 21
+   scale = 5.0
+
+Fine spacing is approximately ``coarse_spacing / scale``. The scale must be
+at least ``1.0`` and may be fractional. For example, ``1.5`` inserts a point at
+two-thirds of each selected coarse-cell edge before the cell boundary. An
+anisotropic scale can be saved as a TOML array:
+
+.. code-block:: toml
+
+   scale = [3.0, 5.0, 2.5]  # x, y, z
+
+The Grid Settings window accepts the same values as ``5.0`` or
+``(3.0, 5.0, 2.5)``. Cartesian bounds and coarse point counts remain editable
+there as well.
+
+Benefits and tradeoffs
+~~~~~~~~~~~~~~~~~~~~~~
+
+Benefits:
+
+* The initial coarse grid is much faster and smaller to tabulate than a dense
+  global grid.
+* Fine-grid GTO memory is spent only around contour regions crossed by at
+  least one available MO.
+* The fine GTO cache is shared by every MO, so changing the selected orbital
+  does not rebuild the adaptive grid.
+* Per-axis scales can concentrate resolution along an anisotropic direction.
+
+Tradeoffs:
+
+* Changing the contour value changes which cells are crossed, so it discards
+  and rebuilds the complete all-MO adaptive grid and fine GTO cache. Changing
+  bounds, coarse counts, or scale does the same.
+* A coarse grid can miss a small contour that never appears in its sampled
+  values. Increase the coarse point counts when orbitals contain small or
+  rapidly varying features.
+* Taking the union over every MO can select much of the domain for molecules
+  with many spatially diverse orbitals, reducing the time and memory savings.
+* Fine-grid cell count grows approximately with the product of the three scale
+  values. Large scales can therefore consume substantial memory.
+* Fractional scales produce a shorter final interval at the edge of each
+  coarse cell when the scale is not an integer; the refined grid remains
+  conforming, but spacing within a cell is not perfectly uniform.
+* Adaptive grids affect interactive contour rendering only. VTK and cube
+  exports continue to use the Tabulator's structured coarse grid.
+
+Local benchmark
+~~~~~~~~~~~~~~~
+
+The benchmark suite includes ``TimeInitialGridTabulation`` and
+``TimeAdaptiveGridPreparation`` in ``benchmarks/grids.py``. On the bundled CO
+example over identical ``[-5, 5]`` Cartesian bounds, using an Apple M1 with
+8 GB RAM and three repetitions, the median development measurements were:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Stage
+     - Points
+     - Median
+     - GTO array
+   * - Uniform initial grid (100³)
+     - 1,000,000
+     - 0.254 s
+     - 198.4 MiB
+   * - Adaptive coarse initial grid (21³)
+     - 9,261
+     - 0.00129 s
+     - 1.84 MiB
+   * - Full adaptive preparation (scale 5.0)
+     - 177,787 fine points from 1,320 crossed cells
+     - 0.844 s
+     - 35.3 MiB
+
+The initial coarse GTO stage was about 198 times faster and used about 108
+times less GTO storage than the uniform initial grid. Full adaptive preparation
+was slower than the uniform-grid calculation in this small CO case, but its
+retained fine GTO cache was about 5.6 times smaller. Results depend strongly on
+the molecule, contour, coarse resolution, scale, worker count, and hardware;
+run the ASV benchmarks locally before choosing production defaults.
 
 Molecular Orbital Settings
 --------------------------

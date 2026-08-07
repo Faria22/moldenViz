@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 import toml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from ._adaptive_grid import AdaptiveScale, normalize_scale
+
 # Global config directory paths
 DEFAULT_CONFIGS_DIR = Path(__file__).parent / 'default_configs'
 CUSTOM_CONFIGS_DIR = Path().home() / '.config/moldenViz'
@@ -48,14 +50,39 @@ class CartesianGridConfig(BaseModel):
     num_z_points: int = Field(100, gt=0, description='Number of z points')
 
 
+class AdaptiveGridConfig(BaseModel):
+    """Configuration for cell-local adaptive Cartesian grids."""
+
+    num_x_points: int = Field(21, ge=2, description='Number of coarse x points')
+    num_y_points: int = Field(21, ge=2, description='Number of coarse y points')
+    num_z_points: int = Field(21, ge=2, description='Number of coarse z points')
+    scale: AdaptiveScale = Field(5.0, description='Fine-grid resolution multiplier')
+
+    @field_validator('scale')
+    @classmethod
+    def validate_scale(cls, value: AdaptiveScale) -> AdaptiveScale:
+        """Validate and normalize the adaptive scale.
+
+        Returns
+        -------
+        float or tuple of float
+            Validated scalar or three-axis scale.
+        """
+        normalized = normalize_scale(value)
+        if isinstance(value, int | float):
+            return normalized[0]
+        return normalized
+
+
 class GridConfig(BaseModel):
     """Configuration for grid generation."""
 
     min_radius: int = Field(5, gt=0, description='Minimum radius')
     max_radius_multiplier: int = Field(2, gt=0, description='Max radius multiplier')
-    default_type: Literal['spherical', 'cartesian'] = Field('spherical', description='Default grid type')
+    default_type: Literal['spherical', 'cartesian', 'adaptive'] = Field('spherical', description='Default grid type')
     spherical: SphericalGridConfig = Field(default_factory=SphericalGridConfig)
     cartesian: CartesianGridConfig = Field(default_factory=CartesianGridConfig)
+    adaptive: AdaptiveGridConfig = Field(default_factory=AdaptiveGridConfig)
 
 
 class MOConfig(BaseModel):
@@ -418,6 +445,7 @@ class Config:
             'grid': {
                 'min_radius': self.config.grid.min_radius,
                 'max_radius_multiplier': self.config.grid.max_radius_multiplier,
+                'default_type': self.config.grid.default_type,
                 'spherical': {
                     'num_r_points': self.config.grid.spherical.num_r_points,
                     'num_theta_points': self.config.grid.spherical.num_theta_points,
@@ -427,6 +455,16 @@ class Config:
                     'num_x_points': self.config.grid.cartesian.num_x_points,
                     'num_y_points': self.config.grid.cartesian.num_y_points,
                     'num_z_points': self.config.grid.cartesian.num_z_points,
+                },
+                'adaptive': {
+                    'num_x_points': self.config.grid.adaptive.num_x_points,
+                    'num_y_points': self.config.grid.adaptive.num_y_points,
+                    'num_z_points': self.config.grid.adaptive.num_z_points,
+                    'scale': (
+                        list(self.config.grid.adaptive.scale)
+                        if isinstance(self.config.grid.adaptive.scale, tuple)
+                        else self.config.grid.adaptive.scale
+                    ),
                 },
             },
             'MO': {

@@ -16,6 +16,12 @@ num_x_points = 100
 num_y_points = 100
 num_z_points = 100
 
+[grid.adaptive]
+num_x_points = 21
+num_y_points = 21
+num_z_points = 21
+scale = 5.0
+
 [MO]
 contour = 0.1
 opacity = 1

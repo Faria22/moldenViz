@@ -12,6 +12,7 @@ import numpy as np
 from qtpy.QtWidgets import QAction, QMenu  # pyright: ignore[reportPrivateImportUsage]
 from shiboken6 import isValid
 
+from ._adaptive_grid import format_scale, parse_scale
 from ._config_module import Config
 from .tabulator import GridType, Tabulator
 
@@ -80,6 +81,8 @@ class _PlotterUI:
     if TYPE_CHECKING:
         _CARTESIAN_GRID_SETTINGS_WINDOW_SIZE: str
         _SPHERICAL_GRID_SETTINGS_WINDOW_SIZE: str
+        _adaptive_scale: Any
+        _grid_mode: str
         _molecule: Any
         _molecule_actors: list[Any]
         _only_molecule: bool
@@ -95,6 +98,7 @@ class _PlotterUI:
         def are_bonds_visible(self) -> bool: ...
         def _custom_cmap_from_colors(self, colors: list[str]) -> Any: ...
         def _load_molecule(self, config: Config) -> None: ...
+        def _invalidate_adaptive_grid(self, *, rebuild: bool = False) -> None: ...
         def plot_orbital(self, orb_ind: int) -> None: ...
         def toggle_atoms(self) -> None: ...
         def toggle_bonds(self) -> None: ...
@@ -549,7 +553,7 @@ class _PlotterUI:
         ttk.Label(settings_frame, text='MO Grid parameters').grid(row=0, column=0, padx=5, pady=5, columnspan=5)
 
         self.grid_type_radio_var = tk.StringVar()
-        self.grid_type_radio_var.set(self.tabulator.grid_type.value)
+        self.grid_type_radio_var.set(self._grid_mode)
 
         ttk.Label(settings_frame, text='Spherical grid:').grid(row=1, column=0, padx=5, pady=5)
         sph_grid_type_button = ttk.Radiobutton(
@@ -570,6 +574,15 @@ class _PlotterUI:
         sph_grid_type_button.grid(row=1, column=1, padx=5, pady=5)
         cart_grid_type_button.grid(row=1, column=3, padx=5, pady=5)
 
+        ttk.Label(settings_frame, text='Adaptive Cartesian grid:').grid(row=2, column=0, padx=5, pady=5)
+        adaptive_grid_type_button = ttk.Radiobutton(
+            settings_frame,
+            variable=self.grid_type_radio_var,
+            value='adaptive',
+            command=self._place_grid_params_frame,
+        )
+        adaptive_grid_type_button.grid(row=2, column=1, padx=5, pady=5)
+
         self.sph_grid_params_frame = self._sph_grid_params_frame_widgets(settings_frame)
         self.cart_grid_params_frame = self._cart_grid_params_frame_widgets(settings_frame)
 
@@ -577,11 +590,11 @@ class _PlotterUI:
 
         # Reset button
         reset_button = ttk.Button(settings_frame, text='Reset', command=self._reset_grid_settings)
-        reset_button.grid(row=8, column=0, padx=5, pady=5, columnspan=5)
+        reset_button.grid(row=10, column=0, padx=5, pady=5, columnspan=5)
 
         # Apply settings button
         apply_button = ttk.Button(settings_frame, text='Apply', command=self._apply_grid_settings)
-        apply_button.grid(row=9, column=0, padx=5, pady=5, columnspan=5)
+        apply_button.grid(row=11, column=0, padx=5, pady=5, columnspan=5)
 
     def _mo_settings_screen(self) -> None:
         """Open the molecular orbital settings window."""
@@ -640,14 +653,21 @@ class _PlotterUI:
     def _apply_mo_contour(self) -> None:
         """Apply contour changes immediately."""
         try:
-            self._contour = float(self.contour_entry.get().strip())
-            logger.info('Set molecular orbital contour to %.2f.', self._contour)
-            # Replot the current orbital with the new contour
-            idx = self._get_current_mo_index()
-            if idx >= 0:
-                self.plot_orbital(idx)
+            contour = float(self.contour_entry.get().strip())
         except ValueError:
-            pass  # Ignore invalid input
+            return
+        if contour <= 0 or np.isclose(contour, self._contour):
+            return
+        self._contour = contour
+        config.mo.contour = contour
+        logger.info('Set molecular orbital contour to %.2f.', self._contour)
+        if self._grid_mode == 'adaptive':
+            self._invalidate_adaptive_grid(rebuild=True)
+            return
+        # Replot the current orbital with the new contour
+        idx = self._get_current_mo_index()
+        if idx >= 0:
+            self.plot_orbital(idx)
 
     def _update_settings_button_states(self) -> None:
         """Update the state of the settings buttons based on current plotter state."""
@@ -932,16 +952,23 @@ class _PlotterUI:
 
     def _place_grid_params_frame(self) -> None:
         """Render the parameter frame that matches the selected grid type."""
-        if self.grid_type_radio_var.get() == GridType.SPHERICAL.value:
+        selected_type = self.grid_type_radio_var.get()
+        if selected_type == GridType.SPHERICAL.value:
             self.grid_settings_window.geometry(self._SPHERICAL_GRID_SETTINGS_WINDOW_SIZE)
             self.cart_grid_params_frame.grid_forget()
-            self.sph_grid_params_frame.grid(row=2, column=0, padx=5, pady=5, rowspan=6, columnspan=4)
+            self.sph_grid_params_frame.grid(row=3, column=0, padx=5, pady=5, rowspan=6, columnspan=4)
             self._sph_grid_params_frame_setup()
         else:
             self.grid_settings_window.geometry(self._CARTESIAN_GRID_SETTINGS_WINDOW_SIZE)
             self.sph_grid_params_frame.grid_forget()
-            self.cart_grid_params_frame.grid(row=2, column=0, padx=5, pady=5, rowspan=6, columnspan=4)
-            self._cart_grid_params_frame_setup()
+            self.cart_grid_params_frame.grid(row=3, column=0, padx=5, pady=5, rowspan=7, columnspan=4)
+            self._cart_grid_params_frame_setup(adaptive=selected_type == 'adaptive')
+            if selected_type == 'adaptive':
+                self.adaptive_scale_label.grid()
+                self.adaptive_scale_entry.grid()
+            else:
+                self.adaptive_scale_label.grid_remove()
+                self.adaptive_scale_entry.grid_remove()
 
     def _sph_grid_params_frame_widgets(self, master: ttk.Frame) -> ttk.Frame:
         """Build widgets that capture spherical grid parameters.
@@ -1036,6 +1063,14 @@ class _PlotterUI:
         self.z_max_entry.grid(row=5, column=1, padx=5, pady=5)
         self.z_num_points_entry.grid(row=5, column=2, padx=5, pady=5)
 
+        self.adaptive_scale_label = ttk.Label(
+            grid_params_frame,
+            text='Fine scale (float or x, y, z tuple):',
+        )
+        self.adaptive_scale_label.grid(row=6, column=0, columnspan=2, padx=5, pady=5)
+        self.adaptive_scale_entry = ttk.Entry(grid_params_frame)
+        self.adaptive_scale_entry.grid(row=6, column=2, padx=5, pady=5)
+
         return grid_params_frame
 
     def _sph_grid_params_frame_setup(self) -> None:
@@ -1066,7 +1101,7 @@ class _PlotterUI:
         self.theta_points_entry.insert(0, str(num_theta))
         self.phi_points_entry.insert(0, str(num_phi))
 
-    def _cart_grid_params_frame_setup(self) -> None:
+    def _cart_grid_params_frame_setup(self, *, adaptive: bool = False) -> None:
         """Populate the Cartesian grid widgets with defaults or existing values."""
         self.x_min_entry.delete(0, tk.END)
         self.x_max_entry.delete(0, tk.END)
@@ -1079,10 +1114,13 @@ class _PlotterUI:
         self.z_min_entry.delete(0, tk.END)
         self.z_max_entry.delete(0, tk.END)
         self.z_num_points_entry.delete(0, tk.END)
+        self.adaptive_scale_entry.delete(0, tk.END)
+        self.adaptive_scale_entry.insert(0, format_scale(self._adaptive_scale))
 
         # Previous grid was sphesical, so use adapted default values
         if self.tabulator.grid_type == GridType.SPHERICAL:
             r = max(config.grid.max_radius_multiplier * self._molecule.max_radius, config.grid.min_radius)
+            grid_config = config.grid.adaptive if adaptive else config.grid.cartesian
 
             self.x_min_entry.insert(0, str(-r))
             self.y_min_entry.insert(0, str(-r))
@@ -1092,12 +1130,17 @@ class _PlotterUI:
             self.y_max_entry.insert(0, str(r))
             self.z_max_entry.insert(0, str(r))
 
-            self.x_num_points_entry.insert(0, str(config.grid.cartesian.num_x_points))
-            self.y_num_points_entry.insert(0, str(config.grid.cartesian.num_y_points))
-            self.z_num_points_entry.insert(0, str(config.grid.cartesian.num_z_points))
+            self.x_num_points_entry.insert(0, str(grid_config.num_x_points))
+            self.y_num_points_entry.insert(0, str(grid_config.num_y_points))
+            self.z_num_points_entry.insert(0, str(grid_config.num_z_points))
             return
 
-        x_num, y_num, z_num = self.tabulator.grid_dimensions
+        if adaptive and self._grid_mode != 'adaptive':
+            x_num = config.grid.adaptive.num_x_points
+            y_num = config.grid.adaptive.num_y_points
+            z_num = config.grid.adaptive.num_z_points
+        else:
+            x_num, y_num, z_num = self.tabulator.grid_dimensions
         x_min, y_min, z_min = self.tabulator.grid[0, :]
         x_max, y_max, z_max = self.tabulator.grid[-1, :]
 
@@ -1132,6 +1175,17 @@ class _PlotterUI:
 
         self.phi_points_entry.delete(0, tk.END)
         self.phi_points_entry.insert(0, str(config.grid.spherical.num_phi_points))
+
+        if config.grid.default_type == 'adaptive':
+            for entry, value in (
+                (self.x_num_points_entry, config.grid.adaptive.num_x_points),
+                (self.y_num_points_entry, config.grid.adaptive.num_y_points),
+                (self.z_num_points_entry, config.grid.adaptive.num_z_points),
+            ):
+                entry.delete(0, tk.END)
+                entry.insert(0, str(value))
+            self.adaptive_scale_entry.delete(0, tk.END)
+            self.adaptive_scale_entry.insert(0, format_scale(config.grid.adaptive.scale))
 
     def _reset_mo_settings(self) -> None:
         """Restore MO settings widgets back to configuration defaults."""
@@ -1212,7 +1266,8 @@ class _PlotterUI:
 
     def _apply_grid_settings(self) -> None:
         """Validate UI inputs and apply the chosen grid parameters."""
-        if self.grid_type_radio_var.get() == GridType.SPHERICAL.value:
+        selected_type = self.grid_type_radio_var.get()
+        if selected_type == GridType.SPHERICAL.value:
             radius = float(self.radius_entry.get())
             if radius <= 0:
                 messagebox.showerror('Invalid input', 'Radius must be greater than zero.')
@@ -1242,6 +1297,7 @@ class _PlotterUI:
                     num_theta_points,
                     num_phi_points,
                 )
+                self._grid_mode = selected_type
                 self._update_mesh(r, theta, phi, GridType.SPHERICAL)
 
         else:
@@ -1257,9 +1313,22 @@ class _PlotterUI:
             z_max = float(self.z_max_entry.get())
             z_num = int(self.z_num_points_entry.get())
 
-            if x_num <= 0 or y_num <= 0 or z_num <= 0:
-                messagebox.showerror('Invalid input', 'Number of points must be greater than zero.')
+            minimum_points = 2 if selected_type == 'adaptive' else 1
+            if x_num < minimum_points or y_num < minimum_points or z_num < minimum_points:
+                messagebox.showerror('Invalid input', f'Number of points must be at least {minimum_points}.')
                 return
+
+            if x_min >= x_max or y_min >= y_max or z_min >= z_max:
+                messagebox.showerror('Invalid input', 'Each Cartesian minimum must be less than its maximum.')
+                return
+
+            scale = self._adaptive_scale
+            if selected_type == 'adaptive':
+                try:
+                    scale = parse_scale(self.adaptive_scale_entry.get())
+                except ValueError as exc:
+                    messagebox.showerror('Invalid input', str(exc))
+                    return
 
             x = np.linspace(x_min, x_max, x_num)
             y = np.linspace(y_min, y_max, y_num)
@@ -1268,10 +1337,22 @@ class _PlotterUI:
             xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
 
             new_grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
-            if not np.array_equal(new_grid, self.tabulator.grid):
+            grid_changed = not np.array_equal(new_grid, self.tabulator.grid)
+            mode_changed = selected_type != self._grid_mode
+            scale_changed = selected_type == 'adaptive' and scale != self._adaptive_scale
+            self._grid_mode = selected_type
+            self._adaptive_scale = scale
+            if selected_type == 'adaptive':
+                config.grid.adaptive.num_x_points = x_num
+                config.grid.adaptive.num_y_points = y_num
+                config.grid.adaptive.num_z_points = z_num
+                config.grid.adaptive.scale = scale
+            config.grid.default_type = selected_type
+            if grid_changed:
                 logger.info(
-                    'Applying cartesian grid: x=[%.2f, %.2f] (%d pts), y=[%.2f, %.2f] (%d pts), '
+                    'Applying %s Cartesian grid: x=[%.2f, %.2f] (%d pts), y=[%.2f, %.2f] (%d pts), '
                     'z=[%.2f, %.2f] (%d pts).',
+                    selected_type,
                     x_min,
                     x_max,
                     x_num,
@@ -1283,6 +1364,13 @@ class _PlotterUI:
                     z_num,
                 )
                 self._update_mesh(x, y, z, GridType.CARTESIAN)
+            elif selected_type == 'adaptive' and (mode_changed or scale_changed):
+                self._invalidate_adaptive_grid(rebuild=True)
+            elif mode_changed:
+                self._invalidate_adaptive_grid()
+                idx = self._get_current_mo_index()
+                if idx >= 0:
+                    self.plot_orbital(idx)
 
     def _apply_molecule_settings(self) -> None:
         """Validate UI inputs and apply the chosen molecule rendering parameters."""

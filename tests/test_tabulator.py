@@ -540,6 +540,27 @@ def test_tabulate_mos(mo_inds: int | list[int] | range | None) -> None:
         assert mo_data.shape == (125, len(mo_inds))
 
 
+def test_tabulate_mos_with_explicit_gtos_does_not_replace_cache() -> None:
+    """Explicit adaptive GTO values should be contracted without mutation."""
+    tab = Tabulator(str(MOLDEN_PATH))
+    axis = np.linspace(-1, 1, 3)
+    tab.cartesian_grid(axis, axis, axis)
+    cached_gtos = tab.gtos.copy()
+    explicit_gtos = cached_gtos[:2] * 2.0
+
+    actual = tab.tabulate_mos(0, gtos=explicit_gtos)
+
+    assert actual.shape == (2,)
+    np.testing.assert_array_equal(tab.gtos, cached_gtos)
+
+
+def test_tabulate_mos_rejects_invalid_explicit_gtos() -> None:
+    """Explicit GTO matrices must match the parsed basis dimension."""
+    tab = Tabulator(str(MOLDEN_PATH))
+    with pytest.raises(ValueError, match='GTO data must have shape'):
+        tab.tabulate_mos(0, gtos=np.ones((2, 1)))
+
+
 @pytest.mark.parametrize('mo_inds', [0, [0, 1, 2], None])
 def test_tabulate_mos_matches_sum_reduction(mo_inds: int | list[int] | None) -> None:
     """Matrix contractions should match the previous sum reduction."""

@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 _MOIndices = NDArray[np.integer] | list[int] | tuple[int, ...] | range
 _DEFAULT_POINT_CHUNK_SIZE = 32_768
+_GTO_DIMENSIONS = 2
 _MAX_GTO_WORKERS = 4
 _PARALLEL_GTO_POINT_LIMIT = 125_000
 _S_HARMONIC_SCALE = np.sqrt(1.0 / (4.0 * np.pi))
@@ -643,13 +644,21 @@ class Tabulator:
                 contraction = shell._prefactor @ exponentials  # ruff:ignore[private-member-access]
                 atom_block[:, inner_slice] = contraction[:, None] * solid_harmonics[l, m_inds, ...].T
 
-    def tabulate_mos(self, mo_inds: int | _MOIndices | None = None) -> NDArray[np.floating]:
+    def tabulate_mos(
+        self,
+        mo_inds: int | _MOIndices | None = None,
+        *,
+        gtos: NDArray[np.floating] | None = None,
+    ) -> NDArray[np.floating]:
         """Tabulate molecular orbitals (MOs) on the current grid.
 
         Parameters
         ----------
         mo_inds : int, array-like, or None, optional
             Indices of the MOs to tabulate. If None, all MOs are tabulated.
+        gtos : NDArray[np.floating] or None, optional
+            Explicit GTO values to contract instead of the current grid cache.
+            This does not modify the current grid or cached GTOs.
 
         Returns
         -------
@@ -668,10 +677,15 @@ class Tabulator:
         ValueError
             If provided mo_inds is invalid.
         """
-        if not hasattr(self, '_grid'):
+        if gtos is None and not hasattr(self, '_grid'):
             raise RuntimeError('Grid is not defined. Please create a grid before tabulating MOs.')
-        if not self.has_gtos:
+        if gtos is None and not self.has_gtos:
             raise RuntimeError('GTOs are not tabulated. Please tabulate GTOs before tabulating MOs.')
+
+        resolved_gtos = self.gtos if gtos is None else np.asarray(gtos)
+        expected_coeffs = self._parser.mo_coeffs.shape[1]
+        if resolved_gtos.ndim != _GTO_DIMENSIONS or resolved_gtos.shape[1] != expected_coeffs:
+            raise ValueError(f'GTO data must have shape (n_points, {expected_coeffs}).')
 
         if mo_inds is None:
             mo_inds = list(range(len(self._parser.mos)))
@@ -692,10 +706,10 @@ class Tabulator:
             raise ValueError('Provided mo_inds contains invalid indices. Please provide valid indices.')
 
         if isinstance(mo_inds, int):
-            mo_data = self.gtos @ self._parser.mo_coeffs[mo_inds]
+            mo_data = resolved_gtos @ self._parser.mo_coeffs[mo_inds]
         else:
             mo_coeffs = self._parser.mo_coeffs[mo_inds]
-            mo_data = self.gtos @ mo_coeffs.T
+            mo_data = resolved_gtos @ mo_coeffs.T
             logger.debug('MO data shape: %s', mo_data.shape)
 
         return mo_data

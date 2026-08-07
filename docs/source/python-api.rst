@@ -83,7 +83,7 @@ The plotter window provides several interactive controls:
 * **Orbital Selection**: Navigate through molecular orbitals using the control panel
 * **Contour Adjustment**: Modify isosurface contour levels in real-time
 * **Opacity Control**: Adjust transparency of orbital surfaces and molecule
-* **Grid Settings**: Change grid resolution and type (spherical/cartesian)
+* **Grid Settings**: Change grid resolution and type (spherical/cartesian/adaptive)
 * **Export Options**: Access data and image export through the menu bar
 
 When ``Plotter`` creates its own grid, it tabulates Gaussian-type orbitals in the background so the molecule window can appear first. Orbital controls become usable when that work finishes; failures are reported in the GUI instead of leaving the viewer silently unavailable.
