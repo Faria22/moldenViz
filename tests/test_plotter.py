@@ -350,13 +350,16 @@ from moldenViz.plotter import Plotter
 from tests.test_plotter import FakeInteractor
 
 qt_module._load_qt_interactor = lambda: FakeInteractor
-original_show = Plotter.show
-def show_then_close(window):
-    original_show(window)
+original_initialize = Plotter._initialize_viewer
+def initialize_then_close(window, *args, **kwargs):
+    assert window.isVisible()
+    assert window.centralWidget().objectName() == 'moldenVizLoadingPlaceholder'
+    original_initialize(window, *args, **kwargs)
     QTimer.singleShot(0, window.close)
-Plotter.show = show_then_close
+Plotter._initialize_viewer = initialize_then_close
 window = Plotter({str(MOLDEN_PATH)!r}, only_molecule=True)
 assert window._owns_application
+assert window.viewer is not None
 """
     environment = os.environ.copy()
     environment['QT_QPA_PLATFORM'] = 'offscreen'

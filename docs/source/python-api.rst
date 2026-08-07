@@ -72,6 +72,8 @@ The ``Plotter`` class renders atoms, bonds, and (optionally) orbital isosurfaces
 ``QApplication`` when no Qt application exists. Inside an existing PySide6
 application it reuses that application, shows its window, and returns
 immediately; retain the returned window for as long as it should remain open.
+When ``Plotter`` owns the application, it paints a loading placeholder before
+initializing the VTK-backed viewer so the standalone window appears promptly.
 
 Embedding the Viewer
 ~~~~~~~~~~~~~~~~~~~~

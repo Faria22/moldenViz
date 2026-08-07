@@ -5,11 +5,22 @@ from __future__ import annotations
 import logging
 import sys
 from collections.abc import Mapping
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction, QCloseEvent
-from PySide6.QtWidgets import QApplication, QFileDialog, QMainWindow, QMessageBox, QWidget
+from PySide6.QtWidgets import (
+    QApplication,
+    QFileDialog,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QProgressBar,
+    QVBoxLayout,
+    QWidget,
+)
 
 from .qt import OrbitalViewer
 
@@ -27,6 +38,7 @@ __all__ = ['Plotter']
 # Qt does not retain an unparented top-level Python wrapper. Keep windows made
 # inside an existing application alive until Qt emits ``destroyed``.
 _OPEN_WINDOWS: set[Plotter] = set()
+_LOADING_DELAY_MS = 50
 
 
 class Plotter(QMainWindow):
@@ -70,6 +82,75 @@ class Plotter(QMainWindow):
         super().__init__(parent)
         self.setWindowTitle('moldenViz')
         self.resize(1200, 760)
+        self._closing = False
+        self.viewer: OrbitalViewer
+        _OPEN_WINDOWS.add(self)
+        self.destroyed.connect(lambda: _OPEN_WINDOWS.discard(self))
+
+        if self._owns_application:
+            self.setCentralWidget(self._create_loading_placeholder())
+            self.show()
+            initialize = partial(
+                self._initialize_owned_viewer,
+                source,
+                only_molecule,
+                tabulator,
+                config,
+            )
+            QTimer.singleShot(_LOADING_DELAY_MS, initialize)
+            self._application.exec()
+        else:
+            self._initialize_viewer(source, only_molecule, tabulator, config)
+            self.show()
+
+    def _create_loading_placeholder(self) -> QWidget:
+        """Build the lightweight view shown before VTK initialization.
+
+        Returns
+        -------
+        QWidget
+            Loading label and indeterminate progress indicator.
+        """
+        placeholder = QWidget(self)
+        placeholder.setObjectName('moldenVizLoadingPlaceholder')
+        layout = QVBoxLayout(placeholder)
+        layout.addStretch()
+        label = QLabel('Loading molecular viewer…', placeholder)
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(label)
+        progress = QProgressBar(placeholder)
+        progress.setRange(0, 0)
+        progress.setTextVisible(False)
+        progress.setFixedWidth(320)
+        layout.addWidget(progress, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addStretch()
+        return placeholder
+
+    def _initialize_owned_viewer(
+        self,
+        source: str | list[str],
+        only_molecule: bool,
+        tabulator: Tabulator | None,
+        config: Config | MainConfig | Mapping[str, Any] | None,
+    ) -> None:
+        """Initialize a standalone viewer and report startup failures in Qt."""
+        if self._closing:
+            return
+        try:
+            self._initialize_viewer(source, only_molecule, tabulator, config)
+        except Exception as exc:
+            logger.exception('Unable to initialize the molecular viewer.')
+            self._show_error('Unable to launch moldenViz', exc)
+            self.close()
+
+    def _initialize_viewer(
+        self,
+        source: str | list[str],
+        only_molecule: bool,
+        tabulator: Tabulator | None,
+        config: Config | MainConfig | Mapping[str, Any] | None,
+    ) -> None:
+        """Construct the viewer and replace any loading placeholder."""
         self.viewer = OrbitalViewer(
             source,
             only_molecule=only_molecule,
@@ -82,12 +163,6 @@ class Plotter(QMainWindow):
         self.viewer.error_occurred.connect(self._show_error)
         self.viewer.export_requested.connect(self._handle_export_request)
         self._build_menus(only_molecule)
-        _OPEN_WINDOWS.add(self)
-        self.destroyed.connect(lambda: _OPEN_WINDOWS.discard(self))
-        self.show()
-
-        if self._owns_application:
-            self._application.exec()
 
     @property
     def tabulator(self) -> Tabulator:
@@ -267,6 +342,9 @@ class Plotter(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:  # ruff: ignore[invalid-function-name]
         """Close VTK resources before the top-level Qt window is destroyed."""
-        self.viewer.close()
+        self._closing = True
+        viewer = getattr(self, 'viewer', None)
+        if viewer is not None:
+            viewer.close()
         _OPEN_WINDOWS.discard(self)
         event.accept()
