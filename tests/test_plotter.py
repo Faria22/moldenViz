@@ -218,6 +218,9 @@ def test_background_color_presets_and_custom_field() -> None:
     assert controls.background_color_choice.currentData() == 'white'
     assert controls.background_color.isHidden()
 
+    controls.background_color_choice.setCurrentText('Light gray')
+    assert controls.selected_background_color == '#A0A0A0'
+
     controls.background_color_choice.setCurrentText('Dark gray')
     assert controls.selected_background_color == '#202124'
 

@@ -60,7 +60,7 @@ _MO_COLOR_SCHEMES = ['bwr', 'RdBu', 'seismic', 'coolwarm', 'PiYG']
 _BACKGROUND_COLORS = (
     ('White', 'white'),
     ('Black', 'black'),
-    ('Light gray', 'lightgray'),
+    ('Light gray', '#A0A0A0'),
     ('Dark gray', '#202124'),
 )
 _ORBITAL_COLUMN_PADDING = 8
