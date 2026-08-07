@@ -20,7 +20,6 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QLineEdit,
     QPushButton,
@@ -56,6 +55,7 @@ __all__ = ['OrbitalViewer', 'ViewerConfig']
 ViewerConfig = MainConfig
 _GTO_EXECUTOR = ThreadPoolExecutor(max_workers=1)
 _MO_COLOR_SCHEMES = ['bwr', 'RdBu', 'seismic', 'coolwarm', 'PiYG']
+_ORBITAL_COLUMN_PADDING = 8
 
 
 @dataclass(frozen=True)
@@ -122,13 +122,13 @@ class OrbitalControlPanel(QWidget):
 
         self.orbital_table = QTableWidget(0, 5, tab)
         self.orbital_table.setHorizontalHeaderLabels(['#', 'Sym', 'Spin', 'Occ', 'Energy'])
-        self.orbital_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self.orbital_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.orbital_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.orbital_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.orbital_table.verticalHeader().hide()
         self.orbital_table.itemSelectionChanged.connect(self._on_orbital_selected)
         layout.addWidget(self.orbital_table)
+        self._fit_orbital_columns()
 
         nav = QHBoxLayout()
         self.previous_button = QPushButton('Previous', tab)
@@ -304,8 +304,15 @@ class OrbitalControlPanel(QWidget):
             for column, value in enumerate(values):
                 self.orbital_table.setItem(row, column, QTableWidgetItem(value))
         self.orbital_table.blockSignals(False)
+        self._fit_orbital_columns()
         self.current_mo_ind = -1
         self.update_nav_button_states()
+
+    def _fit_orbital_columns(self) -> None:
+        self.orbital_table.resizeColumnsToContents()
+        for column in range(self.orbital_table.columnCount()):
+            width = self.orbital_table.columnWidth(column)
+            self.orbital_table.setColumnWidth(column, width + _ORBITAL_COLUMN_PADDING)
 
     def sync_from_viewer(self) -> None:
         """Refresh fields from the viewer's instance configuration."""
