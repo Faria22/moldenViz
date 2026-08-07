@@ -98,7 +98,7 @@ assert Parser.__module__ == 'moldenViz.parser'
 assert Tabulator.__module__ == 'moldenViz.tabulator'
 assert Atom.__module__ == 'moldenViz.models'
 assert 'moldenViz.plotter' not in sys.modules
-assert 'moldenViz._plotter_ui' not in sys.modules
+assert 'moldenViz.qt' not in sys.modules
 assert 'pyvista' not in sys.modules
 assert 'pydantic' not in sys.modules
 assert not (pathlib.Path.home() / '.config' / 'moldenViz').exists()

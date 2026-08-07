@@ -63,8 +63,6 @@ Keep changes to the interactive plotter within these boundaries:
   create ``QApplication``, start an event loop, show itself, or open dialogs.
 - ``plotter.py`` owns the free-floating ``QMainWindow``, application/event-loop
   ownership, native file dialogs, message boxes, and menu shortcuts.
-- ``_plotter_ui.py`` contains private compatibility aliases only; new user
-  interface behavior belongs in ``qt.py`` or the standalone adapter.
 - ``_plotter_rendering.py`` owns PyVista scene and orbital rendering.
 - ``_plotter_jobs.py`` owns background-job state and must remain independent
   of Qt and PyVista so it can be tested without a GUI.
