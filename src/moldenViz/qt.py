@@ -328,7 +328,8 @@ class OrbitalControlPanel(QWidget):
         self.data_format = QComboBox(tab)
         self.data_format.addItems(['vtk', 'cube'])
         self.data_scope = QComboBox(tab)
-        self.data_scope.addItems(['current', 'all'])
+        self.data_scope.addItem('current orbital', 'current')
+        self.data_scope.addItem('all orbitals', 'all')
         self.data_format.currentTextChanged.connect(self._update_export_scope)
         self.data_export_button = QPushButton('Export orbital data…', tab)
         self.data_export_button.clicked.connect(self._request_data_export)
@@ -579,8 +580,8 @@ class OrbitalControlPanel(QWidget):
 
     def _update_export_scope(self, file_format: str) -> None:
         enabled = file_format != 'cube'
-        if not enabled and self.data_scope.currentText() == 'all':
-            self.data_scope.setCurrentText('current')
+        if not enabled and self.data_scope.currentData() == 'all':
+            self.data_scope.setCurrentIndex(self.data_scope.findData('current'))
         self.data_scope.setEnabled(enabled)
 
     def _update_transparency_option(self, file_format: str) -> None:
@@ -590,12 +591,13 @@ class OrbitalControlPanel(QWidget):
         self.transparent_background.setEnabled(enabled)
 
     def _request_data_export(self) -> None:
-        if self.data_scope.currentText() == 'current' and self.current_mo_ind < 0:
+        scope = str(self.data_scope.currentData())
+        if scope == 'current' and self.current_mo_ind < 0:
             self._viewer.report_error('Export failed', ValueError('No orbital is currently selected.'))
             return
         self._viewer.export_requested.emit(
             'data',
-            {'format': self.data_format.currentText(), 'scope': self.data_scope.currentText()},
+            {'format': self.data_format.currentText(), 'scope': scope},
         )
 
     def _request_image_export(self) -> None:

@@ -232,6 +232,22 @@ def test_background_color_presets_and_custom_field() -> None:
     viewer.close()
 
 
+def test_export_scope_uses_descriptive_labels_and_stable_values() -> None:
+    viewer = OrbitalViewer()
+    scope = viewer.controls.data_scope
+
+    assert [scope.itemText(index) for index in range(scope.count())] == [
+        'current orbital',
+        'all orbitals',
+    ]
+    assert [scope.itemData(index) for index in range(scope.count())] == ['current', 'all']
+
+    scope.setCurrentIndex(scope.findData('all'))
+    viewer.controls.data_format.setCurrentText('cube')
+    assert scope.currentData() == 'current'
+    viewer.close()
+
+
 def test_viewers_have_isolated_configuration() -> None:
     first = OrbitalViewer(config={'background_color': '#112233'})
     second = OrbitalViewer(config={'background_color': '#abcdef'})
