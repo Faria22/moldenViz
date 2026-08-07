@@ -1,2122 +1,262 @@
-"""Tests covering Plotter behaviours called out by plotter_coverage_gaps.md."""
-# ruff:file-ignore[private-member-access, undocumented-public-class, undocumented-public-method, undocumented-public-function]
+"""Tests for the Qt-native viewer and standalone facade."""
+# ruff:file-ignore[no-self-use, undocumented-public-function, undocumented-public-method]
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from pathlib import Path
-from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any
+from typing import cast
+from unittest.mock import Mock
 
-if TYPE_CHECKING:
-    from collections.abc import Iterator
-
-import numpy as np
 import pytest
-from matplotlib import colors as mcolors
+from PySide6.QtWidgets import QApplication, QWidget
 
-from moldenViz import Tabulator
+import moldenViz.qt as qt_module
+from moldenViz.plotter import Plotter
+from moldenViz.qt import OrbitalViewer
 
-plotter_module = pytest.importorskip('moldenViz.plotter')
-_plotter_rendering_module = pytest.importorskip('moldenViz._plotter_rendering')
-_plotter_ui_module = pytest.importorskip('moldenViz._plotter_ui')
-config_module = pytest.importorskip('moldenViz._config_module')
-
-MOLDEN_PATH = Path(__file__).with_name('sample_molden.inp')
+MOLDEN_PATH = Path(__file__).parent / 'sample_molden.inp'
 
 
-def test_ui_helpers_are_defined_in_companion_module() -> None:
-    """Keep the Tk and Qt helpers out of the core plotter module."""
-    assert plotter_module.Plotter._grid_settings_screen.__module__ == _plotter_ui_module.__name__
-    assert plotter_module._OrbitalSelectionScreen.__module__ == _plotter_ui_module.__name__
-    assert _plotter_ui_module._OrbitalsTreeview.__module__ == _plotter_ui_module.__name__
+class FakeActor:
+    """Small VTK actor stand-in."""
 
-
-def test_rendering_helpers_are_defined_in_companion_module() -> None:
-    """Keep PyVista scene operations out of the Plotter coordinator."""
-    assert plotter_module.Plotter.plot_orbital.__module__ == _plotter_rendering_module.__name__
-    assert plotter_module.Plotter._create_mo_mesh.__module__ == _plotter_rendering_module.__name__
-
-
-class _GridTypeProxy:
-    def __getattr__(self, item: str) -> Any:
-        return getattr(plotter_module.GridType, item)
-
-
-GridType = _GridTypeProxy()
-
-
-class DummySignal:
-    def __init__(self) -> None:
-        self.callbacks: list = []
-
-    def connect(self, callback: object) -> None:
-        self.callbacks.append(callback)
-
-    def disconnect(self) -> bool:
-        if self.callbacks:
-            self.callbacks.pop()
-            return True
-        return False
-
-
-class DummyActor:
     def __init__(self) -> None:
         self.visible = True
         self.opacity = 1.0
 
-    def SetVisibility(self, value: bool) -> None:  # ruff:ignore[invalid-function-name]
-        self.visible = bool(value)
-
-    def GetVisibility(self) -> bool:  # ruff:ignore[invalid-function-name]
+    def GetVisibility(self) -> bool:  # ruff: ignore[invalid-function-name]
         return self.visible
 
-    def GetProperty(self) -> SimpleNamespace:  # ruff:ignore[invalid-function-name]
-        return SimpleNamespace(SetOpacity=lambda val: setattr(self, 'opacity', val))
+    def SetVisibility(self, visible: bool) -> None:  # ruff: ignore[invalid-function-name]
+        self.visible = visible
+
+    def GetProperty(self) -> FakeActor:  # ruff: ignore[invalid-function-name]
+        return self
+
+    def SetOpacity(self, opacity: float) -> None:  # ruff: ignore[invalid-function-name]
+        self.opacity = opacity
 
 
-class DummyMenuBar:
-    def __init__(self) -> None:
-        self.menus: list = []
+class FakeInteractor(QWidget):
+    """Headless ``QtInteractor`` replacement for widget unit tests."""
 
-    def addMenu(self, menu: object) -> None:  # ruff:ignore[invalid-function-name] - Qt naming
-        self.menus.append(menu)
+    instances: list[FakeInteractor] = []
 
-    @staticmethod
-    def actions() -> list:
-        return []
-
-
-class DummyMenuAction:
-    def __init__(self, text: str, menu: DummyMenuWithActions | None = None) -> None:
-        self._text = text
-        self._menu = menu
-        self.triggered = DummySignal()
-
-    def text(self) -> str:
-        return self._text
-
-    def menu(self) -> DummyMenuWithActions | None:
-        return self._menu
-
-
-class DummyMenuWithActions:
-    def __init__(self, title: str) -> None:
-        self.title = title
-        self._actions: list[DummyMenuAction] = []
-
-    def addAction(self, action: DummyMenuAction) -> None:  # ruff:ignore[invalid-function-name] - match Qt API
-        self._actions.append(action)
-
-    def addSeparator(self) -> None:  # ruff:ignore[invalid-function-name] - match Qt API
-        self._actions.append(DummyMenuAction('---'))
-
-    def actions(self) -> list[DummyMenuAction]:
-        return self._actions
-
-
-class DummyBackgroundPlotter:
-    def __init__(self, *_args: object, **_kwargs: object) -> None:
-        self.background: str | None = None
-        self.removed_actors: list = []
-        self.added_meshes: list = []
-        self.saved_graphic: str | None = None
-        self.screenshot_calls: list[tuple[str, bool]] = []
-        self.update_count = 0
-        self.callbacks: list[tuple[object, int]] = []
-        self.app = SimpleNamespace(exec_calls=0)
-        self.app.exec = lambda: setattr(self.app, 'exec_calls', self.app.exec_calls + 1)
-        self.app_window = SimpleNamespace(signal_close=DummySignal())
-        self.main_menu = DummyMenuBar()
+    def __init__(self, parent: QWidget | None = None, **_kwargs: object) -> None:
+        super().__init__(parent)
+        self.background = ''
+        self.closed_count = 0
+        self.actors: list[FakeActor] = []
+        self.saved_graphic: Path | None = None
+        self.saved_screenshot: tuple[Path, bool] | None = None
+        self.reset_count = 0
+        self.__class__.instances.append(self)
 
     def set_background(self, color: str) -> None:
         self.background = color
 
-    def show_axes(self) -> None:  # pragma: no cover - noop stub
-        pass
+    def show_axes(self) -> None:
+        return
 
-    def remove_actor(self, actor: object) -> None:
-        self.removed_actors.append(actor)
-
-    def add_mesh(self, mesh: object, **kwargs: object) -> DummyActor:
-        actor = DummyActor()
-        self.added_meshes.append((mesh, kwargs))
+    def add_mesh(self, _mesh: object, **_kwargs: object) -> FakeActor:
+        actor = FakeActor()
+        self.actors.append(actor)
         return actor
 
-    def update(self) -> None:  # pragma: no cover - noop stub
-        self.update_count += 1
+    def remove_actor(self, actor: FakeActor) -> None:
+        if actor in self.actors:
+            self.actors.remove(actor)
 
-    def add_callback(self, callback: object, interval: int) -> None:
-        self.callbacks.append((callback, interval))
+    def update(self) -> None:
+        return
 
-    def save_graphic(self, path: str) -> None:
+    def close(self) -> None:  # type: ignore[override]
+        self.closed_count += 1
+
+    def save_graphic(self, path: Path) -> None:
         self.saved_graphic = path
 
-    def screenshot(self, path: str, transparent_background: bool = False) -> None:
-        self.screenshot_calls.append((path, transparent_background))
-        self.screenshot_args = (path, transparent_background)
+    def screenshot(self, path: Path, *, transparent_background: bool) -> None:
+        self.saved_screenshot = path, transparent_background
 
+    def reset_camera(self) -> None:
+        self.reset_count += 1
 
-class MenuAwareMainMenu:
-    def __init__(self) -> None:
-        self.menus: list[Any] = []
-        self.view_menu = DummyMenuWithActions('View')
-        self.clear_action = DummyMenuAction('Clear All')
-        self.view_menu.addAction(self.clear_action)
-        self._view_action = DummyMenuAction('View', menu=self.view_menu)
 
-    def addMenu(self, menu: Any) -> None:  # ruff:ignore[invalid-function-name] - match Qt API
-        self.menus.append(menu)
-
-    def actions(self) -> list[DummyMenuAction]:
-        return [self._view_action]
-
-
-class MenuAwareBackgroundPlotter(DummyBackgroundPlotter):
-    def __init__(self, *_args: object, **_kwargs: object) -> None:
-        super().__init__(*_args, **_kwargs)
-        self.main_menu = MenuAwareMainMenu()
-
-
-class FakeQAction:
-    def __init__(self, text: str, _parent: Any) -> None:
-        self._text = text
-        self.triggered = DummySignal()
-
-    def text(self) -> str:
-        return self._text
-
-
-class FakeQMenu:
-    def __init__(self, title: str, _parent: Any) -> None:
-        self.title = title
-        self._actions: list[FakeQAction] = []
-        self.separators = 0
-
-    def addAction(self, action: FakeQAction) -> None:  # ruff:ignore[invalid-function-name] - match Qt API
-        self._actions.append(action)
-
-    def addSeparator(self) -> None:  # ruff:ignore[invalid-function-name] - match Qt API
-        self.separators += 1
-
-    def actions(self) -> list[FakeQAction]:
-        return self._actions
-
-
-class DummyMolecule:
-    def __init__(self, atoms: list, _config: object) -> None:
-        self.atoms = atoms
-        self.max_radius = 1.0
-
-    def _add_meshes(  # ruff:ignore[no-self-use]
-        self,
-        _plotter: DummyBackgroundPlotter,
-        opacity: float,
-    ) -> tuple[list[DummyActor], list[DummyActor], list[DummyActor]]:
-        actors = [DummyActor()]
-        atoms = [DummyActor()]
-        bonds = [DummyActor()]
-        for actor in actors:
-            actor.opacity = opacity
-        return actors, atoms, bonds
-
-
-class DummySelectionScreen:
-    def __init__(self, plotter: Any) -> None:
-        self.plotter = plotter
-        self.current_mo_ind = -1
-        self.destroyed = False
-        self._loading = False
-        self.loading_events: list[tuple[bool, str]] = []
-        self.last_loading_message = 'Tabulating orbitals...'
-
-    def _update_nav_button_states(self) -> None:  # pragma: no cover - noop stub
-        pass
-
-    def _set_loading_state(self, loading: bool, message: str = 'Tabulating orbitals...') -> None:
-        self._loading = loading
-        self.last_loading_message = message
-        self.loading_events.append((loading, message))
-
-    def _on_gtos_ready(self) -> None:
-        self._set_loading_state(False)
-
-    def destroy(self) -> None:  # pragma: no cover - noop stub
-        self.destroyed = True
-
-    def winfo_exists(self) -> bool:
-        return not self.destroyed
-
-
-class DummyStructuredGrid:
-    def __init__(self) -> None:
-        self.points: np.ndarray | None = None
-        self.dimensions: tuple[int, int, int] | None = None
-        self.arrays: dict[str, np.ndarray] = {}
-
-    def __setitem__(self, key: str, value: np.ndarray) -> None:
-        """Store array on the fake grid."""
-        self.arrays[key] = value
-
-    def contour(self, values: list[float]) -> dict:
-        return {'levels': tuple(values), 'points': self.points}
-
-
-class DummyTk:
-    def __init__(self) -> None:
-        self.withdrawn = False
-        self.mainloop_calls = 0
-        self.quit_calls = 0
-        self.idle_callbacks: list[tuple[object, tuple[object, ...]]] = []
-        self.after_callbacks: dict[str, tuple[object, tuple[object, ...]]] = {}
-        self._next_after_id = 0
-
-    def withdraw(self) -> None:
-        self.withdrawn = True
-
-    def mainloop(self) -> None:
-        self.mainloop_calls += 1
-
-    def quit(self) -> None:
-        self.quit_calls += 1
-
-    def update(self) -> None:  # pragma: no cover - noop stub
-        pass
-
-    def after_idle(self, callback: object, *args: object) -> str:
-        self.idle_callbacks.append((callback, args))
-        return f'idle-{len(self.idle_callbacks) - 1}'
-
-    def after(self, _delay: int, callback: object, *args: object) -> str:
-        callback_id = f'after-{self._next_after_id}'
-        self._next_after_id += 1
-        self.after_callbacks[callback_id] = (callback, args)
-        return callback_id
-
-    def after_cancel(self, callback_id: str) -> None:
-        self.after_callbacks.pop(callback_id, None)
-
-
-class DummyWindow:
-    def __init__(self) -> None:
-        self.destroyed = False
-
-    def destroy(self) -> None:
-        self.destroyed = True
-
-
-class DummyVar:
-    def __init__(self, value: Any = '') -> None:
-        self._value = value
-
-    def get(self) -> Any:
-        return self._value
-
-    def set(self, value: Any) -> None:
-        self._value = value
-
-    def trace_add(self, mode: str, callback: Any) -> None:
-        self._last_trace = (mode, callback)
-
-
-class DummyEntry:
-    def __init__(self, value: str = '') -> None:
-        self.value = value
-
-    def get(self) -> str:
-        return self.value
-
-    def insert(self, _index: int, text: str) -> None:
-        self.value = text
-
-    def delete(self, _start: int, _end: int | None = None) -> None:
-        self.value = ''
-
-
-class DummyLabelWidget:
-    def __init__(self, text: str) -> None:
-        self.text = text
-
-    def cget(self, _key: str) -> str:
-        return self.text
-
-    def config(self, **kwargs: Any) -> None:
-        if 'text' in kwargs:
-            self.text = kwargs['text']
-
-
-class DummyContainer:
-    def __init__(self, children: list[Any]) -> None:
-        self._children = children
-
-    def winfo_children(self) -> list[Any]:
-        return self._children
-
-
-class SimpleWidget:
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        self.args = args
-        self.kwargs = kwargs
-        self.children: list[Any] = []
-        self.value = ''
-
-    def grid(self, *_args: Any, **_kwargs: Any) -> SimpleWidget:
-        return self
-
-    def pack(self, *_args: Any, **_kwargs: Any) -> SimpleWidget:
-        return self
-
-    def columnconfigure(self, *args: Any, **kwargs: Any) -> None:
-        self._columnconfigure = (args, kwargs)
-
-    def rowconfigure(self, *args: Any, **kwargs: Any) -> None:
-        self._rowconfigure = (args, kwargs)
-
-    def config(self, **kwargs: Any) -> SimpleWidget:
-        self.kwargs.update(kwargs)
-        return self
-
-    def bind(self, *_args: Any, **_kwargs: Any) -> SimpleWidget:
-        return self
-
-    def grid_remove(self) -> SimpleWidget:
-        return self
-
-    def grid_forget(self) -> SimpleWidget:
-        return self
-
-    def winfo_children(self) -> list[Any]:
-        return self.children
-
-    def set(self, value: Any) -> None:
-        self.value = value
-
-
-class SimpleEntry(SimpleWidget):
-    def insert(self, _index: int, text: str) -> None:
-        self.value = text
-
-    def delete(self, *_args: Any) -> None:
-        self.value = ''
-
-    def get(self) -> str:
-        return self.value
-
-
-class SimpleCombobox(SimpleWidget):
-    def __init__(self, *args: Any, textvariable: DummyVar | None = None, values: Any = None, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
-        self.textvariable = textvariable
-        self.values = values or []
-        self._items: dict[str, Any] = {}
-
-    def current(self, index: int) -> None:
-        if self.textvariable is not None and 0 <= index < len(self.values):
-            self.textvariable.set(self.values[index])
-
-    def __setitem__(self, key: str, value: Any) -> None:
-        """Store Tk-style option value."""
-        self._items[key] = value
-
-    def __getitem__(self, key: str) -> Any:
-        """Return Tk-style option value.
-
-        Returns
-        -------
-        Any
-            Stored value for the requested option.
-        """
-        return self._items.get(key)
-
-
-class SimpleToplevel(SimpleWidget):
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
-        self.protocol_handlers: dict[str, Any] = {}
-        self.destroyed = False
-        self.parent_args = args
-
-    def title(self, text: str) -> None:
-        self._title = text
-
-    def geometry(self, size: str) -> None:
-        self._geometry = size
-
-    def destroy(self) -> None:
-        self.destroyed = True
-
-    def protocol(self, name: str, handler: Any) -> None:
-        self.protocol_handlers[name] = handler
-
-    def winfo_exists(self) -> bool:
-        return not self.destroyed
-
-
-class SimpleTreeview(SimpleWidget):
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
-        self._headings: dict[str, str] = {}
-        self._columns: dict[str, int] = {}
-        self._items: dict[Any, dict[str, Any]] = {}
-        self._selection: tuple[str, ...] = ()
-        self._bindings: dict[str, Any] = {}
-        self._tags: dict[str, Any] = {}
-        self.seen: Any = None
-
-    def heading(self, column: str, text: str) -> None:
-        self._headings[column] = text
-
-    def column(self, column: str, width: int) -> None:
-        self._columns[column] = width
-
-    def tag_configure(self, tag: str, **options: Any) -> None:
-        self._tags[tag] = options
-
-    def bind(self, event: str, handler: Any) -> SimpleWidget:
-        self._bindings[event] = handler
-        return super().bind(event, handler)
-
-    def insert(self, parent: str, index: str, iid: Any, values: Any = None) -> Any:
-        self._items[iid] = {'parent': parent, 'index': index, 'values': values or (), 'tags': ()}
-        return iid
-
-    def item(self, iid: Any, **kwargs: Any) -> dict[str, Any]:
-        item = self._items.setdefault(iid, {'values': (), 'tags': ()})
-        if 'tags' in kwargs:
-            item['tags'] = kwargs['tags']
-        return item
-
-    def see(self, iid: Any) -> None:
-        self.seen = iid
-
-    def get_children(self) -> list[Any]:
-        return list(self._items.keys())
-
-    def delete(self, iid: Any) -> None:
-        self._items.pop(iid, None)
-
-    def selection(self) -> tuple[str, ...]:
-        return self._selection
-
-    def selection_remove(self, items: Any) -> None:
-        removals = {str(item) for item in items}
-        self._selection = tuple(entry for entry in self._selection if entry not in removals)
-
-    def set_selection(self, iid: Any) -> None:
-        self._selection = (str(iid),)
-
-
-class FakeTabulator:
-    def __init__(self, _source: Any = None, only_molecule: bool = False, **_kwargs: Any) -> None:
-        grid_enum = plotter_module.GridType
-        self.grid_type = grid_enum.SPHERICAL
-        self.grid_dimensions = (1, 1, 1)
-        self.grid = np.zeros((1, 3))
-        self.grid_axes = None
-        self._gtos: np.ndarray | None = np.zeros((1, 1))
-        self._parser = SimpleNamespace(
-            atoms=[SimpleNamespace(symbol='H', coords=(0.0, 0.0, 0.0))],
-            mos=[SimpleNamespace(sym='s', spin='alpha', occ=2.0, energy=-0.5)],
-        )
-        self.export_calls: list[tuple[str, int | None]] = []
-        self._only_molecule = only_molecule
-
-    @property
-    def gtos(self) -> np.ndarray:
-        if self._gtos is None:
-            raise RuntimeError('GTOs are not available. Call tabulate_gtos() first.')
-        return self._gtos
-
-    @property
-    def has_gtos(self) -> bool:
-        return self._gtos is not None
-
-    @property
-    def atoms(self) -> list[Any]:
-        return self._parser.atoms
-
-    @property
-    def molecular_orbitals(self) -> list[Any]:
-        return self._parser.mos
-
-    def set_gtos(self, gtos: np.ndarray) -> None:
-        self._gtos = gtos
-
-    def _set_structured_grid(
-        self,
-        grid: np.ndarray,
-        axes: tuple[np.ndarray, np.ndarray, np.ndarray],
-        grid_type: Any,
-    ) -> None:
-        self.grid = grid
-        self.grid_type = grid_type
-        self.grid_dimensions = (len(axes[0]), len(axes[1]), len(axes[2]))
-        self.grid_axes = axes
-        self.clear_gtos()
-
-    def clear_gtos(self) -> None:
-        self._gtos = None
-
-    def spherical_grid(
-        self,
-        r: np.ndarray,
-        theta: np.ndarray,
-        phi: np.ndarray,
-        tabulate_gtos: bool = True,
-    ) -> None:
-        rr, tt, pp = np.meshgrid(r, theta, phi, indexing='ij')
-        xx, yy, zz = Tabulator.spherical_to_cartesian(rr, tt, pp)
-        self.grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
-        self.grid_type = GridType.SPHERICAL
-        self.grid_dimensions = (len(r), len(theta), len(phi))
-        self.grid_axes = (r, theta, phi)
-        if tabulate_gtos:
-            self._gtos = np.zeros((self.grid.shape[0], 1))
-
-    def cartesian_grid(
-        self,
-        x: np.ndarray,
-        y: np.ndarray,
-        z: np.ndarray,
-        tabulate_gtos: bool = True,
-    ) -> None:
-        xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
-        self.grid = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel()))
-        self.grid_type = GridType.CARTESIAN
-        self.grid_dimensions = (len(x), len(y), len(z))
-        self.grid_axes = (x, y, z)
-        if tabulate_gtos:
-            self._gtos = np.zeros((self.grid.shape[0], 1))
-
-    def tabulate_mos(self, _orb_ind: int) -> np.ndarray:
-        return np.arange(self.grid.shape[0], dtype=float)
-
-    def export(self, path: str, mo_index: int | None) -> None:
-        self.export_calls.append((path, mo_index))
-
-    def tabulate_gtos(self) -> np.ndarray:
-        gtos = np.ones((self.grid.shape[0], 1))
-        self._gtos = gtos
-        return gtos
-
-    @staticmethod
-    def compute_gtos(grid: np.ndarray) -> np.ndarray:
-        return np.ones((grid.shape[0], 1))
-
-
-def seed_tabulator_with_cartesian_grid(tabulator: FakeTabulator) -> None:
-    points = np.linspace(0.0, 1.0, 2)
-    tabulator.cartesian_grid(points, points, points)
-
-
-class RecordingTabulator(FakeTabulator):
-    def __init__(self, source: Any = None, only_molecule: bool = False, **kwargs: Any) -> None:
-        super().__init__(source, only_molecule=only_molecule, **kwargs)
-        self.spherical_calls: list[tuple[np.ndarray, np.ndarray, np.ndarray]] = []
-        self.cartesian_calls: list[tuple[np.ndarray, np.ndarray, np.ndarray]] = []
-
-    def spherical_grid(
-        self,
-        r: np.ndarray,
-        theta: np.ndarray,
-        phi: np.ndarray,
-        tabulate_gtos: bool = True,
-    ) -> None:
-        self.spherical_calls.append((r, theta, phi))
-        super().spherical_grid(r, theta, phi, tabulate_gtos=tabulate_gtos)
-
-    def cartesian_grid(
-        self,
-        x: np.ndarray,
-        y: np.ndarray,
-        z: np.ndarray,
-        tabulate_gtos: bool = True,
-    ) -> None:
-        self.cartesian_calls.append((x, y, z))
-        super().cartesian_grid(x, y, z, tabulate_gtos=tabulate_gtos)
-
-
-class RootRecorder:
-    def __init__(self) -> None:
-        self.quit_calls = 0
-        self.destroy_calls = 0
-
-    def quit(self) -> None:
-        self.quit_calls += 1
-
-    def destroy(self) -> None:
-        self.destroy_calls += 1
-
-
-class PVRecorder:
-    def __init__(self) -> None:
-        self.closed = False
-
-    def close(self) -> None:
-        self.closed = True
-
-
-class SelectionPlotter:
-    def __init__(self) -> None:
-        self._tk_root = RootRecorder()
-        self._no_prev_tk_root = True
-        self.tabulator = FakeTabulator()
-        self.tabulator.molecular_orbitals[:] = [
-            SimpleNamespace(sym='s', spin='alpha', occ=2.0, energy=-0.5),
-            SimpleNamespace(sym='p', spin='alpha', occ=1.0, energy=-0.1),
-            SimpleNamespace(sym='d', spin='beta', occ=0.0, energy=0.2),
-        ]
-        self._pv_plotter = PVRecorder()
-        self._on_screen = True
-        self._selection_screen: Any | None = None
-        self.plot_calls: list[int] = []
-
-    def plot_orbital(self, idx: int) -> None:
-        self.plot_calls.append(idx)
-        if self._selection_screen is not None:
-            self._selection_screen.current_mo_ind = idx
-
-    def _cancel_gto_future(self) -> None:  # pragma: no cover - stubbed out
-        pass
-
-
-@pytest.fixture
-def plotter_env(monkeypatch: pytest.MonkeyPatch) -> Any:
-    """Provide helper factory plus global patches for Plotter instantiation.
+@pytest.fixture(scope='session')
+def qapplication() -> QApplication:
+    """Provide the host-owned Qt application required by widgets.
 
     Returns
     -------
-    Any
-        Helper object that creates patched Plotter instances.
+    QApplication
+        Process-wide application used by viewer tests.
     """
-    monkeypatch.setattr(plotter_module, 'config', plotter_module.Config())
-    monkeypatch.setattr(plotter_module, 'BackgroundPlotter', DummyBackgroundPlotter)
-    monkeypatch.setattr(_plotter_rendering_module, 'Molecule', DummyMolecule)
-    monkeypatch.setattr(plotter_module, '_OrbitalSelectionScreen', DummySelectionScreen)
-    monkeypatch.setattr(_plotter_rendering_module.pv, 'StructuredGrid', DummyStructuredGrid)
-    monkeypatch.setattr(_plotter_rendering_module.pv, 'pyvista_ndarray', lambda arr: arr)
-    monkeypatch.setattr(plotter_module.Plotter, '_add_orbital_menus_to_pv_plotter', lambda _self: None)
-    monkeypatch.setattr(plotter_module.Plotter, '_override_clear_all_button', lambda _self: None)
-
-    class Env:
-        @staticmethod
-        def make_root() -> DummyTk:
-            return DummyTk()
-
-        @staticmethod
-        def make_tabulator() -> FakeTabulator:
-            return FakeTabulator()
-
-        def make_plotter(
-            self,
-            *,
-            tabulator: FakeTabulator | None = None,
-            only_molecule: bool = False,
-            root: DummyTk | None = None,
-        ) -> Any:
-            root = root or self.make_root()
-            tabulator = tabulator or self.make_tabulator()
-            return plotter_module.Plotter('dummy', tabulator=tabulator, only_molecule=only_molecule, tk_root=root)
-
-    return Env()
+    application = QApplication.instance()
+    return QApplication([]) if application is None else cast(QApplication, application)
 
 
-def test_describe_source_reports_list_length() -> None:
-    assert plotter_module._describe_source('sample.molden') == 'sample.molden'
-    assert plotter_module._describe_source(['a', 'b', 'c']) == '3 molden lines'
+@pytest.fixture(autouse=True)
+def fake_interactor(monkeypatch: pytest.MonkeyPatch, qapplication: QApplication) -> None:
+    """Avoid creating native VTK windows in unit tests."""
+    del qapplication
+    FakeInteractor.instances.clear()
+    monkeypatch.setattr(qt_module, 'QtInteractor', FakeInteractor)
 
 
-def test_custom_cmap_from_colors_uses_endpoints() -> None:
-    cmap = plotter_module.Plotter._custom_cmap_from_colors(['red', 'blue'])
-    assert cmap.name == 'custom_mo'
-    assert cmap(0) == pytest.approx(mcolors.to_rgba('red'))
-    almost_one = np.nextafter(1.0, 0.0)
-    assert cmap(almost_one) == pytest.approx(mcolors.to_rgba('blue'))
+def test_viewer_requires_existing_qapplication(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(qt_module.QApplication, 'instance', lambda: None)
+    with pytest.raises(RuntimeError, match='existing QApplication'):
+        OrbitalViewer()
 
 
-def test_settings_parent_prefers_selection_screen(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    assert plotter._settings_parent() is plotter._selection_screen
+def test_viewer_is_parentable_and_does_not_show_itself(qapplication: QApplication) -> None:
+    parent = QWidget()
+    viewer = OrbitalViewer(parent=parent)
+
+    assert viewer.parent() is parent
+    assert viewer.isAncestorOf(viewer.interactor)
+    assert not viewer.isVisible()
+    assert QApplication.instance() is qapplication
+
+    viewer.close()
 
 
-def test_settings_parent_requires_root(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter._selection_screen = None
-    plotter._tk_root = None
-    with pytest.raises(RuntimeError):
-        plotter._settings_parent()
+def test_viewers_have_isolated_configuration() -> None:
+    first = OrbitalViewer(config={'background_color': '#112233'})
+    second = OrbitalViewer(config={'background_color': '#abcdef'})
+
+    first.set_background_color('red')
+
+    assert first.config.background_color == 'red'
+    assert second.config.background_color == '#abcdef'
+    assert first.interactor.background == 'red'
+    first.close()
+    second.close()
 
 
-def test_get_current_mo_index_tracks_selection(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    target_index = 4
-    plotter._selection_screen.current_mo_ind = target_index
-    assert plotter._get_current_mo_index() == target_index
-    plotter._selection_screen = None
-    missing_index = -1
-    assert plotter._get_current_mo_index() == missing_index
+def test_deferred_molecule_source_loading() -> None:
+    viewer = OrbitalViewer(config={'molecule': {'bond': {'show': False}}})
+    ready_calls: list[bool] = []
+    viewer.source_ready.connect(lambda: ready_calls.append(True))
+
+    viewer.set_source(str(MOLDEN_PATH), only_molecule=True)
+
+    assert viewer.tabulator.atoms
+    assert viewer.gtos_ready
+    assert ready_calls == [True]
+    assert not viewer.controls.tabs.isTabVisible(0)
+    viewer.close()
 
 
-def test_do_export_with_all_scope_calls_tabulator(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter._selection_screen.current_mo_ind = 2
-    export_window = DummyWindow()
-
-    messagebox_calls: list[tuple[str, str]] = []
-
-    monkeypatch.setattr(_plotter_ui_module.filedialog, 'asksaveasfilename', lambda **_kwargs: '/tmp/export.vtk')
-    monkeypatch.setattr(
-        plotter_module.messagebox,
-        'showinfo',
-        lambda title, msg: messagebox_calls.append((title, msg)),
+def test_orbital_source_tabulation_and_selection() -> None:
+    viewer = OrbitalViewer(
+        str(MOLDEN_PATH),
+        config={
+            'grid': {
+                'spherical': {'num_r_points': 3, 'num_theta_points': 3, 'num_phi_points': 3},
+            },
+        },
     )
-    monkeypatch.setattr(
-        plotter_module.messagebox,
-        'showerror',
-        lambda *_args, **_kwargs: pytest.fail('showerror called'),
-    )
+    viewer.wait_for_gtos(timeout=5)
+    changes: list[int] = []
+    viewer.orbital_changed.connect(changes.append)
 
-    plotter._do_export(export_window, DummyVar('vtk'), DummyVar('all'))
+    viewer.show_orbital(0)
+    viewer.show_orbital(-1)
 
-    assert plotter.tabulator.export_calls == [('/tmp/export.vtk', None)]
-    assert export_window.destroyed
-    assert messagebox_calls
+    assert viewer.gtos_ready
+    assert changes == [0, -1]
+    assert viewer.controls.current_mo_ind == -1
+    viewer.close()
 
 
-def test_do_export_requires_selected_orbital(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter._selection_screen.current_mo_ind = -1
+def test_set_source_rejects_closed_viewer() -> None:
+    viewer = OrbitalViewer()
+    viewer.close()
 
-    errors: list[tuple[str, str]] = []
-    monkeypatch.setattr(
-        plotter_module.messagebox,
-        'showerror',
-        lambda title, msg: errors.append((title, msg)),
-    )
-    monkeypatch.setattr(
-        _plotter_ui_module.filedialog,
-        'asksaveasfilename',
-        lambda **_kwargs: pytest.fail('Dialog should not open'),
-    )
+    with pytest.raises(RuntimeError, match='closed'):
+        viewer.set_source(str(MOLDEN_PATH), only_molecule=True)
 
-    plotter._do_export(DummyWindow(), DummyVar('vtk'), DummyVar('current'))
+
+def test_close_releases_interactor_once() -> None:
+    viewer = OrbitalViewer()
+    interactor = viewer.interactor
+
+    viewer.close()
+    viewer.close()
+
+    assert interactor.closed_count == 1
+
+
+def test_errors_are_emitted_without_dialogs() -> None:
+    viewer = OrbitalViewer()
+    errors: list[tuple[str, object]] = []
+    viewer.error_occurred.connect(lambda title, exc: errors.append((title, exc)))
+
+    viewer.report_error('Example failure', ValueError('bad input'))
+
     assert errors
-    assert 'No orbital' in errors[0][1]
+    assert errors[0][0] == 'Example failure'
+    assert isinstance(errors[0][1], ValueError)
+    viewer.close()
 
 
-def test_do_export_rejects_cube_all(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter._selection_screen.current_mo_ind = 0
+def test_exports_use_explicit_paths(tmp_path: Path) -> None:
+    viewer = OrbitalViewer()
+    viewer.tabulator = Mock()
+    viewer.controls.current_mo_ind = 2
 
-    errors: list[tuple[str, str]] = []
-    monkeypatch.setattr(
-        plotter_module.messagebox,
-        'showerror',
-        lambda title, msg: errors.append((title, msg)),
-    )
-    monkeypatch.setattr(
-        _plotter_ui_module.filedialog,
-        'asksaveasfilename',
-        lambda **_kwargs: pytest.fail('Dialog should not open'),
-    )
+    viewer.export_data(tmp_path / 'orbital', file_format='vtk', scope='current')
+    viewer.export_image(tmp_path / 'scene', file_format='png', transparent=True)
 
-    plotter._do_export(DummyWindow(), DummyVar('cube'), DummyVar('all'))
-    assert errors
-    assert 'Cube format' in errors[0][1]
+    viewer.tabulator.export.assert_called_once_with(tmp_path / 'orbital.vtk', mo_index=2)
+    assert viewer.interactor.saved_screenshot == (tmp_path / 'scene.png', True)
+    viewer.close()
 
 
-def test_do_export_uses_current_index(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter._selection_screen.current_mo_ind = 3
-    export_window = DummyWindow()
+def test_cube_export_rejects_all_orbitals(tmp_path: Path) -> None:
+    viewer = OrbitalViewer()
+    viewer.tabulator = Mock()
 
-    monkeypatch.setattr(_plotter_ui_module.filedialog, 'asksaveasfilename', lambda **_kwargs: '/tmp/single.vtk')
-    monkeypatch.setattr(plotter_module.messagebox, 'showinfo', lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(plotter_module.messagebox, 'showerror', lambda *_args, **_kwargs: None)
+    with pytest.raises(ValueError, match='only supports one'):
+        viewer.export_data(tmp_path / 'all.cube', file_format='cube', scope='all')
 
-    plotter._do_export(export_window, DummyVar('vtk'), DummyVar('current'))
-    assert plotter.tabulator.export_calls == [('/tmp/single.vtk', 3)]
+    viewer.close()
 
 
-def test_do_export_handles_errors(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter._selection_screen.current_mo_ind = 0
-    export_window = DummyWindow()
+def test_plotter_returns_inside_existing_application(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(qt_module, 'QtInteractor', FakeInteractor)
+    window = Plotter(str(MOLDEN_PATH), only_molecule=True)
 
-    def boom(*_args: Any, **_kwargs: Any) -> None:
-        raise RuntimeError('fail')
+    assert window.viewer.isVisible()
+    assert not window._owns_application  # ruff: ignore[private-member-access]
+    window.close()
 
-    plotter.tabulator.export = boom  # type: ignore[assignment]
-    monkeypatch.setattr(_plotter_ui_module.filedialog, 'asksaveasfilename', lambda **_kwargs: '/tmp/single.vtk')
 
-    errors: list[tuple[str, str]] = []
-    monkeypatch.setattr(plotter_module.messagebox, 'showerror', lambda title, msg: errors.append((title, msg)))
-    monkeypatch.setattr(plotter_module.messagebox, 'showinfo', lambda *_args, **_kwargs: None)
+def test_plotter_owns_event_loop_when_it_creates_application() -> None:
+    script = f"""
+from PySide6.QtCore import QTimer
+import moldenViz.qt as qt_module
+from moldenViz.plotter import Plotter
+from tests.test_plotter import FakeInteractor
 
-    plotter._do_export(export_window, DummyVar('vtk'), DummyVar('current'))
-    assert errors
+qt_module.QtInteractor = FakeInteractor
+original_show = Plotter.show
+def show_then_close(window):
+    original_show(window)
+    QTimer.singleShot(0, window.close)
+Plotter.show = show_then_close
+window = Plotter({str(MOLDEN_PATH)!r}, only_molecule=True)
+assert window._owns_application
+"""
+    environment = os.environ.copy()
+    environment['QT_QPA_PLATFORM'] = 'offscreen'
+    subprocess.run([sys.executable, '-c', script], check=True, env=environment)
 
 
-def test_plotter_rejects_tabulator_without_grid(plotter_env: Any) -> None:
-    bad_tab = SimpleNamespace(grid_type=GridType.SPHERICAL, gtos=object(), grid_axes=None)
-    with pytest.raises(ValueError, match='grid attribute'):
-        plotter_env.make_plotter(tabulator=bad_tab)
-
-
-def test_plotter_rejects_unknown_grid_type(plotter_env: Any) -> None:
-    bad_tab = plotter_env.make_tabulator()
-    bad_tab.grid_type = GridType.UNKNOWN
-    with pytest.raises(ValueError, match='only supports spherical and cartesian'):
-        plotter_env.make_plotter(tabulator=bad_tab)
-
-
-def test_plotter_requires_tabulated_gtos(plotter_env: Any) -> None:
-    tabulator = plotter_env.make_tabulator()
-    tabulator.clear_gtos()
-
-    with pytest.raises(ValueError, match='tabulated GTOs'):
-        plotter_env.make_plotter(tabulator=tabulator)
-
-
-def test_plotter_accepts_real_tabulator_with_cached_gtos(plotter_env: Any) -> None:
-    axis = np.linspace(-1.0, 1.0, 2)
-    tabulator = Tabulator(str(MOLDEN_PATH))
-    tabulator.cartesian_grid(axis, axis, axis)
-
-    plotter = plotter_module.Plotter(str(MOLDEN_PATH), tabulator=tabulator, tk_root=plotter_env.make_root())
-
-    assert plotter.tabulator is tabulator
-    assert plotter._gtos_ready
-
-
-def test_export_orbitals_dialog_sets_attributes(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    install_fake_tk_widgets(monkeypatch)
-    plotter = plotter_env.make_plotter()
-    plotter._selection_screen.current_mo_ind = 1
-
-    plotter._export_orbitals_dialog()
-
-    assert isinstance(plotter._export_window, SimpleToplevel)
-    assert plotter._export_current_orb_radio is not None
-    assert plotter._export_all_orb_radio is not None
-
-
-def test_export_image_dialog_builds_controls(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    install_fake_tk_widgets(monkeypatch)
-    plotter = plotter_env.make_plotter()
-
-    plotter._export_image_dialog()
-
-
-@pytest.mark.usefixtures('plotter_env')
-def test_plotter_uses_qt_event_loop_for_internal_tk_root_on_macos(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    created: list[DummyTk] = []
-
-    def fake_tk() -> DummyTk:
-        root = DummyTk()
-        created.append(root)
-        return root
-
-    monkeypatch.setattr(plotter_module, 'Tabulator', RecordingTabulator)
-    monkeypatch.setattr(plotter_module.tk, 'Tk', fake_tk)
-    monkeypatch.setattr(plotter_module.sys, 'platform', 'darwin')
-
-    plotter = plotter_module.Plotter('dummy', only_molecule=True)
-
-    assert created
-    assert created[0].withdrawn
-    assert plotter._pv_plotter.app.exec_calls == 1
-    assert plotter._pv_plotter.callbacks == [(created[0].update, plotter._TK_UPDATE_MS)]
-    assert created[0].mainloop_calls == 0
-    assert plotter._selection_screen is None
-
-
-@pytest.mark.usefixtures('plotter_env')
-def test_plotter_preserves_tk_event_loop_off_macos(monkeypatch: pytest.MonkeyPatch) -> None:
-    created: list[DummyTk] = []
-
-    def fake_tk() -> DummyTk:
-        root = DummyTk()
-        created.append(root)
-        return root
-
-    monkeypatch.setattr(plotter_module, 'Tabulator', RecordingTabulator)
-    monkeypatch.setattr(plotter_module.tk, 'Tk', fake_tk)
-    monkeypatch.setattr(plotter_module.sys, 'platform', 'linux')
-
-    plotter = plotter_module.Plotter('dummy', only_molecule=True)
-
-    assert created[0].mainloop_calls == 1
-    assert plotter._pv_plotter.app.exec_calls == 0
-    assert plotter._pv_plotter.callbacks == []
-
-
-def test_plotter_generates_default_spherical_grid(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    monkeypatch.setattr(plotter_module, 'Tabulator', RecordingTabulator)
-    plotter_module.config.grid.default_type = 'spherical'
-    plotter_module.config.grid.spherical.num_r_points = 2
-    plotter_module.config.grid.spherical.num_theta_points = 2
-    plotter_module.config.grid.spherical.num_phi_points = 2
-    plotter_module.config.grid.min_radius = 1
-    plotter_module.config.grid.max_radius_multiplier = 1
-
-    plotter = plotter_module.Plotter('dummy', tk_root=plotter_env.make_root())
-
-    tabulator = plotter.tabulator
-    assert isinstance(tabulator, RecordingTabulator)
-    assert tabulator.spherical_calls
-    r, theta, phi = tabulator.spherical_calls[0]
-    expected_size = 2
-    assert r.size == expected_size
-    assert theta.size == expected_size
-    assert phi.size == expected_size
-
-
-def test_plotter_generates_default_cartesian_grid(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    monkeypatch.setattr(plotter_module, 'Tabulator', RecordingTabulator)
-    plotter_module.config.grid.default_type = 'cartesian'
-    plotter_module.config.grid.cartesian.num_x_points = 2
-    plotter_module.config.grid.cartesian.num_y_points = 3
-    plotter_module.config.grid.cartesian.num_z_points = 4
-    plotter_module.config.grid.max_radius_multiplier = 1
-    plotter_module.config.grid.min_radius = 1
-
-    plotter = plotter_module.Plotter('dummy', tk_root=plotter_env.make_root())
-
-    tabulator = plotter.tabulator
-    assert isinstance(tabulator, RecordingTabulator)
-    assert tabulator.cartesian_calls
-    x, y, z = tabulator.cartesian_calls[0]
-    expected_x = 2
-    expected_y = 3
-    expected_z = 4
-    assert x.size == expected_x
-    assert y.size == expected_y
-    assert z.size == expected_z
-
-
-def test_plotter_initializes_custom_colormap(plotter_env: Any) -> None:
-    plotter_module.config.mo.custom_colors = ['navy', 'white']
-    plotter = plotter_env.make_plotter()
-    assert getattr(plotter._cmap, 'name', '') == 'custom_mo'
-
-
-def test_plotter_builds_menus_and_overrides_clear(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(plotter_module, 'config', plotter_module.Config())
-    monkeypatch.setattr(plotter_module, 'Tabulator', FakeTabulator)
-    monkeypatch.setattr(plotter_module, 'BackgroundPlotter', MenuAwareBackgroundPlotter)
-    monkeypatch.setattr(_plotter_rendering_module, 'Molecule', DummyMolecule)
-    monkeypatch.setattr(plotter_module, '_OrbitalSelectionScreen', DummySelectionScreen)
-    monkeypatch.setattr(_plotter_rendering_module.pv, 'StructuredGrid', DummyStructuredGrid)
-    monkeypatch.setattr(_plotter_rendering_module.pv, 'pyvista_ndarray', lambda arr: arr)
-    monkeypatch.setattr(_plotter_ui_module, 'QMenu', FakeQMenu)
-    monkeypatch.setattr(_plotter_ui_module, 'QAction', FakeQAction)
-    monkeypatch.setattr(_plotter_ui_module, 'isValid', lambda _action: True)
-
-    root = DummyTk()
-    plotter = plotter_module.Plotter('dummy', tk_root=root)
-
-    main_menu = plotter._pv_plotter.main_menu
-    assert [menu.title for menu in main_menu.menus] == ['Settings', 'Export']
-    settings_action_texts = [action.text() for action in main_menu.menus[0].actions()]
-    assert {'Grid Settings', 'MO Settings', 'Molecule Settings'} <= set(settings_action_texts)
-    assert main_menu.clear_action.triggered.callbacks[-1] == plotter._clear_all
-
-    opened: list[str] = []
-    plotter._mo_settings_screen = lambda: opened.append('mo')  # type: ignore[method-assign]
-    mo_action = next(action for action in main_menu.menus[0].actions() if action.text() == 'MO Settings')
-    mo_action.triggered.callbacks[0]()
-
-    assert opened == []
-    callback, args = root.idle_callbacks.pop()
-    callback(*args)  # type: ignore[operator]
-    assert opened == ['mo']
-
-
-def test_plotter_does_not_access_private_axis_validation(
-    monkeypatch: pytest.MonkeyPatch,
-    plotter_env: Any,
-) -> None:
-    tabulator = plotter_env.make_tabulator()
-    axes = (
-        np.array([0.0, 0.5, 1.0]),
-        np.array([0.0, 0.5, 1.0]),
-        np.array([0.0, 0.5, 1.0]),
-    )
-    tabulator.grid_axes = axes
-
-    monkeypatch.setattr(
-        plotter_module.Tabulator,
-        '_axis_spacing',
-        lambda *_args: pytest.fail('Plotter accessed private Tabulator axis validation'),
-    )
-
-    plotter_env.make_plotter(tabulator=tabulator)
-
-
-def test_plotter_only_molecule_skips_selection_screen(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter(only_molecule=True)
-    assert not hasattr(plotter, 'orb_mesh')
-    assert plotter._selection_screen is None
-
-
-def test_apply_grid_settings_updates_spherical_grid(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter.grid_type_radio_var = DummyVar(GridType.SPHERICAL.value)
-    plotter.radius_entry = DummyEntry('2.0')
-    plotter.radius_points_entry = DummyEntry('2')
-    plotter.theta_points_entry = DummyEntry('2')
-    plotter.phi_points_entry = DummyEntry('2')
-    plotter._selection_screen.current_mo_ind = 0
-
-    captured: dict[str, Any] = {}
-
-    def fake_update(i_points: np.ndarray, j_points: np.ndarray, k_points: np.ndarray, grid_type: Any) -> None:
-        captured['args'] = (i_points, j_points, k_points, grid_type)
-
-    plotter._update_mesh = fake_update  # type: ignore[assignment]
-
-    plotter._apply_grid_settings()
-
-    i_points, j_points, k_points, grid_type = captured['args']
-    assert grid_type == GridType.SPHERICAL
-    expected_points = 2
-    assert i_points.shape[0] == expected_points
-    assert j_points.shape[0] == expected_points
-    assert k_points.shape[0] == expected_points
-
-
-def test_apply_grid_settings_cartesian_validation_shows_error(
-    monkeypatch: pytest.MonkeyPatch,
-    plotter_env: Any,
-) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter.grid_type_radio_var = DummyVar(GridType.CARTESIAN.value)
-    plotter.x_min_entry = DummyEntry('-1.0')
-    plotter.x_max_entry = DummyEntry('1.0')
-    plotter.x_num_points_entry = DummyEntry('0')
-    plotter.y_min_entry = DummyEntry('-1.0')
-    plotter.y_max_entry = DummyEntry('1.0')
-    plotter.y_num_points_entry = DummyEntry('5')
-    plotter.z_min_entry = DummyEntry('-1.0')
-    plotter.z_max_entry = DummyEntry('1.0')
-    plotter.z_num_points_entry = DummyEntry('5')
-
-    errors: list[tuple[str, str]] = []
-    monkeypatch.setattr(
-        plotter_module.messagebox,
-        'showerror',
-        lambda title, msg: errors.append((title, msg)),
-    )
-
-    plotter._apply_grid_settings()
-    assert errors
-
-
-def test_apply_grid_settings_rejects_nonpositive_radius(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter.grid_type_radio_var = DummyVar(GridType.SPHERICAL.value)
-    plotter.radius_entry = DummyEntry('0')
-    plotter.radius_points_entry = DummyEntry('1')
-    plotter.theta_points_entry = DummyEntry('1')
-    plotter.phi_points_entry = DummyEntry('1')
-
-    errors: list[tuple[str, str]] = []
-    monkeypatch.setattr(plotter_module.messagebox, 'showerror', lambda title, msg: errors.append((title, msg)))
-
-    plotter._apply_grid_settings()
-    assert errors
-    assert 'Radius' in errors[0][1]
-
-
-def test_apply_grid_settings_rejects_nonpositive_points(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter.grid_type_radio_var = DummyVar(GridType.SPHERICAL.value)
-    plotter.radius_entry = DummyEntry('1.0')
-    plotter.radius_points_entry = DummyEntry('0')
-    plotter.theta_points_entry = DummyEntry('1')
-    plotter.phi_points_entry = DummyEntry('1')
-
-    errors: list[tuple[str, str]] = []
-    monkeypatch.setattr(plotter_module.messagebox, 'showerror', lambda title, msg: errors.append((title, msg)))
-
-    plotter._apply_grid_settings()
-    assert errors
-    assert 'Number of points' in errors[0][1]
-    assert 'greater than zero' in errors[0][1]
-
-
-def test_grid_settings_screen_creates_entries(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    install_fake_tk_widgets(monkeypatch)
-    plotter = plotter_env.make_plotter()
-    seed_tabulator_with_cartesian_grid(plotter.tabulator)
-
-    plotter._grid_settings_screen()
-
-    assert hasattr(plotter, 'radius_entry')
-    assert hasattr(plotter, 'x_min_entry')
-
-
-def test_mo_settings_screen_initializes_controls(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    install_fake_tk_widgets(monkeypatch)
-    plotter = plotter_env.make_plotter()
-
-    plotter._mo_settings_screen()
-
-    assert hasattr(plotter, 'contour_entry')
-    assert hasattr(plotter, 'opacity_scale')
-
-
-def test_molecule_settings_screen_initializes_entries(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    install_fake_tk_widgets(monkeypatch)
-    plotter = plotter_env.make_plotter()
-
-    plotter._molecule_settings_screen()
-
-    assert hasattr(plotter, 'bond_max_length_entry')
-    assert hasattr(plotter, 'bond_radius_entry')
-
-
-def test_color_settings_screen_initializes_entries(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    install_fake_tk_widgets(monkeypatch)
-    plotter = plotter_env.make_plotter()
-
-    plotter._color_settings_screen()
-
-    assert isinstance(plotter.background_color_entry, SimpleEntry)
-
-
-def test_color_settings_screen_populates_custom_scheme(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    install_fake_tk_widgets(monkeypatch)
-    plotter_module.config.mo.color_scheme = 'bwr'
-    plotter_module.config.mo.custom_colors = ['black', 'white']
-    plotter = plotter_env.make_plotter()
-
-    plotter._color_settings_screen()
-
-    assert plotter.mo_color_scheme_var.get() == 'custom'
-    assert plotter.mo_negative_color_entry.get() == 'black'
-    assert plotter.mo_positive_color_entry.get() == 'white'
-
-
-def test_color_settings_screen_selects_custom_colors_loaded_from_file(
-    monkeypatch: pytest.MonkeyPatch,
-    plotter_env: Any,
-    tmp_path: Path,
-) -> None:
-    """Regression test for custom colors loaded from the user config file."""
-    install_fake_tk_widgets(monkeypatch)
-    custom_config_path = tmp_path / 'config.toml'
-    custom_config_path.write_text("[MO]\ncustom_colors = ['navy', 'gold']\n")
-    monkeypatch.setattr(config_module, 'CUSTOM_CONFIG_PATH', custom_config_path)
-    monkeypatch.setattr(plotter_module, 'config', plotter_module.Config())
-    plotter = plotter_env.make_plotter()
-
-    plotter._color_settings_screen()
-
-    assert plotter.mo_color_scheme_var.get() == 'custom'
-    assert plotter.mo_negative_color_entry.get() == 'navy'
-    assert plotter.mo_positive_color_entry.get() == 'gold'
-
-
-def test_color_settings_screen_populates_non_predefined_scheme(
-    monkeypatch: pytest.MonkeyPatch,
-    plotter_env: Any,
-) -> None:
-    """A valid named colormap outside the standard choices remains selectable."""
-    install_fake_tk_widgets(monkeypatch)
-    plotter_module.config.mo.color_scheme = 'viridis'
-    plotter_module.config.mo.custom_colors = None
-    plotter = plotter_env.make_plotter()
-
-    plotter._color_settings_screen()
-
-    assert plotter.mo_color_scheme_var.get() == 'viridis'
-    assert plotter.mo_color_scheme_dropdown.values[0] == 'viridis'
-
-
-def test_on_mo_color_scheme_change_toggles_widgets(plotter_env: Any) -> None:
-    class Tracker(SimpleWidget):
-        def __init__(self) -> None:
-            super().__init__()
-            self.visible = False
-
-        def grid(self, *_args: Any, **_kwargs: Any) -> SimpleWidget:
-            self.visible = True
-            return super().grid(*_args, **_kwargs)
-
-        def grid_remove(self) -> SimpleWidget:
-            self.visible = False
-            return self
-
-    plotter = plotter_env.make_plotter()
-    plotter.mo_custom_color_widgets = [Tracker()]
-    plotter.mo_color_scheme_var = DummyVar('custom')
-
-    plotter._on_mo_color_scheme_change(SimpleNamespace())
-    assert plotter.mo_custom_color_widgets[0].visible
-
-    plotter.mo_color_scheme_var.set('coolwarm')
-    plotter._on_mo_color_scheme_change(SimpleNamespace())
-    assert not plotter.mo_custom_color_widgets[0].visible
-
-
-def test_on_bond_color_type_change_updates_visibility(plotter_env: Any) -> None:
-    class Tracker(SimpleWidget):
-        def __init__(self) -> None:
-            super().__init__()
-            self.visible = False
-
-        def grid(self, *_args: Any, **_kwargs: Any) -> SimpleWidget:
-            self.visible = True
-            return self
-
-        def grid_remove(self) -> SimpleWidget:
-            self.visible = False
-            return self
-
-    plotter = plotter_env.make_plotter()
-    plotter.bond_color_type_var = DummyVar('uniform')
-    plotter.bond_color_label = Tracker()
-    plotter.bond_color_entry = Tracker()
-
-    calls: list[str] = []
-    plotter._apply_bond_color_settings = lambda: calls.append('run')  # type: ignore[assignment]
-
-    plotter._on_bond_color_type_change()
-    assert plotter.bond_color_label.visible
-    plotter.bond_color_type_var.set('gradient')
-    plotter._on_bond_color_type_change()
-    assert not plotter.bond_color_label.visible
-    assert calls
-
-
-def test_reset_grid_settings_restores_defaults(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    install_fake_tk_widgets(monkeypatch)
-    plotter = plotter_env.make_plotter()
-    plotter._grid_settings_screen()
-    plotter.radius_entry.insert(0, '9.0')
-
-    plotter._reset_grid_settings()
-    expected = max(
-        plotter_module.config.grid.max_radius_multiplier * plotter._molecule.max_radius,
-        plotter_module.config.grid.min_radius,
-    )
-    assert float(plotter.radius_entry.get()) == pytest.approx(expected)
-
-
-def test_reset_mo_settings_restores_inputs(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    install_fake_tk_widgets(monkeypatch)
-    plotter = plotter_env.make_plotter()
-    plotter._mo_settings_screen()
-    plotter.contour_entry.insert(0, '9.5')
-    plotter.opacity_scale.value = 0.1
-
-    plotter._reset_mo_settings()
-    assert float(plotter.contour_entry.get()) == pytest.approx(plotter_module.config.mo.contour)
-    assert plotter.opacity_scale.value == pytest.approx(plotter_module.config.mo.opacity)
-
-
-def test_reset_molecule_settings_restores_config(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    install_fake_tk_widgets(monkeypatch)
-    plotter = plotter_env.make_plotter()
-    plotter._molecule_settings_screen()
-    plotter._atom_actors[0].SetVisibility(False)
-    plotter._bond_actors[0].SetVisibility(False)
-    plotter.bond_max_length_entry.insert(0, '7.7')
-
-    plotter._reset_molecule_settings()
-    assert plotter.are_atoms_visible()
-    assert plotter.are_bonds_visible()
-    assert float(plotter.bond_max_length_entry.get()) == pytest.approx(
-        plotter_module.config.molecule.bond.max_length,
-    )
-
-
-def test_reset_color_settings_restores_entries(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    install_fake_tk_widgets(monkeypatch)
-    plotter_module.config.molecule.bond.color_type = 'uniform'
-    plotter_module.config.molecule.bond.color = 'yellow'
-    plotter = plotter_env.make_plotter()
-    plotter._color_settings_screen()
-    plotter.background_color_entry.insert(0, 'black')
-    plotter.mo_color_scheme_var.set('custom')
-    plotter.mo_negative_color_entry.insert(0, 'purple')
-    plotter.bond_color_type_var.set('split')
-
-    plotter._reset_color_settings()
-    assert plotter.background_color_entry.get() == str(plotter_module.config.background_color)
-    assert plotter.bond_color_type_var.get() == plotter_module.config.molecule.bond.color_type
-    assert plotter.bond_color_entry.get() == str(plotter_module.config.molecule.bond.color)
-
-
-def test_apply_mo_contour_replots_current(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter.contour_entry = DummyEntry('0.25')
-    plotter._selection_screen.current_mo_ind = 1
-
-    replotted: list[int] = []
-
-    def remember(idx: int) -> None:
-        replotted.append(idx)
-
-    plotter.plot_orbital = remember  # type: ignore[assignment]
-
-    plotter._apply_mo_contour()
-    assert plotter._contour == pytest.approx(0.25)
-    assert replotted == [1]
-
-
-def test_apply_custom_mo_color_settings_updates_scheme(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter.mo_color_scheme_var = DummyVar('custom')
-    plotter.mo_negative_color_entry = DummyEntry('navy')
-    plotter.mo_positive_color_entry = DummyEntry('gold')
-    plotter._selection_screen.current_mo_ind = 0
-
-    replotted: list[int] = []
-
-    def remember(idx: int) -> None:
-        replotted.append(idx)
-
-    plotter.plot_orbital = remember  # type: ignore[assignment]
-    fallback_scheme = plotter_module.config.mo.color_scheme
-
-    plotter._apply_custom_mo_color_settings()
-
-    assert plotter_module.config.mo.custom_colors == ['navy', 'gold']
-    assert plotter_module.config.mo.color_scheme == fallback_scheme
-    assert replotted == [0]
-
-
-def test_apply_custom_mo_color_settings_rejects_invalid(
-    monkeypatch: pytest.MonkeyPatch,
-    plotter_env: Any,
-) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter.mo_color_scheme_var = DummyVar('custom')
-    plotter.mo_negative_color_entry = DummyEntry('navy')
-    plotter.mo_positive_color_entry = DummyEntry('not-a-color')
-
-    errors: list[tuple[str, str]] = []
-    monkeypatch.setattr(
-        plotter_module.messagebox,
-        'showerror',
-        lambda title, msg: errors.append((title, msg)),
-    )
-
-    plotter._apply_custom_mo_color_settings()
-    assert errors
-    assert 'custom colors' in errors[0][1]
-
-
-def test_apply_mo_color_settings_switches_scheme(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter.mo_color_scheme_var = DummyVar('viridis')
-    plotter._selection_screen.current_mo_ind = 2
-    plotter._on_mo_color_scheme_change = lambda *_args: None  # type: ignore[assignment]
-
-    replotted: list[int] = []
-
-    def remember(idx: int) -> None:
-        replotted.append(idx)
-
-    plotter.plot_orbital = remember  # type: ignore[assignment]
-
-    plotter._apply_mo_color_settings()
-
-    assert plotter_module.config.mo.color_scheme == 'viridis'
-    assert plotter_module.config.mo.custom_colors is None
-    assert plotter._cmap == 'viridis'
-    assert replotted == [2]
-
-
-def test_apply_color_settings_runs_all_handlers(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    calls: list[str] = []
-    plotter._apply_mo_color_settings = lambda: calls.append('mo')  # type: ignore[assignment]
-    plotter._apply_custom_mo_color_settings = lambda: calls.append('custom')  # type: ignore[assignment]
-    plotter._apply_bond_color_settings = lambda: calls.append('bond')  # type: ignore[assignment]
-
-    plotter._apply_color_settings()
-    assert calls == ['mo', 'custom', 'bond']
-
-
-def test_apply_mo_color_settings_returns_for_custom(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter.mo_color_scheme_var = DummyVar('custom')
-    plotter._on_mo_color_scheme_change = lambda *_args: None  # type: ignore[assignment]
-
-    plotter._apply_mo_color_settings()
-    assert plotter._cmap == plotter_module.config.mo.color_scheme
-
-
-def test_apply_mo_color_settings_same_value_no_replot(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    current_scheme = plotter_module.config.mo.color_scheme
-    plotter.mo_color_scheme_var = DummyVar(current_scheme)
-    plotter._on_mo_color_scheme_change = lambda *_args: None  # type: ignore[assignment]
-
-    calls: list[int] = []
-
-    def remember_plot(idx: int) -> None:
-        calls.append(idx)
-
-    plotter.plot_orbital = remember_plot  # type: ignore[assignment]
-    plotter._selection_screen.current_mo_ind = 1
-
-    plotter._apply_mo_color_settings()
-    assert not calls
-
-
-def test_apply_mo_color_settings_skips_replot_without_selection(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter.mo_color_scheme_var = DummyVar('viridis')
-    plotter._selection_screen.current_mo_ind = -1
-    plotter._on_mo_color_scheme_change = lambda *_args: None  # type: ignore[assignment]
-
-    calls: list[int] = []
-
-    def remember_plot(idx: int) -> None:
-        calls.append(idx)
-
-    plotter.plot_orbital = remember_plot  # type: ignore[assignment]
-
-    plotter._apply_mo_color_settings()
-    assert not calls
-
-
-def test_apply_custom_mo_color_settings_non_custom_returns(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter.mo_color_scheme_var = DummyVar('coolwarm')
-
-    plotter._apply_custom_mo_color_settings()
-    assert plotter._cmap == plotter_module.config.mo.color_scheme
-
-
-def test_apply_background_color_updates_plotter(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter.background_color_entry = DummyEntry('navy')
-    plotter.background_color_var = DummyVar('navy')
-
-    plotter._apply_background_color()
-
-    assert plotter._pv_plotter.background == 'navy'
-
-
-def test_apply_background_color_rejects_invalid(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter.background_color_entry = DummyEntry('not_a_color')
-    plotter.background_color_var = DummyVar('not_a_color')
-
-    errors: list[tuple[str, str]] = []
-    monkeypatch.setattr(plotter_module.messagebox, 'showerror', lambda title, msg: errors.append((title, msg)))
-
-    plotter._apply_background_color()
-    assert errors
-
-
-def test_apply_background_color_handles_exception(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter.background_color_entry = DummyEntry('navy')
-
-    def boom(_color: str) -> None:
-        raise ValueError('explode')
-
-    plotter._pv_plotter.set_background = boom  # type: ignore[assignment]
-
-    errors: list[tuple[str, str]] = []
-    monkeypatch.setattr(plotter_module.messagebox, 'showerror', lambda title, msg: errors.append((title, msg)))
-
-    plotter._apply_background_color()
-    assert errors
-
-
-def test_apply_bond_color_settings_reloads_molecule(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter.bond_color_type_var = DummyVar('split')
-    plotter.bond_color_entry = DummyEntry('red')
-
-    reloads: list[Any] = []
-
-    def remember(cfg: Any) -> None:
-        reloads.append(cfg)
-
-    plotter._load_molecule = remember  # type: ignore[assignment]
-
-    plotter._apply_bond_color_settings()
-
-    assert plotter_module.config.molecule.bond.color_type == 'split'
-    assert reloads
-
-
-def test_apply_bond_color_settings_no_reload_when_unchanged(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    cfg = plotter_module.config.molecule.bond
-    plotter.bond_color_type_var = DummyVar(cfg.color_type)
-    plotter.bond_color_entry = DummyEntry(cfg.color)
-
-    reloads: list[Any] = []
-
-    def remember(cfg: Any) -> None:
-        reloads.append(cfg)
-
-    plotter._load_molecule = remember  # type: ignore[assignment]
-
-    plotter._apply_bond_color_settings()
-    assert not reloads
-
-
-def test_apply_bond_color_settings_updates_uniform_color(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter.bond_color_type_var = DummyVar('uniform')
-    plotter.bond_color_entry = DummyEntry('cyan')
-
-    reloads: list[Any] = []
-
-    def remember(cfg: Any) -> None:
-        reloads.append(cfg)
-
-    plotter._load_molecule = remember  # type: ignore[assignment]
-
-    plotter._apply_bond_color_settings()
-    assert plotter_module.config.molecule.bond.color == 'cyan'
-    assert reloads
-
-
-def test_on_opacity_change_updates_actor(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    monkeypatch.setattr(_plotter_ui_module.ttk, 'Label', DummyLabelWidget)
-    plotter = plotter_env.make_plotter()
-    plotter._orb_actor = DummyActor()
-    label = DummyLabelWidget('Molecular Orbital Opacity: 1.00')
-    container = DummyContainer([label])
-    plotter.mo_settings_window = DummyContainer([container])
-
-    plotter._on_opacity_change('0.33')
-
-    assert plotter._opacity == pytest.approx(0.33)
-    assert plotter._orb_actor.opacity == pytest.approx(0.33)
-    assert '0.33' in label.text
-
-
-def test_on_molecule_opacity_change_updates_actors(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    monkeypatch.setattr(_plotter_ui_module.ttk, 'Label', DummyLabelWidget)
-    plotter = plotter_env.make_plotter()
-    label = DummyLabelWidget('Molecule Opacity: 1.00')
-    plotter.molecule_settings_window = DummyContainer([DummyContainer([label])])
-
-    plotter._on_molecule_opacity_change('0.45')
-
-    assert plotter._molecule_opacity == pytest.approx(0.45)
-    assert all(actor.opacity == pytest.approx(0.45) for actor in plotter._molecule_actors)
-    assert '0.45' in label.text
-
-
-def test_clear_all_hides_actors_and_resets_selection(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter._selection_screen.current_mo_ind = 3
-    plotter._orb_actor = DummyActor()
-
-    plotter._clear_all()
-
-    assert plotter._orb_actor is None
-    assert plotter._selection_screen.current_mo_ind == -1
-    assert all(not actor.GetVisibility() for actor in plotter._molecule_actors)
-
-
-def test_toggle_atoms_flips_visibility(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    initial_visibility = plotter._atom_actors[0].GetVisibility()
-
-    plotter.toggle_atoms()
-
-    assert plotter._atom_actors[0].GetVisibility() is (not initial_visibility)
-
-
-def test_apply_grid_settings_updates_cartesian(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter.grid_type_radio_var = DummyVar(GridType.CARTESIAN.value)
-    plotter.x_min_entry = DummyEntry('-1.0')
-    plotter.x_max_entry = DummyEntry('1.0')
-    plotter.x_num_points_entry = DummyEntry('2')
-    plotter.y_min_entry = DummyEntry('-2.0')
-    plotter.y_max_entry = DummyEntry('2.0')
-    plotter.y_num_points_entry = DummyEntry('3')
-    plotter.z_min_entry = DummyEntry('-3.0')
-    plotter.z_max_entry = DummyEntry('3.0')
-    plotter.z_num_points_entry = DummyEntry('4')
-    plotter._selection_screen.current_mo_ind = 0
-
-    captured: dict[str, Any] = {}
-
-    def fake_update(i_points: np.ndarray, j_points: np.ndarray, k_points: np.ndarray, grid_type: Any) -> None:
-        captured['args'] = (i_points, j_points, k_points, grid_type)
-
-    plotter._update_mesh = fake_update  # type: ignore[assignment]
-
-    plotter._apply_grid_settings()
-
-    i_points, j_points, k_points, grid_type = captured['args']
-    assert grid_type == GridType.CARTESIAN
-    assert np.isclose(i_points[[0, -1]], [-1.0, 1.0]).all()
-    expected_j_points = 3
-    expected_k_points = 4
-    assert j_points.size == expected_j_points
-    assert k_points.size == expected_k_points
-
-
-def test_apply_molecule_settings_updates_config(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter.bond_max_length_entry = DummyEntry('5.5')
-    plotter.bond_radius_entry = DummyEntry('0.22')
-
-    reloads: list[Any] = []
-
-    def remember(cfg: Any) -> None:
-        reloads.append(cfg)
-
-    plotter._load_molecule = remember  # type: ignore[assignment]
-
-    plotter._apply_molecule_settings()
-
-    new_max = 5.5
-    new_radius = 0.22
-    assert pytest.approx(plotter_module.config.molecule.bond.max_length) == new_max
-    assert pytest.approx(plotter_module.config.molecule.bond.radius) == new_radius
-    assert reloads
-
-
-def test_apply_molecule_settings_validates_numbers(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter.bond_max_length_entry = DummyEntry('bad-number')
-    plotter.bond_radius_entry = DummyEntry('0.22')
-
-    errors: list[tuple[str, str]] = []
-    monkeypatch.setattr(
-        plotter_module.messagebox,
-        'showerror',
-        lambda title, msg: errors.append((title, msg)),
-    )
-
-    plotter._apply_molecule_settings()
-    assert errors
-    assert 'Bond Max Length' in errors[0][1]
-
-
-def test_apply_molecule_settings_rejects_invalid_radius(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter.bond_max_length_entry = DummyEntry('1.0')
-    plotter.bond_radius_entry = DummyEntry('not-number')
-
-    errors: list[tuple[str, str]] = []
-    monkeypatch.setattr(plotter_module.messagebox, 'showerror', lambda title, msg: errors.append((title, msg)))
-
-    plotter._apply_molecule_settings()
-    assert errors
-    assert 'Bond Radius' in errors[0][1]
-
-
-def test_apply_molecule_settings_no_changes_skip_reload(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    cfg = plotter_module.config
-    plotter.bond_max_length_entry = DummyEntry(str(cfg.molecule.bond.max_length))
-    plotter.bond_radius_entry = DummyEntry(str(cfg.molecule.bond.radius))
-
-    reloads: list[Any] = []
-
-    def remember(cfg: Any) -> None:
-        reloads.append(cfg)
-
-    plotter._load_molecule = remember  # type: ignore[assignment]
-
-    plotter._apply_molecule_settings()
-    assert not reloads
-
-
-def test_load_molecule_removes_existing_actors(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    original_actor = plotter._molecule_actors[0]
-
-    plotter._load_molecule(plotter_module.config)
-    assert original_actor in plotter._pv_plotter.removed_actors
-
-
-def test_apply_mo_contour_invalid_input(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter.contour_entry = DummyEntry('not-a-number')
-    plotter._selection_screen.current_mo_ind = 0
-
-    replotted: list[int] = []
-
-    def remember(idx: int) -> None:
-        replotted.append(idx)
-
-    plotter.plot_orbital = remember  # type: ignore[assignment]
-
-    plotter._apply_mo_contour()
-    assert replotted == []
-    assert plotter._contour == pytest.approx(plotter_module.config.mo.contour)
-
-
-def test_do_image_export_vector(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    window = DummyWindow()
-    format_var = DummyVar('svg')
-    transparent_var = DummyVar(False)
-
-    infos: list[tuple[str, str]] = []
-    monkeypatch.setattr(_plotter_ui_module.filedialog, 'asksaveasfilename', lambda **_kwargs: '/tmp/export.svg')
-    monkeypatch.setattr(plotter_module.messagebox, 'showinfo', lambda title, msg: infos.append((title, msg)))
-    monkeypatch.setattr(
-        plotter_module.messagebox,
-        'showerror',
-        lambda *_args, **_kwargs: pytest.fail('Unexpected error'),
-    )
-
-    plotter._do_image_export(window, format_var, transparent_var)
-
-    assert plotter._pv_plotter.saved_graphic == '/tmp/export.svg'
-    assert window.destroyed
-    assert infos
-
-
-def test_do_image_export_png_respects_transparency(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    window = DummyWindow()
-    format_var = DummyVar('png')
-    transparent_var = DummyVar(True)
-
-    monkeypatch.setattr(_plotter_ui_module.filedialog, 'asksaveasfilename', lambda **_kwargs: '/tmp/export.png')
-    monkeypatch.setattr(plotter_module.messagebox, 'showinfo', lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(plotter_module.messagebox, 'showerror', lambda *_args, **_kwargs: None)
-
-    plotter._do_image_export(window, format_var, transparent_var)
-
-    assert plotter._pv_plotter.screenshot_calls == [('/tmp/export.png', True)]
-
-
-def test_do_image_export_handles_failures(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    window = DummyWindow()
-    format_var = DummyVar('png')
-    transparent_var = DummyVar(False)
-
-    monkeypatch.setattr(_plotter_ui_module.filedialog, 'asksaveasfilename', lambda **_kwargs: '/tmp/export.png')
-
-    def boom(*_args: Any, **_kwargs: Any) -> None:
-        raise RuntimeError('boom')
-
-    plotter._pv_plotter.screenshot = boom  # type: ignore[assignment]
-
-    errors: list[tuple[str, str]] = []
-    monkeypatch.setattr(plotter_module.messagebox, 'showerror', lambda title, msg: errors.append((title, msg)))
-    monkeypatch.setattr(plotter_module.messagebox, 'showinfo', lambda *_args, **_kwargs: None)
-
-    plotter._do_image_export(window, format_var, transparent_var)
-    assert errors
-    assert 'Failed to export image' in errors[0][1]
-
-
-def test_do_image_export_cancel(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    window = DummyWindow()
-    format_var = DummyVar('png')
-    transparent_var = DummyVar(False)
-
-    monkeypatch.setattr(_plotter_ui_module.filedialog, 'asksaveasfilename', lambda **_kwargs: '')
-
-    plotter._do_image_export(window, format_var, transparent_var)
-    assert not plotter._pv_plotter.screenshot_calls
-
-
-def test_save_settings_reports_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    saves: list[str] = []
-    monkeypatch.setattr(plotter_module.config, '_save_current_config', lambda: saves.append('saved'))
-
-    infos: list[tuple[str, str]] = []
-    monkeypatch.setattr(plotter_module.messagebox, 'showinfo', lambda title, msg: infos.append((title, msg)))
-
-    plotter_module.Plotter._save_settings()
-    assert saves == ['saved']
-    assert infos
-
-
-def test_save_settings_reports_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    def boom() -> None:
-        raise OSError('disk full')
-
-    monkeypatch.setattr(plotter_module.config, '_save_current_config', boom)
-    errors: list[tuple[str, str]] = []
-    monkeypatch.setattr(plotter_module.messagebox, 'showerror', lambda title, msg: errors.append((title, msg)))
-
-    plotter_module.Plotter._save_settings()
-    assert errors
-
-
-def test_plot_orbital_creates_actor(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter._selection_screen.current_mo_ind = -1
-
-    plotter.plot_orbital(0)
-
-    assert plotter._selection_screen.current_mo_ind == 0
-    assert isinstance(plotter._orb_actor, DummyActor)
-    assert 'orbital' in plotter._orb_mesh.arrays
-    assert plotter._pv_plotter.added_meshes
-
-
-def test_plot_orbital_minus_one_clears_scene(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter.plot_orbital(0)
-
-    plotter.plot_orbital(-1)
-
-    assert plotter._orb_actor is None
-    assert plotter._selection_screen.current_mo_ind == -1
-    assert plotter._pv_plotter.removed_actors
-
-
-def test_toggle_bonds_triggers_update(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    initial_visibility = plotter._bond_actors[0].GetVisibility()
-
-    plotter.toggle_bonds()
-
-    assert plotter._bond_actors[0].GetVisibility() is (not initial_visibility)
-    assert plotter._pv_plotter.update_count == 1
-
-
-def test_update_mesh_rebuilds_structured_grid(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    x = np.linspace(-1, 1, 2)
-    y = np.linspace(-1, 1, 2)
-    z = np.linspace(-1, 1, 2)
-
-    plotter._update_mesh(x, y, z, GridType.CARTESIAN)
-    plotter.wait_for_gtos()
-
-    expected_points = x.size * y.size * z.size
-    assert plotter.tabulator.grid.shape[0] == expected_points
-    assert plotter._orb_mesh.points.shape[0] == expected_points
-
-
-def test_update_mesh_rejects_unknown_grid_type(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    points = np.linspace(0.0, 1.0, 2)
-
-    with pytest.raises(ValueError, match='only supports spherical'):
-        plotter._update_mesh(points, points, points, GridType.UNKNOWN)
-
-
-def test_update_mesh_handles_spherical_grid(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    r = np.linspace(0.0, 1.0, 2)
-
-    plotter._update_mesh(r, r, r, GridType.SPHERICAL)
-    assert plotter.tabulator.grid_type == GridType.SPHERICAL
-
-
-def test_toggle_molecule_balances_atom_and_bond_visibility(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter._atom_actors[0].SetVisibility(False)
-    plotter._bond_actors[0].SetVisibility(True)
-    plotter.show_atoms_var = DummyVar(True)
-    plotter.show_bonds_var = DummyVar(True)
-
-    plotter.toggle_molecule()
-
-    assert plotter.are_atoms_visible()
-    assert plotter.are_bonds_visible()
-    assert plotter_module.config.molecule.atom.show is plotter.are_atoms_visible()
-    assert plotter_module.config.molecule.bond.show is plotter.are_bonds_visible()
-
-
-def test_toggle_molecule_toggles_scene_when_states_match(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    visible_before = plotter._molecule_actors[0].GetVisibility()
-
-    plotter.toggle_molecule()
-
-    assert plotter._molecule_actors[0].GetVisibility() is (not visible_before)
-    assert plotter._pv_plotter.update_count == 1
-
-
-def test_visibility_helpers_reflect_actor_state(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    assert plotter.is_molecule_visible()
-    assert plotter.are_atoms_visible()
-    assert plotter.are_bonds_visible()
-
-    plotter._molecule_actors[0].SetVisibility(False)
-    plotter._atom_actors[0].SetVisibility(False)
-    plotter._bond_actors[0].SetVisibility(False)
-
-    assert not plotter.is_molecule_visible()
-    assert not plotter.are_atoms_visible()
-    assert not plotter.are_bonds_visible()
-
-    plotter._molecule_actors = []
-    plotter._atom_actors = []
-    plotter._bond_actors = []
-    assert plotter.is_molecule_visible() is False
-    assert plotter.are_atoms_visible() is False
-    assert plotter.are_bonds_visible() is False
-
-
-def test_update_settings_button_states(plotter_env: Any) -> None:
-    plotter = plotter_env.make_plotter()
-    plotter.show_atoms_var = DummyVar(False)
-    plotter.show_bonds_var = DummyVar(False)
-    plotter._atom_actors[0].SetVisibility(False)
-    plotter._bond_actors[0].SetVisibility(True)
-
-    plotter._update_settings_button_states()
-
-    assert plotter.show_atoms_var.get() is False
-    assert plotter.show_bonds_var.get() is True
-    assert plotter_module.config.molecule.atom.show is False
-    assert plotter_module.config.molecule.bond.show is True
-
-
-@pytest.mark.usefixtures('plotter_env')
-def test_pv_plotter_close_signal_closes_windows(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(plotter_module, 'Tabulator', RecordingTabulator)
-    monkeypatch.setattr(plotter_module.tk, 'Tk', DummyTk)
-    plotter = plotter_module.Plotter('dummy')
-    callbacks = plotter._pv_plotter.app_window.signal_close.callbacks
-    assert callbacks
-
-    callbacks[0]()
-
-    assert not plotter._on_screen
-    assert plotter._selection_screen.destroyed
-    assert plotter._tk_root.quit_calls == 1
-
-
-def install_fake_tk_widgets(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(plotter_module.tk, 'Toplevel', SimpleToplevel)
-    monkeypatch.setattr(plotter_module.tk, 'StringVar', DummyVar)
-    monkeypatch.setattr(plotter_module.tk, 'BooleanVar', DummyVar)
-
-    widget_names = [
-        'Frame',
-        'Label',
-        'Radiobutton',
-        'Button',
-        'Scale',
-        'Checkbutton',
-        'Separator',
-    ]
-    for name in widget_names:
-        monkeypatch.setattr(_plotter_ui_module.ttk, name, SimpleWidget)
-    monkeypatch.setattr(_plotter_ui_module.ttk, 'Entry', SimpleEntry)
-    monkeypatch.setattr(_plotter_ui_module.ttk, 'Combobox', SimpleCombobox)
-
-
-@pytest.fixture
-def selection_screen_ui(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    original_screen_bases = plotter_module._OrbitalSelectionScreen.__bases__
-    original_tree_bases = _plotter_ui_module._OrbitalsTreeview.__bases__
-    plotter_module._OrbitalSelectionScreen.__bases__ = (SimpleToplevel,)
-    _plotter_ui_module._OrbitalsTreeview.__bases__ = (SimpleTreeview,)
-    monkeypatch.setattr(_plotter_ui_module.ttk, 'Frame', SimpleWidget)
-    monkeypatch.setattr(_plotter_ui_module.ttk, 'Button', SimpleWidget)
-    monkeypatch.setattr(_plotter_ui_module.ttk, 'Label', SimpleWidget)
-    yield
-    plotter_module._OrbitalSelectionScreen.__bases__ = original_screen_bases
-    _plotter_ui_module._OrbitalsTreeview.__bases__ = original_tree_bases
-
-
-def test_orbital_selection_screen_navigation_and_close(selection_screen_ui: None) -> None:
-    _ = selection_screen_ui
-    plotter = SelectionPlotter()
-    screen = plotter_module._OrbitalSelectionScreen(plotter)
-    plotter._selection_screen = screen
-
-    screen._export_current_orb_radio = SimpleWidget()
-    screen._update_nav_button_states()
-    assert screen.prev_button.kwargs['state'] == plotter_module.tk.DISABLED
-    assert screen.next_button.kwargs['state'] == plotter_module.tk.NORMAL
-    assert 'None' in screen._export_current_orb_radio.kwargs['text']
-    assert screen._export_current_orb_radio.kwargs['state'] == plotter_module.tk.DISABLED
-
-    screen.current_mo_ind = 0
-    screen._update_nav_button_states()
-    assert screen.next_button.kwargs['state'] == plotter_module.tk.NORMAL
-    assert '#1' in screen._export_current_orb_radio.kwargs['text']
-
-    screen.current_mo_ind = -1
-    screen._next_plot()
-    screen._next_plot()
-    assert plotter.plot_calls[:2] == [0, 1]
-    assert screen.orb_tv.current_mo_ind == 1
-
-    screen._prev_plot()
-    assert plotter.plot_calls[-1] == 0
-    screen._prev_plot()  # Should be no-op when at the start
-    assert plotter.plot_calls[-1] == 0
-
-    plotter.tabulator.molecular_orbitals.clear()
-    before = plotter.plot_calls.copy()
-    screen.current_mo_ind = -1
-    screen._next_plot()
-    assert plotter.plot_calls == before
-
-    screen._plot_orbital(0)
-    assert screen.current_mo_ind == 0
-
-    screen._on_close()
-    assert not plotter._on_screen
-    assert plotter._pv_plotter.closed
-    assert screen.destroyed
-    assert plotter._tk_root.quit_calls == 1
-    assert plotter._tk_root.destroy_calls == 1
-
-
-def test_orbitals_treeview_populate_and_select(selection_screen_ui: None) -> None:
-    _ = selection_screen_ui
-    plot_calls: list[int] = []
-    updates: list[int] = []
-
-    def record_plot(idx: int) -> None:
-        plot_calls.append(idx)
-
-    def record_update() -> None:
-        updates.append(1)
-
-    selection_screen = SimpleNamespace(
-        current_mo_ind=-1,
-        _plot_orbital=record_plot,
-        _update_nav_button_states=record_update,
-        _loading=False,
-    )
-
-    tree = _plotter_ui_module._OrbitalsTreeview(selection_screen)
-    mos = [
-        SimpleNamespace(sym='s', occ=2.0, energy=-0.5),
-        SimpleNamespace(sym='s', occ=1.0, energy=-0.3),
-        SimpleNamespace(sym='p', occ=1.0, energy=-0.1),
-    ]
-    tree._populate_tree(mos)
-    expected_children = 3
-    assert len(tree.get_children()) == expected_children
-    assert tree._items[1]['values'][1].startswith('s.')
-
-    tree.current_mo_ind = 1
-    tree._highlight_orbital(2)
-    assert tree._items[1]['tags'] == ('!hightlight',)
-    assert tree._items[2]['tags'] == ('highlight',)
-    expected_seen = 2
-    assert tree.seen == expected_seen
-
-    tree.set_selection(1)
-    tree._on_select(SimpleNamespace())
-    assert selection_screen.current_mo_ind == 1
-    assert plot_calls == [1]
-    assert updates
-    assert tree.current_mo_ind == 1
-    assert tree.selection() == ()
-
-    tree._erase()
-    assert tree.get_children() == []
+def test_qt_gui_import_path_does_not_load_tkinter() -> None:
+    assert 'tkinter' not in sys.modules

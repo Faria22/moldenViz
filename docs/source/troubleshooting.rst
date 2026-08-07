@@ -65,6 +65,19 @@ Invalid entries in ``~/.config/moldenViz/config.toml`` raise ``ValueError`` the 
        print(f'Configuration error: {exc}')
        print('Review your TOML configuration and try again')
 
+Qt Application Errors
+---------------------
+
+``RuntimeError: OrbitalViewer requires an existing QApplication`` means the
+embeddable widget was constructed before its host initialized PySide6. Create
+``QApplication`` first, then add the viewer to a layout. Do not call
+``app.exec()`` from the viewer or from a button handler; the host application
+owns that loop.
+
+If an embedded page is rebuilt, call ``viewer.close()`` during teardown. This
+cancels result delivery and explicitly releases the VTK render window before
+Qt destroys the surrounding layout.
+
 Export Errors
 -------------
 

@@ -58,19 +58,25 @@ Plotter Architecture
 
 Keep changes to the interactive plotter within these boundaries:
 
-- ``plotter.py`` coordinates construction and connects the other layers.
-- ``_plotter_ui.py`` owns Tk and Qt menus, widgets, and dialogs.
+- ``qt.py`` owns the embeddable ``OrbitalViewer``, Qt controls, queued result
+  delivery, per-viewer state, and explicit render-window teardown. It must not
+  create ``QApplication``, start an event loop, show itself, or open dialogs.
+- ``plotter.py`` owns the free-floating ``QMainWindow``, application/event-loop
+  ownership, native file dialogs, message boxes, and menu shortcuts.
+- ``_plotter_ui.py`` contains private compatibility aliases only; new user
+  interface behavior belongs in ``qt.py`` or the standalone adapter.
 - ``_plotter_rendering.py`` owns PyVista scene and orbital rendering.
 - ``_plotter_jobs.py`` owns background-job state and must remain independent
-  of Tk, Qt, and PyVista so it can be tested without a GUI.
+  of Qt and PyVista so it can be tested without a GUI.
 - ``tabulator.py`` exposes the parsed data and computation operations needed
   by those layers; plotter modules must not access private ``Tabulator``
   fields.
 
 The underscored modules are internal implementation details. Keep
 ``moldenViz.Plotter`` and ``moldenViz.plotter.Plotter`` as the supported
-public entry points, and pass dependencies through narrow methods rather than
-introducing imports between the UI and rendering modules.
+standalone entry points and ``moldenViz.qt.OrbitalViewer`` as the supported
+embedding entry point. Background workers may compute numerical arrays, but
+all Qt and VTK updates must be delivered on the owning GUI thread.
 
 Pull Request Checklist
 ----------------------

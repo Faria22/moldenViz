@@ -12,6 +12,9 @@ Package exports
 ``GridType``, ``MolecularOrbital``, ``Parser``, ``Plotter``, ``Shell``,
 ``Tabulator``, and ``__version__``.
 
+The public ``moldenViz.qt`` module exports ``OrbitalViewer`` for embedding and
+``ViewerConfig`` for validated per-instance configuration.
+
 Parser data models
 ------------------
 
@@ -63,3 +66,14 @@ Plotter
    :members: wait_for_gtos, plot_orbital, toggle_molecule, toggle_atoms, toggle_bonds, is_molecule_visible, are_atoms_visible, are_bonds_visible
    :member-order: bysource
    :show-inheritance:
+
+OrbitalViewer
+-------------
+
+.. autoclass:: moldenViz.qt.OrbitalViewer
+   :members: set_source, show_orbital, update_grid, apply_appearance, set_background_color, export_data, export_image, save_settings, wait_for_gtos, close
+   :member-order: bysource
+   :show-inheritance:
+
+.. autoclass:: moldenViz.qt.ViewerConfig
+   :members:

@@ -41,6 +41,7 @@ class Atom:
         self,
         atomic_number: int,
         center: NDArray[np.floating],
+        config: Config = config,
     ) -> None:
         """Initialize an atom for visualization.
 
@@ -51,7 +52,7 @@ class Atom:
         center : NDArray[np.floating]
             Cartesian coordinates of the atom centre in Angstroms.
         """
-        self.atom_type = ATOM_TYPES.get(atomic_number, ATOM_X)
+        self.atom_type = config.atom_types.get(atomic_number, ATOM_X)
         if self.atom_type is ATOM_X:
             logger.warning(
                 "Invalid atomic number: %d. Atom type could not be determined. Using atom 'X' instead.",
@@ -276,7 +277,10 @@ class Molecule:
         """
         atomic_numbers = [atom.atomic_number for atom in atoms]
         atom_centers = np.asarray([atom.position for atom in atoms], dtype=float)
-        self.atoms = list(map(Atom, atomic_numbers, atom_centers))
+        self.atoms = [
+            Atom(atomic_number, center, self.config)
+            for atomic_number, center in zip(atomic_numbers, atom_centers, strict=True)
+        ]
         self.max_radius = np.max(np.linalg.norm(atom_centers, axis=1))
 
         atom_a_indices, atom_b_indices = np.triu_indices(len(atom_centers), k=1)

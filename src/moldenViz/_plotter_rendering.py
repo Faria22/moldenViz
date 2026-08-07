@@ -12,8 +12,6 @@ from ._plotting_objects import Molecule
 from .tabulator import GridType
 
 if TYPE_CHECKING:
-    import tkinter as tk
-
     import numpy as np
     from numpy.typing import NDArray
 
@@ -31,11 +29,11 @@ class _PlotterRendering:
         _bond_actors: list[Any]
         _cmap: Any
         _contour: float
+        _config: Config
         _gtos_ready: bool
         _molecule: Molecule
         _molecule_actors: list[Any]
         _molecule_opacity: float
-        _no_prev_tk_root: bool
         _on_screen: bool
         _opacity: float
         _orb_actor: Any | None
@@ -43,7 +41,6 @@ class _PlotterRendering:
         _only_molecule: bool
         _pv_plotter: Any
         _selection_screen: Any | None
-        _tk_root: tk.Misc | None
         tabulator: Tabulator
 
         def _cancel_gto_future(self) -> None: ...
@@ -92,7 +89,7 @@ class _PlotterRendering:
 
         if orb_ind == -1:
             if self._selection_screen:
-                self._selection_screen._update_nav_button_states()  # ruff:ignore[private-member-access]
+                self._selection_screen.update_nav_button_states()
             logger.info('Clearing molecular orbital from scene.')
             return
 
@@ -114,24 +111,10 @@ class _PlotterRendering:
             opacity=self._opacity,
             show_scalar_bar=False,
             cmap=self._cmap,
-            smooth_shading=True,
+            smooth_shading=self._config.smooth_shading,
         )
         if self._selection_screen:
-            self._selection_screen._update_nav_button_states()  # ruff:ignore[private-member-access]
-
-    def _connect_pv_plotter_close_signal(self) -> None:
-        """Connect the PyVista close signal to the Plotter lifecycle."""
-
-        def on_pv_plotter_close() -> None:
-            if self._on_screen:
-                self._on_screen = False
-                self._cancel_gto_future()
-                if self._selection_screen and self._selection_screen.winfo_exists():
-                    self._selection_screen.destroy()
-                if self._tk_root and self._no_prev_tk_root:
-                    self._tk_root.quit()
-
-        self._pv_plotter.app_window.signal_close.connect(on_pv_plotter_close)
+            self._selection_screen.update_nav_button_states()
 
     def _clear_all(self) -> None:
         """Clear all molecule and orbital actors."""
@@ -144,7 +127,7 @@ class _PlotterRendering:
             self._orb_actor = None
             if self._selection_screen:
                 self._selection_screen.current_mo_ind = -1
-                self._selection_screen._update_nav_button_states()  # ruff:ignore[private-member-access]
+                self._selection_screen.update_nav_button_states()
 
     def toggle_molecule(self) -> None:
         """Toggle visibility of all molecule actors."""
@@ -169,6 +152,7 @@ class _PlotterRendering:
             for actor in self._atom_actors:
                 actor.SetVisibility(not actor.GetVisibility())
             self._pv_plotter.update()
+            self._update_settings_button_states()
 
     def toggle_bonds(self) -> None:
         """Toggle bond visibility."""
@@ -176,6 +160,7 @@ class _PlotterRendering:
             for actor in self._bond_actors:
                 actor.SetVisibility(not actor.GetVisibility())
             self._pv_plotter.update()
+            self._update_settings_button_states()
 
     def is_molecule_visible(self) -> bool:
         """Return whether the molecule is visible.
@@ -239,7 +224,7 @@ class _PlotterRendering:
         self._cancel_gto_future()
         self._gtos_ready = False
         if self._selection_screen:
-            self._selection_screen._set_loading_state(  # ruff:ignore[private-member-access]
+            self._selection_screen.set_loading_state(
                 True,
                 'Updating grid...',
             )
