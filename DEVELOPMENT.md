@@ -32,6 +32,26 @@ the project.
 See the [benchmark guide](https://moldenviz.readthedocs.io/en/latest/benchmarks.html)
 for the full matrix, revision comparisons, result storage, and CI policy.
 
+## Generated Numerical Kernels
+
+The direct NumPy real solid-harmonic kernels through `l=4` are generated from
+the finite polynomial definition with development-only SymPy. Regenerate the
+committed runtime module from the repository root:
+
+```console
+uv run --with sympy==1.14.0 python scripts/generate_solid_harmonics.py
+```
+
+Confirm that a checkout is reproducible without rewriting the module:
+
+```console
+uv run --with sympy==1.14.0 python scripts/generate_solid_harmonics.py --check
+```
+
+The runtime package continues to depend only on NumPy. The general
+finite-polynomial implementation remains in `Tabulator` as the correctness
+oracle and fallback above `l=4`.
+
 ## Coding Conventions
 - Follow PEP 8 with 4-space indentation; prefer explicit imports (`from moldenViz.parser import Parser`).
 - Name modules/functions with `snake_case`, classes with `PascalCase`, and keep shared plotting helpers in `_plotting_objects.py` to avoid circular imports.

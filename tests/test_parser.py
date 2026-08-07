@@ -15,6 +15,9 @@ Parser = parser_module.Parser
 # utilities
 # ----------------------------------------------------------------------
 MOLDEN_PATH = Path(__file__).with_name('sample_molden.inp')
+PYSCF_SPHERICAL_PATH = Path(__file__).parent / 'fixtures/pyscf/co-cc-pvqz-spherical.molden'
+CO_ATOM_COUNT = 2
+PYSCF_LMAX = 4
 
 
 @pytest.fixture(scope='session')
@@ -139,3 +142,12 @@ def test_only_molecule_has_stable_result_attributes() -> None:
     assert parser.shells == []
     assert parser.mos == []
     assert parser.mo_coeffs.shape == (0, 0)
+
+
+def test_pyscf_spherical_fixture() -> None:
+    """PySCF's parenthesized atom units and lowercase basis tags should parse."""
+    parser = Parser(str(PYSCF_SPHERICAL_PATH))
+
+    assert len(parser.atoms) == CO_ATOM_COUNT
+    assert max(shell.l for shell in parser.shells) == PYSCF_LMAX
+    assert parser.mo_coeffs.shape == (12, 110)

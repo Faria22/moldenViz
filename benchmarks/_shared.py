@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 
 from moldenViz import examples
+from moldenViz.tabulator import Tabulator
 
 if TYPE_CHECKING:
-    from moldenViz.tabulator import Tabulator
+    from numpy.typing import NDArray
 
 EXAMPLE_NAMES = (
     'acrolein',
@@ -27,8 +29,24 @@ POINT_CHUNK_SIZES = (8_192, 32_768, 65_536, None)
 MO_SELECTIONS = ('single', 'several', 'all')
 REPRESENTATIVE_EXAMPLES = ('h2o', 'furan', 'benzene')
 WORKER_COUNTS = (1, 4)
+PYSCF_SPHERICAL_EXAMPLES = ('co', 'h2o', 'benzene')
+PYSCF_FIXTURE_DIR = Path(__file__).parents[1] / 'tests/fixtures/pyscf'
 
 MOSelection = Literal['single', 'several', 'all']
+
+
+class GenericSolidHarmonicTabulator(Tabulator):
+    """Tabulator using the finite-polynomial solid-harmonic oracle."""
+
+    @staticmethod
+    def _tabulate_real_solid_harmonics(
+        centered_grid: NDArray[np.floating],
+        lmax: int,
+    ) -> NDArray[np.floating]:
+        return Tabulator._tabulate_real_solid_harmonics_generic(  # ruff:ignore[private-member-access]
+            centered_grid,
+            lmax,
+        )
 
 
 def example_source(name: str) -> list[str]:
@@ -54,6 +72,17 @@ def grid_axis(edge_size: int) -> np.ndarray:
         Evenly spaced grid coordinates.
     """
     return np.linspace(-3.0, 3.0, edge_size)
+
+
+def pyscf_spherical_path(name: str) -> Path:
+    """Return the committed spherical cc-pVQZ fixture for ``name``.
+
+    Returns
+    -------
+    Path
+        Path to the requested PySCF fixture.
+    """
+    return PYSCF_FIXTURE_DIR / f'{name}-cc-pvqz-spherical.molden'
 
 
 def mo_indices(tabulator: Tabulator, selection: MOSelection) -> int | list[int] | None:
