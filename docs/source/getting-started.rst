@@ -51,28 +51,17 @@ eager imports; importing them loads NumPy. The visualization-specific
 ``AtomType`` model and ``Plotter`` remain lazy imports, so core-only workflows
 do not load or require Pydantic or the rest of the GUI stack.
 
-Prerequisites
--------------
+Qt ownership
+------------
 
-The interactive plotting window relies on ``tkinter``. Verify that your Python install can import it:
+The standalone CLI and :class:`moldenViz.Plotter` create a PySide6 application
+when needed. When called from an existing Qt application, ``Plotter`` creates a
+free-floating window and returns immediately because the host already owns the
+event loop.
 
-.. code-block:: bash
-
-   python3 -m tkinter
-
-If that check fails, install ``tkinter`` manually:
-
-* macOS:
-
-  .. code-block:: bash
-
-     brew install python-tk
-
-* Ubuntu:
-
-  .. code-block:: bash
-
-     sudo apt-get install python3-tk
+Use :class:`moldenViz.qt.OrbitalViewer` when the visualization belongs inside
+an existing layout. The host must create ``QApplication`` before constructing
+the viewer and must keep its event loop running.
 
 Quick CLI Preview
 -----------------
@@ -119,7 +108,8 @@ Create plots programmatically by importing the high-level API:
 
    Plotter(benzene)
 
-This opens an interactive plotter window with full orbital visualization and control panel:
+This opens an interactive PySide6 window with the orbital controls and 3D
+renderer side by side.
 
 The Python API provides the same interactive capabilities as the CLI, with additional programmatic control over grid settings, tabulation, and export workflows.
 
