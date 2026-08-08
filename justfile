@@ -68,8 +68,15 @@ release bump="patch" dry_run="false":
         echo "Would commit pyproject.toml and uv.lock."
         echo "Would create tag ${tag}."
         echo "Would atomically push HEAD and ${tag} to origin."
+        echo "Would create the GitHub release ${tag} with generated notes."
         exit 0
     fi
+
+    if ! command -v gh >/dev/null; then
+        echo "error: the GitHub CLI (gh) is required to create the release" >&2
+        exit 1
+    fi
+    gh api user --silent
 
     uv version --bump "{{ bump }}" --no-sync
     just all build
@@ -77,3 +84,4 @@ release bump="patch" dry_run="false":
     git commit -m "Bump version to ${version}"
     git tag "${tag}"
     git push --atomic origin HEAD "${tag}"
+    gh release create "${tag}" --verify-tag --generate-notes --title "${tag}" --latest
