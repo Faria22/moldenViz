@@ -24,11 +24,15 @@ class _PlotterRendering:
 
     if TYPE_CHECKING:
         _atom_actors: list[Any]
+        _adaptive_gtos: NDArray[np.floating] | None
+        _adaptive_mesh: pv.UnstructuredGrid
+        _adaptive_ready: bool
         _bond_actors: list[Any]
         _cmap: Any
         _contour: float
         _config: Config
         _gtos_ready: bool
+        _grid_mode: str
         _molecule: Molecule
         _molecule_actors: list[Any]
         _molecule_opacity: float
@@ -42,6 +46,7 @@ class _PlotterRendering:
         tabulator: Tabulator
 
         def _cancel_gto_future(self) -> None: ...
+        def _invalidate_adaptive_grid(self, *, rebuild: bool = False) -> None: ...
         def _ensure_gtos_ready(self) -> bool: ...
         def _schedule_gto_tabulation(
             self,
@@ -81,13 +86,13 @@ class _PlotterRendering:
         """Render the selected orbital isosurface in the PyVista plotter."""
         if not self._ensure_gtos_ready():
             return
-        if self._orb_actor:
-            self._pv_plotter.remove_actor(self._orb_actor)
-            self._orb_actor = None
         if self._selection_screen:
             self._selection_screen.current_mo_ind = orb_ind
 
         if orb_ind == -1:
+            if self._orb_actor:
+                self._pv_plotter.remove_actor(self._orb_actor)
+                self._orb_actor = None
             if self._selection_screen:
                 self._selection_screen.update_nav_button_states()
             logger.info('Clearing molecular orbital from scene.')
@@ -103,8 +108,20 @@ class _PlotterRendering:
             mo.energy,
         )
 
-        self._orb_mesh['orbital'] = self.tabulator.tabulate_mos(orb_ind)
-        contour_mesh = self._orb_mesh.contour([-self._contour, self._contour])
+        if self._grid_mode == 'adaptive':
+            if not self._adaptive_ready or self._adaptive_gtos is None:
+                return
+            self._adaptive_mesh['orbital'] = self.tabulator.tabulate_mos(
+                orb_ind,
+                gtos=self._adaptive_gtos,
+            )
+            contour_mesh = self._adaptive_mesh.contour([-self._contour, self._contour])
+        else:
+            self._orb_mesh['orbital'] = self.tabulator.tabulate_mos(orb_ind)
+            contour_mesh = self._orb_mesh.contour([-self._contour, self._contour])
+        if self._orb_actor:
+            self._pv_plotter.remove_actor(self._orb_actor)
+            self._orb_actor = None
         self._orb_actor = self._pv_plotter.add_mesh(
             contour_mesh,
             clim=[-self._contour, self._contour],
@@ -224,6 +241,7 @@ class _PlotterRendering:
         if grid_type == grid_type_class.UNKNOWN:
             raise ValueError('The plotter only supports spherical and cartesian grids.')
         self._cancel_gto_future()
+        self._invalidate_adaptive_grid()
         self._gtos_ready = False
         if self._selection_screen:
             self._selection_screen.set_loading_state(

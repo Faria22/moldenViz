@@ -34,6 +34,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ._adaptive_grid import (
+    AdaptiveScale,
+    crossed_cell_ids,
+    format_scale,
+    normalize_scale,
+    parse_scale,
+    refined_grid,
+)
 from ._plotter_jobs import BackgroundJob
 from ._plotter_rendering import _PlotterRendering
 from .parser import _validate_molden_input
@@ -68,6 +76,7 @@ _BACKGROUND_COLORS = (
 )
 _ORBITAL_COLUMN_PADDING = 8
 _CUSTOM_COLOR_COUNT = 2
+_MIN_ADAPTIVE_POINTS = 2
 
 
 def __getattr__(name: str) -> Any:
@@ -136,6 +145,15 @@ class _GTOResult:
     axes: tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]
     grid_type: GridType
     gtos: NDArray[np.floating]
+
+
+@dataclass(frozen=True)
+class _AdaptiveResult:
+    """Refined contour grid and its reusable GTO cache."""
+
+    mesh: pv.UnstructuredGrid
+    gtos: NDArray[np.floating]
+    crossed_cells: int
 
 
 class _CompletionDispatcher(QObject):
@@ -221,7 +239,7 @@ class OrbitalControlPanel(QWidget):
         layout = QVBoxLayout(tab)
         form = QFormLayout()
         self.grid_type = QComboBox(tab)
-        self.grid_type.addItems(['spherical', 'cartesian'])
+        self.grid_type.addItems(['spherical', 'cartesian', 'adaptive'])
         self.grid_type.currentTextChanged.connect(self._update_grid_field_visibility)
         form.addRow('Grid type', self.grid_type)
 
@@ -268,6 +286,10 @@ class OrbitalControlPanel(QWidget):
             self.cartesian_fields[axis] = (minimum, maximum, points)
             self.cartesian_axis_labels[axis] = label
         form.addRow(self.cartesian_grid)
+
+        self.adaptive_scale_label = QLabel('Fine scale', tab)
+        self.adaptive_scale = QLineEdit('5.0', tab)
+        form.addRow(self.adaptive_scale_label, self.adaptive_scale)
 
         layout.addLayout(form)
         apply_button = QPushButton('Apply grid', tab)
@@ -425,8 +447,10 @@ class OrbitalControlPanel(QWidget):
         self.radius_points.setValue(config.grid.spherical.num_r_points)
         self.theta_points.setValue(config.grid.spherical.num_theta_points)
         self.phi_points.setValue(config.grid.spherical.num_phi_points)
+        cartesian_config = config.grid.adaptive if config.grid.default_type == 'adaptive' else config.grid.cartesian
         for axis, field_name in zip('xyz', ('num_x_points', 'num_y_points', 'num_z_points'), strict=True):
-            self.cartesian_fields[axis][2].setValue(getattr(config.grid.cartesian, field_name))
+            self.cartesian_fields[axis][2].setValue(getattr(cartesian_config, field_name))
+        self.adaptive_scale.setText(format_scale(config.grid.adaptive.scale))
         self.contour.setValue(config.mo.contour)
         self.mo_opacity.setValue(config.mo.opacity)
         if config.mo.custom_colors:
@@ -501,11 +525,19 @@ class OrbitalControlPanel(QWidget):
             label.setVisible(spherical)
             widget.setVisible(spherical)
         self.cartesian_grid.setVisible(not spherical)
+        self.adaptive_scale_label.setVisible(grid_type == 'adaptive')
+        self.adaptive_scale.setVisible(grid_type == 'adaptive')
+        if grid_type in {'cartesian', 'adaptive'}:
+            grid_config = getattr(self._viewer.config.grid, grid_type)
+            for axis, field_name in zip('xyz', ('num_x_points', 'num_y_points', 'num_z_points'), strict=True):
+                self.cartesian_fields[axis][2].setValue(getattr(grid_config, field_name))
 
     def _apply_grid(self) -> None:
         try:
             axes, grid_type = self._grid_values()
-            self._viewer.update_grid(axes, grid_type)
+            mode = self.grid_type.currentText()
+            scale = parse_scale(self.adaptive_scale.text()) if mode == 'adaptive' else None
+            self._viewer.update_grid(axes, grid_type, mode=mode, adaptive_scale=scale)
         except (RuntimeError, ValueError) as exc:
             self._viewer.report_error('Grid update failed', exc)
 
@@ -527,6 +559,10 @@ class OrbitalControlPanel(QWidget):
         axes = tuple(
             np.linspace(minimum.value(), maximum.value(), points.value()) for minimum, maximum, points in values
         )
+        if self.grid_type.currentText() == 'adaptive' and any(
+            points.value() < _MIN_ADAPTIVE_POINTS for _min, _max, points in values
+        ):
+            raise ValueError('Adaptive grid point counts must be at least 2.')
         return (axes[0], axes[1], axes[2]), GridType.CARTESIAN
 
     def _apply_appearance(self) -> None:
@@ -701,6 +737,11 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         self._closed = False
         self._only_molecule = only_molecule
         self._gtos_ready = only_molecule
+        self._grid_mode = self._config.grid.default_type
+        self._adaptive_scale: AdaptiveScale = self._config.grid.adaptive.scale
+        self._adaptive_ready = False
+        self._adaptive_mesh = import_module('pyvista').UnstructuredGrid()
+        self._adaptive_gtos: NDArray[np.floating] | None = None
         self._current_orbital_index = -1
         self._controls_visible = show_controls
         self._selection_screen: OrbitalControlPanel | None = None
@@ -710,6 +751,7 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         self._bond_actors: list[Any] = []
         self._dispatcher = _CompletionDispatcher(self)
         self._gto_job: BackgroundJob[_GTOResult] = BackgroundJob(_GTO_EXECUTOR, self._dispatcher.dispatch)
+        self._adaptive_job: BackgroundJob[_AdaptiveResult] = BackgroundJob(_GTO_EXECUTOR, self._dispatcher.dispatch)
 
         interactor_class = _load_qt_interactor()
         self.interactor = interactor_class(self, auto_update=5.0)
@@ -745,7 +787,7 @@ class OrbitalViewer(QWidget, _PlotterRendering):
     @property
     def gtos_ready(self) -> bool:
         """Whether orbital data can be rendered."""
-        return self._gtos_ready
+        return self._gtos_ready and (self._grid_mode != 'adaptive' or self._adaptive_ready)
 
     @property
     def controls_visible(self) -> bool:
@@ -793,6 +835,7 @@ class OrbitalViewer(QWidget, _PlotterRendering):
             _validate_molden_input(filename, content)
         self._cancel_gto_future()
         self._clear_scene()
+        self._invalidate_adaptive_grid()
         self._current_orbital_index = -1
         if only_molecule is not None:
             self._only_molecule = only_molecule
@@ -805,12 +848,15 @@ class OrbitalViewer(QWidget, _PlotterRendering):
             if not tabulator.has_gtos and not self._only_molecule:
                 raise ValueError('Tabulator does not have tabulated GTOs.')
             self.tabulator = tabulator
+            self._grid_mode = tabulator.grid_type.value
         else:
             self.tabulator = Tabulator(
                 filename=filename,
                 content=content,
                 only_molecule=self._only_molecule,
             )
+            self._grid_mode = self._config.grid.default_type
+        self._adaptive_scale = self._config.grid.adaptive.scale
 
         self._gtos_ready = self._only_molecule or self.tabulator.has_gtos
         self._molecule_opacity = self._config.molecule.opacity
@@ -854,7 +900,11 @@ class OrbitalViewer(QWidget, _PlotterRendering):
                 tabulate_gtos=False,
             )
         else:
-            cartesian = self._config.grid.cartesian
+            cartesian = (
+                self._config.grid.adaptive
+                if self._config.grid.default_type == 'adaptive'
+                else self._config.grid.cartesian
+            )
             axes = []
             for axis, points in zip(
                 'xyz',
@@ -888,9 +938,26 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         self,
         axes: tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]],
         grid_type: GridType,
+        *,
+        mode: str | None = None,
+        adaptive_scale: AdaptiveScale | None = None,
     ) -> None:
         """Replace the structured grid and schedule fresh GTO tabulation."""
         self._ensure_grid_update_supported()
+        resolved_mode = grid_type.value if mode is None else mode
+        if resolved_mode not in {'spherical', 'cartesian', 'adaptive'}:
+            raise ValueError(f'Unknown grid mode: {resolved_mode}')
+        if resolved_mode == 'adaptive' and grid_type != GridType.CARTESIAN:
+            raise ValueError('Adaptive mode requires Cartesian grid axes.')
+        self._grid_mode = resolved_mode
+        if adaptive_scale is not None:
+            normalize_scale(adaptive_scale)
+            self._adaptive_scale = adaptive_scale
+        self._config.config.grid.default_type = resolved_mode
+        if resolved_mode == 'adaptive':
+            adaptive = self._config.config.grid.adaptive
+            adaptive.num_x_points, adaptive.num_y_points, adaptive.num_z_points = map(len, axes)
+            adaptive.scale = self._adaptive_scale
         self._update_mesh(*axes, grid_type)
 
     def _ensure_grid_update_supported(self) -> None:
@@ -976,6 +1043,51 @@ class OrbitalViewer(QWidget, _PlotterRendering):
             GridType.CARTESIAN,
         )
 
+    def set_adaptive_grid(
+        self,
+        *,
+        x_range: tuple[float, float],
+        y_range: tuple[float, float],
+        z_range: tuple[float, float],
+        x_points: int,
+        y_points: int,
+        z_points: int,
+        scale: AdaptiveScale,
+    ) -> None:
+        """Build and apply an adaptive Cartesian grid from explicit values."""
+        self._validate_grid_points(x_points=x_points, y_points=y_points, z_points=z_points)
+        if min(x_points, y_points, z_points) < _MIN_ADAPTIVE_POINTS:
+            raise ValueError('Adaptive grid point counts must be at least 2.')
+        ranges = {'x': x_range, 'y': y_range, 'z': z_range}
+        for axis, bounds in ranges.items():
+            if bounds[0] >= bounds[1]:
+                raise ValueError(f'{axis}_range minimum must be smaller than its maximum.')
+        normalize_scale(scale)
+        self._ensure_grid_update_supported()
+
+        self.controls.grid_type.setCurrentText('adaptive')
+        self.controls.adaptive_scale.setText(format_scale(scale))
+        for axis, bounds, points in zip(
+            'xyz',
+            (x_range, y_range, z_range),
+            (x_points, y_points, z_points),
+            strict=True,
+        ):
+            minimum, maximum, point_widget = self.controls.cartesian_fields[axis]
+            minimum.setValue(bounds[0])
+            maximum.setValue(bounds[1])
+            point_widget.setValue(points)
+        self.update_grid(
+            (
+                np.linspace(*x_range, x_points),
+                np.linspace(*y_range, y_points),
+                np.linspace(*z_range, z_points),
+            ),
+            GridType.CARTESIAN,
+            mode='adaptive',
+            adaptive_scale=scale,
+        )
+
     @staticmethod
     def _validate_grid_points(**point_counts: int) -> None:
         for name, count in point_counts.items():
@@ -1011,6 +1123,7 @@ class OrbitalViewer(QWidget, _PlotterRendering):
             bond_color=bond_color,
             background_color=background_color,
         )
+        contour_changed = hasattr(self, '_contour') and contour != self._contour
         self._config.config.mo.contour = contour
         self._config.config.mo.opacity = mo_opacity
         self._config.config.mo.color_scheme = color_scheme if color_scheme != 'custom' else 'bwr'
@@ -1032,6 +1145,10 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         self.interactor.set_background(background_color)
         if hasattr(self, 'tabulator'):
             self._load_molecule(self._config)
+            if contour_changed and self._grid_mode == 'adaptive':
+                self._invalidate_adaptive_grid(rebuild=True)
+                self.interactor.update()
+                return
             if not self._only_molecule and self._current_orbital_index >= 0 and self._gtos_ready:
                 self.plot_orbital(self._current_orbital_index)
         self.interactor.update()
@@ -1174,6 +1291,16 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         if not self._gtos_ready:
             self._apply_gtos_ready(result, 0.0)
 
+    def wait_for_adaptive_grid(self, timeout: float | None = None) -> None:
+        """Block until adaptive-grid tabulation finishes."""
+        if self._grid_mode != 'adaptive' or self._adaptive_ready:
+            return
+        if self._adaptive_job.future is None:
+            raise RuntimeError('Adaptive-grid tabulation has not been scheduled.')
+        result = self._adaptive_job.wait(timeout=timeout)
+        if not self._adaptive_ready:
+            self._apply_adaptive_ready(result, 0.0)
+
     def _schedule_gto_tabulation(
         self,
         axes: tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]] | None = None,
@@ -1227,11 +1354,79 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         self.tabulator.set_gtos(result.gtos)
         self._gtos_ready = True
         self._orb_mesh = self._create_mo_mesh()
+        logger.info('GTO tabulation completed in %.2fs.', elapsed)
+        if self._grid_mode == 'adaptive':
+            self._schedule_adaptive_tabulation()
+            return
         self.controls.on_gtos_ready()
         if self._current_orbital_index >= 0:
             self.plot_orbital(self._current_orbital_index)
         self.loading_changed.emit(False)
-        logger.info('GTO tabulation completed in %.2fs.', elapsed)
+
+    def _schedule_adaptive_tabulation(self) -> None:
+        """Build the union of all coarse MO contours and tabulate it once."""
+        if self._only_molecule or self._grid_mode != 'adaptive' or not self._gtos_ready:
+            return
+        if self._adaptive_job.pending:
+            return
+        if self.tabulator.grid_type != GridType.CARTESIAN:
+            raise RuntimeError('Adaptive grids require a Cartesian coarse grid.')
+
+        coarse_grid = self._create_mo_mesh()
+        coarse_mos = self.tabulator.tabulate_mos()
+        contour = self._contour
+        scale = normalize_scale(self._adaptive_scale)
+        tabulator = self.tabulator
+
+        def build_and_tabulate() -> _AdaptiveResult:
+            cell_ids = crossed_cell_ids(coarse_grid, coarse_mos, contour)
+            mesh = refined_grid(coarse_grid, cell_ids, scale)
+            gtos = tabulator.compute_gtos(np.asarray(mesh.points))
+            return _AdaptiveResult(mesh=mesh, gtos=gtos, crossed_cells=len(cell_ids))
+
+        self._adaptive_ready = False
+        self.controls.set_loading_state(True, 'Refining contour grid…')
+        self.loading_changed.emit(True)
+        logger.info('Starting adaptive-grid tabulation for all molecular orbitals...')
+        self._adaptive_job.start(
+            build_and_tabulate,
+            on_success=self._apply_adaptive_ready,
+            on_error=self._handle_adaptive_error,
+        )
+
+    def _apply_adaptive_ready(self, result: _AdaptiveResult, elapsed: float) -> None:
+        """Install the reusable adaptive grid and GTO cache."""
+        if not self._on_screen or self._grid_mode != 'adaptive':
+            return
+        self._adaptive_mesh = result.mesh
+        self._adaptive_gtos = result.gtos
+        self._adaptive_ready = True
+        logger.info(
+            'Adaptive-grid tabulation completed in %.2fs from %d crossed coarse cells (%d fine points).',
+            elapsed,
+            result.crossed_cells,
+            result.mesh.n_points,
+        )
+        self.controls.on_gtos_ready()
+        if self._current_orbital_index >= 0:
+            self.plot_orbital(self._current_orbital_index)
+        self.loading_changed.emit(False)
+
+    def _handle_adaptive_error(self, exc: Exception) -> None:
+        """Keep the previous actor and report failed adaptive tabulation."""
+        self._adaptive_ready = False
+        self.controls.on_gtos_ready()
+        self.loading_changed.emit(False)
+        self.report_error('Adaptive grid failed', exc)
+
+    def _invalidate_adaptive_grid(self, *, rebuild: bool = False) -> None:
+        """Discard adaptive cache and optionally rebuild it from the coarse grid."""
+        self._adaptive_job.cancel()
+        self._adaptive_ready = False
+        self._adaptive_mesh = import_module('pyvista').UnstructuredGrid()
+        self._adaptive_gtos = None
+        if rebuild:
+            self._schedule_adaptive_tabulation()
 
     def _handle_gto_error(self, exc: Exception) -> None:
         self._gtos_ready = self.tabulator.has_gtos
@@ -1244,7 +1439,7 @@ class OrbitalViewer(QWidget, _PlotterRendering):
             self._dispatcher.dispatch(callback)
 
     def _ensure_gtos_ready(self) -> bool:
-        return self._gtos_ready
+        return self._gtos_ready and (self._grid_mode != 'adaptive' or self._adaptive_ready)
 
     def _update_settings_button_states(self) -> None:
         """Mirror actor visibility in the public control widgets."""
@@ -1253,6 +1448,7 @@ class OrbitalViewer(QWidget, _PlotterRendering):
 
     def _cancel_gto_future(self) -> None:
         self._gto_job.cancel()
+        self._adaptive_job.cancel()
 
     def _clear_scene(self) -> None:
         for actor in [*self._molecule_actors, self._orb_actor]:

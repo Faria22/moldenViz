@@ -131,6 +131,29 @@ def test_cartesian_grid_uses_column_headers_and_axis_row_labels() -> None:
     viewer.close()
 
 
+def test_adaptive_grid_controls_show_scale_field() -> None:
+    viewer = OrbitalViewer(config={'grid': {'default_type': 'adaptive', 'adaptive': {'scale': [2, 3, 4]}}})
+    controls = viewer.controls
+
+    assert controls.grid_type.currentText() == 'adaptive'
+    assert not controls.cartesian_grid.isHidden()
+    assert not controls.adaptive_scale.isHidden()
+    assert controls.adaptive_scale.text() == '(2.0, 3.0, 4.0)'
+    viewer.close()
+
+
+def test_switching_to_adaptive_grid_loads_coarse_point_counts() -> None:
+    viewer = OrbitalViewer()
+    controls = viewer.controls
+
+    controls.grid_type.setCurrentText('cartesian')
+    assert tuple(controls.cartesian_fields[axis][2].value() for axis in 'xyz') == (100, 100, 100)
+
+    controls.grid_type.setCurrentText('adaptive')
+    assert tuple(controls.cartesian_fields[axis][2].value() for axis in 'xyz') == (20, 20, 20)
+    viewer.close()
+
+
 def test_appearance_control_steps_and_contour_buttons() -> None:
     viewer = OrbitalViewer()
     controls = viewer.controls
@@ -325,6 +348,23 @@ def test_dashboard_grid_convenience_methods(monkeypatch: pytest.MonkeyPatch) -> 
     assert tuple(map(len, cartesian_axes)) == (3, 4, 5)
     assert viewer.config.grid.default_type == 'cartesian'
     assert viewer.config.grid.cartesian.num_x_points == x_points
+
+    viewer.set_adaptive_grid(
+        x_range=(-1.0, 1.0),
+        y_range=(-2.0, 2.0),
+        z_range=(-3.0, 3.0),
+        x_points=x_points,
+        y_points=4,
+        z_points=5,
+        scale=(2.0, 3.0, 4.0),
+    )
+
+    adaptive_axes, adaptive_type = update_grid.call_args.args
+    assert adaptive_type == qt_module.GridType.CARTESIAN
+    assert update_grid.call_args.kwargs == {'mode': 'adaptive', 'adaptive_scale': (2.0, 3.0, 4.0)}
+    assert tuple(map(len, adaptive_axes)) == (3, 4, 5)
+    assert viewer.controls.grid_type.currentText() == 'adaptive'
+    assert viewer.controls.adaptive_scale.text() == '(2.0, 3.0, 4.0)'
     with pytest.raises(ValueError, match='minimum'):
         viewer.set_cartesian_grid(
             x_range=(1.0, -1.0),
@@ -334,6 +374,33 @@ def test_dashboard_grid_convenience_methods(monkeypatch: pytest.MonkeyPatch) -> 
             y_points=3,
             z_points=3,
         )
+    viewer.close()
+
+
+def test_adaptive_grid_builds_one_reusable_fine_gto_cache() -> None:
+    viewer = OrbitalViewer(
+        filename=MOLDEN_PATH,
+        config={
+            'grid': {
+                'default_type': 'adaptive',
+                'adaptive': {
+                    'num_x_points': 5,
+                    'num_y_points': 5,
+                    'num_z_points': 5,
+                    'scale': 1.5,
+                },
+            },
+        },
+    )
+
+    viewer.wait_for_gtos(timeout=5)
+    coarse_gtos = viewer.tabulator.gtos.copy()
+    viewer.wait_for_adaptive_grid(timeout=10)
+
+    assert viewer.gtos_ready
+    assert viewer._adaptive_gtos is not None  # ruff:ignore[private-member-access]
+    assert viewer._adaptive_gtos.shape[0] == viewer._adaptive_mesh.n_points  # ruff:ignore[private-member-access]
+    np.testing.assert_array_equal(viewer.tabulator.gtos, coarse_gtos)
     viewer.close()
 
 

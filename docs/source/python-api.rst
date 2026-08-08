@@ -199,7 +199,7 @@ The plotter window provides several interactive controls:
 * **Opacity Control**: Adjust orbital and molecule transparency in increments of 0.1
 * **Color Control**: Choose molecular-orbital and background presets or enter custom colors
 * **Bond Styling**: Select split or uniform bond colors and adjust radius in increments of 0.05
-* **Grid Settings**: Change grid resolution and type (spherical/cartesian)
+* **Grid Settings**: Change grid resolution and type (spherical/cartesian/adaptive)
 * **Export Options**: Access data and image export through the menu bar
 
 When ``Plotter`` creates its own grid, it tabulates Gaussian-type orbitals in the background so the molecule window can appear first. Orbital controls become usable when that work finishes; failures are reported in the GUI instead of leaving the viewer silently unavailable.

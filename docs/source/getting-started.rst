@@ -78,7 +78,8 @@ The viewer provides controls to:
 
 * Navigate through different molecular orbitals
 * Adjust contour levels and opacity
-* Modify grid resolution
+* Switch between spherical, Cartesian, and cell-local adaptive grids
+* Modify coarse-grid resolution and adaptive fine scaling
 * Export data and images
 
 Use your own Molden file instead:

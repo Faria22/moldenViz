@@ -10,7 +10,8 @@
     "pythons": ["3.13"],
     "matrix": {
         "req": {
-            "numpy": ["2.2"]
+            "numpy": ["2.2"],
+            "pyvista": ["0.48"]
         }
     },
     "build_command": [
