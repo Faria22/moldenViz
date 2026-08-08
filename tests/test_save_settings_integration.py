@@ -1,73 +1,28 @@
-"""Integration test to verify Save Settings button functionality in plotter."""
-# ruff:file-ignore[private-member-access]
+"""Integration coverage for explicit per-viewer setting persistence."""
+# ruff:file-ignore[import-private-name, undocumented-public-function]
 
-from typing import Any
-from unittest.mock import MagicMock, patch
+from __future__ import annotations
 
-import pytest
+from typing import TYPE_CHECKING
 
-plotter_module = pytest.importorskip('moldenViz.plotter')
+from moldenViz import _config_module as config_module
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
-def test_save_settings_method_exists_in_plotter() -> None:
-    """Test that _save_settings method exists on Plotter."""
-    plotter_class = plotter_module.Plotter
-
-    assert hasattr(plotter_class, '_save_settings')
-    assert callable(plotter_class._save_settings)
+    import pytest
 
 
-@patch('moldenViz._plotter_ui.messagebox')
-@patch('moldenViz.plotter.config')
-def test_save_settings_success(mock_config: Any, mock_messagebox: Any) -> None:
-    """Test that _save_settings calls config._save_current_config and shows success message."""
-    # Set up mocks
-    mock_config._save_current_config = MagicMock()
+def test_config_overrides_are_persisted_only_when_saved(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    custom_path = tmp_path / 'config.toml'
+    monkeypatch.setattr(config_module, 'CUSTOM_CONFIG_PATH', custom_path)
+    config = config_module.Config({'background_color': '#123456'})
 
-    # Call the method
-    plotter_module.Plotter._save_settings()
+    assert not custom_path.exists()
+    config._save_current_config()  # ruff: ignore[private-member-access]
 
-    # Verify that _save_current_config was called
-    mock_config._save_current_config.assert_called_once()
-
-    # Verify that success message was shown
-    mock_messagebox.showinfo.assert_called_once()
-    args = mock_messagebox.showinfo.call_args[0]
-    assert 'Settings Saved' in args[0]
-    assert 'Configuration saved successfully' in args[1]
-
-
-@patch('moldenViz._plotter_ui.messagebox')
-@patch('moldenViz.plotter.config')
-def test_save_settings_handles_oserror(mock_config: Any, mock_messagebox: Any) -> None:
-    """Test that _save_settings handles OSError gracefully."""
-    # Set up mock to raise OSError
-    mock_config._save_current_config = MagicMock(side_effect=OSError('Permission denied'))
-
-    # Call the method
-    plotter_module.Plotter._save_settings()
-
-    # Verify that error message was shown
-    mock_messagebox.showerror.assert_called_once()
-    args = mock_messagebox.showerror.call_args[0]
-    assert 'Save Error' in args[0]
-    assert 'Failed to save configuration' in args[1]
-    assert 'Permission denied' in args[1]
-
-
-@patch('moldenViz._plotter_ui.messagebox')
-@patch('moldenViz.plotter.config')
-def test_save_settings_handles_valueerror(mock_config: Any, mock_messagebox: Any) -> None:
-    """Test that _save_settings handles ValueError gracefully."""
-    # Set up mock to raise ValueError
-    mock_config._save_current_config = MagicMock(side_effect=ValueError('Invalid config'))
-
-    # Call the method
-    plotter_module.Plotter._save_settings()
-
-    # Verify that error message was shown
-    mock_messagebox.showerror.assert_called_once()
-    args = mock_messagebox.showerror.call_args[0]
-    assert 'Save Error' in args[0]
-    assert 'Failed to save configuration' in args[1]
-    assert 'Invalid config' in args[1]
+    saved = config_module.toml.load(custom_path)
+    assert saved['background_color'] == '#123456'

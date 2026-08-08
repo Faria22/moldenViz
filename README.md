@@ -40,11 +40,9 @@ uv tool install 'moldenViz[gui]'
 
 This makes the ``moldenViz`` command available on your ``PATH``.
 
-The GUI extra uses PySide6 as its supported Qt binding. ``moldenViz`` also uses
-``tkinter``, which Python distributions commonly provide separately. If
-``python3 -m tkinter`` fails, install the tkinter package provided by your
-operating system (``brew install python-tk`` on macOS,
-``sudo apt-get install python3-tk`` on Ubuntu).
+The GUI extra uses PySide6 as its only GUI toolkit. The standalone CLI creates
+and runs the Qt application for you; applications that embed the viewer keep
+ownership of their existing Qt event loop.
 
 ## Quick start
 
@@ -72,6 +70,26 @@ operating system (``brew install python-tk`` on macOS,
   from moldenViz import Plotter
 
   Plotter(filename='my.molden')
+  ```
+
+- Embed the same controls and renderer in an existing PySide6 application:
+
+  ```python
+  from moldenViz.qt import OrbitalViewer
+
+  viewer = OrbitalViewer(parent=page)
+  page.layout().addWidget(viewer)
+  viewer.set_input(filename='my.molden')
+  ```
+
+  A host-owned dashboard can hide the built-in controls and drive the public
+  viewer API directly:
+
+  ```python
+  viewer = OrbitalViewer(filename='my.molden', parent=page, show_controls=False)
+  viewer.show_orbital(0)
+  viewer.update_appearance(contour=0.05, mo_opacity=0.8)
+  viewer.set_controls_visible(True)  # Restore the built-in panel when needed.
   ```
 
 Full CLI usage, configuration examples, and API walkthroughs live in the docs.

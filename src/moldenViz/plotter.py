@@ -1,80 +1,54 @@
-"""Plotter module for creating plots of the molecule and it's orbitals."""
+"""Standalone Qt window for the embeddable orbital viewer."""
 
 from __future__ import annotations
 
 import logging
 import sys
-import tkinter as tk
-from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
-from queue import SimpleQueue
-from tkinter import messagebox
-from typing import TYPE_CHECKING
+from collections.abc import Mapping
+from functools import partial
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, cast
 
-import numpy as np
-from pyvistaqt import BackgroundPlotter
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QAction, QCloseEvent
+from PySide6.QtWidgets import (
+    QApplication,
+    QFileDialog,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QProgressBar,
+    QVBoxLayout,
+    QWidget,
+)
 
-from ._config_module import Config
-from ._plotter_jobs import BackgroundJob
-from ._plotter_rendering import _PlotterRendering
-from ._plotter_ui import _OrbitalSelectionScreen, _PlotterUI
 from .parser import _validate_molden_input
-from .tabulator import GridType, Tabulator
+from .qt import OrbitalViewer
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
     from concurrent.futures import Future
     from os import PathLike
 
-    import pyvista as pv
-    from numpy.typing import NDArray
-
-
-def _describe_input(filename: str | PathLike[str] | None, content: str | None) -> str:
-    """Return a human-readable description of the Molden input.
-
-    Parameters
-    ----------
-    filename : str | os.PathLike[str] | None
-        Path to a Molden file.
-    content : str | None
-        Complete Molden file content.
-
-    Returns
-    -------
-    str
-        Description suitable for logging output.
-    """
-    if filename is not None:
-        return str(filename)
-    assert content is not None
-    return f'{len(content.splitlines())} molden lines'
-
+    from ._config_module import Config, MainConfig
+    from .qt import _GTOResult
+    from .tabulator import Tabulator
 
 logger = logging.getLogger(__name__)
 
 __all__ = ['Plotter']
 
-config = Config()
-_GTO_EXECUTOR = ThreadPoolExecutor(max_workers=1)
+# Qt does not retain an unparented top-level Python wrapper. Keep windows made
+# inside an existing application alive until Qt emits ``destroyed``.
+_OPEN_WINDOWS: set[Plotter] = set()
+_LOADING_DELAY_MS = 50
 
 
-@dataclass(frozen=True)
-class _GTOResult:
-    """GTO values and the structured grid snapshot they describe."""
+class Plotter(QMainWindow):
+    """Free-floating Qt window containing an :class:`OrbitalViewer`.
 
-    grid: NDArray[np.floating]
-    axes: tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]
-    grid_type: GridType
-    gtos: NDArray[np.floating]
-
-
-class Plotter(_PlotterUI, _PlotterRendering):
-    """
-    Handles the 3D visualization of molecules and molecular orbitals.
-
-    This class uses PyVista for 3D rendering and Tkinter for the user interface
-    to control plotting parameters and select orbitals.
+    If no :class:`QApplication` exists, ``Plotter`` creates one and blocks in
+    its event loop until the window closes. Inside an existing Qt application,
+    construction returns immediately and the host keeps ownership of the loop.
 
     Parameters
     ----------
@@ -85,36 +59,14 @@ class Plotter(_PlotterUI, _PlotterRendering):
         Complete contents of a Molden file. Required when neither ``filename``
         nor ``tabulator`` is provided.
     only_molecule : bool, optional
-        Only parse the atoms and skip molecular orbitals.
-        Default is `False`.
+        Skip molecular-orbital parsing and controls.
     tabulator : Tabulator, optional
-        If `None`, `Plotter` creates a `Tabulator` and tabulates the GTOs and MOs with a default grid.
-        A `Tabulator` can be passed to reuse a predetermined grid. When `only_molecule` is `False`,
-        the supplied `Tabulator` must already have tabulated GTOs available through `tabulator.gtos`.
-
-        Note: `Tabulator` grid must be spherical or cartesian. Custom grids are not allowed.
-    tk_root : tk.Tk, optional
-        If user is using the plotter inside a Tk app, `tk_root` can be passed
-        to avoid creating a new Tk instance. The caller retains ownership of a
-        supplied root and must keep its event loop running while background GTO
-        tabulation is active. Plotter does not quit or destroy a supplied root.
-
-    Attributes
-    ----------
-    tabulator : Tabulator
-        The Tabulator object used for tabulating GTOs and MOs.
-
-    Raises
-    ------
-    ValueError
-        If the provided tabulator is invalid
-        (e.g., missing grid or GTO data when `only_molecule` is `False`, or has an UNKNOWN grid type).
+        Existing structured-grid tabulator with cached GTO values.
+    config : Config | MainConfig | Mapping, optional
+        Per-window configuration overrides.
+    parent : QWidget, optional
+        Optional Qt parent for the free-floating window.
     """
-
-    _SPHERICAL_GRID_SETTINGS_WINDOW_SIZE = '400x350'
-    _CARTESIAN_GRID_SETTINGS_WINDOW_SIZE = '650x400'
-    _GTO_COMPLETION_POLL_MS = 10
-    _TK_UPDATE_MS = 10
 
     def __init__(
         self,
@@ -123,303 +75,297 @@ class Plotter(_PlotterUI, _PlotterRendering):
         content: str | None = None,
         only_molecule: bool = False,
         tabulator: Tabulator | None = None,
-        tk_root: tk.Tk | None = None,
+        config: Config | MainConfig | Mapping[str, Any] | None = None,
+        parent: QWidget | None = None,
     ) -> None:
-        logger.info('Initialising Plotter (only_molecule=%s)', only_molecule)
-
         if tabulator is not None:
             if filename is not None or content is not None:
                 raise ValueError('filename and content must not be provided with tabulator.')
         else:
             _validate_molden_input(filename, content)
 
-        self._on_screen = True
-        self._only_molecule = only_molecule
-        self._selection_screen: _OrbitalSelectionScreen | None = None
-        self._gtos_ready = only_molecule
+        application = QApplication.instance()
+        self._owns_application = application is None
+        if application is None:
+            application = QApplication(sys.argv[:1])
+        elif not application.inherits('QApplication'):
+            raise RuntimeError('Plotter requires QApplication, but a non-GUI QCoreApplication already exists.')
+        self._application = cast(QApplication, application)
 
-        self._tk_root = tk_root
-        self._no_prev_tk_root = self._tk_root is None
-        if self._tk_root is None:
-            self._tk_root = tk.Tk()
-            self._tk_root.withdraw()  # Hides window
-            logger.debug('Created internal Tk root window for Plotter UI.')
+        super().__init__(parent)
+        self.setWindowTitle('moldenViz')
+        self.resize(1200, 760)
+        self._closing = False
+        self.viewer: OrbitalViewer
+        _OPEN_WINDOWS.add(self)
+        self.destroyed.connect(lambda: _OPEN_WINDOWS.discard(self))
 
-        self._gto_completions: SimpleQueue[Callable[[], None]] = SimpleQueue()
-        self._gto_completion_poll_id: str | None = None
-        self._gto_job: BackgroundJob[_GTOResult] = BackgroundJob(
-            _GTO_EXECUTOR,
-            self._dispatch_gto_completion,
-        )
-        self._schedule_gto_completion_poll()
-
-        self._pv_plotter = BackgroundPlotter(editor=False)
-        self._pv_plotter.set_background(config.background_color)
-        self._pv_plotter.show_axes()
-        logger.debug('Configured PyVista plotter background colour to %s', config.background_color)
-
-        self._add_orbital_menus_to_pv_plotter()
-        self._connect_pv_plotter_close_signal()
-        self._override_clear_all_button()
-
-        if tabulator is not None:
-            logger.info('Using provided Tabulator instance with grid type %s', tabulator.grid_type.value)
-            if not hasattr(tabulator, 'grid'):
-                raise ValueError('Tabulator does not have grid attribute.')
-
-            if not tabulator.has_gtos and not only_molecule:
-                raise ValueError('Tabulator does not have tabulated GTOs.')
-
-            if tabulator.grid_type == GridType.UNKNOWN:
-                raise ValueError('The plotter only supports spherical and cartesian grids.')
-
-            self.tabulator = tabulator
+        if self._owns_application:
+            self.setCentralWidget(self._create_loading_placeholder())
+            self.show()
+            initialize = partial(
+                self._initialize_owned_viewer,
+                filename,
+                content,
+                only_molecule,
+                tabulator,
+                config,
+            )
+            QTimer.singleShot(_LOADING_DELAY_MS, initialize)
+            self._application.exec()
         else:
-            logger.info('Creating Tabulator for input %s', _describe_input(filename, content))
-            self.tabulator = Tabulator(filename=filename, content=content, only_molecule=only_molecule)
-        self._gtos_ready = self._only_molecule or self.tabulator.has_gtos
+            self._initialize_viewer(filename, content, only_molecule, tabulator, config)
+            self.show()
 
-        self._molecule_opacity = config.molecule.opacity
-        self._load_molecule(config)
+    def _create_loading_placeholder(self) -> QWidget:
+        """Build the lightweight view shown before VTK initialization.
 
-        # If no tabulator was passed, create default grid
-        if not only_molecule and tabulator is None:
-            if config.grid.default_type == 'spherical':
-                logger.info(
-                    'Generating default spherical grid with %dx%dx%d samples.',
-                    config.grid.spherical.num_r_points,
-                    config.grid.spherical.num_theta_points,
-                    config.grid.spherical.num_phi_points,
-                )
-                self.tabulator.spherical_grid(
-                    np.linspace(
-                        0,
-                        max(config.grid.max_radius_multiplier * self._molecule.max_radius, config.grid.min_radius),
-                        config.grid.spherical.num_r_points,
-                    ),
-                    np.linspace(0, np.pi, config.grid.spherical.num_theta_points),
-                    np.linspace(0, 2 * np.pi, config.grid.spherical.num_phi_points),
-                    tabulate_gtos=False,
-                )
-            else:  # cartesian
-                r = max(config.grid.max_radius_multiplier * self._molecule.max_radius, config.grid.min_radius)
-                logger.info(
-                    'Generating default cartesian grid spanning ±%.2f with %dx%dx%d samples.',
-                    r,
-                    config.grid.cartesian.num_x_points,
-                    config.grid.cartesian.num_y_points,
-                    config.grid.cartesian.num_z_points,
-                )
-                self.tabulator.cartesian_grid(
-                    np.linspace(-r, r, config.grid.cartesian.num_x_points),
-                    np.linspace(-r, r, config.grid.cartesian.num_y_points),
-                    np.linspace(-r, r, config.grid.cartesian.num_z_points),
-                    tabulate_gtos=False,
-                )
-            self._gtos_ready = False
-            self._schedule_gto_tabulation()
+        Returns
+        -------
+        QWidget
+            Loading label and indeterminate progress indicator.
+        """
+        placeholder = QWidget(self)
+        placeholder.setObjectName('moldenVizLoadingPlaceholder')
+        layout = QVBoxLayout(placeholder)
+        layout.addStretch()
+        label = QLabel('Loading molecular viewer…', placeholder)
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(label)
+        progress = QProgressBar(placeholder)
+        progress.setRange(0, 0)
+        progress.setTextVisible(False)
+        progress.setFixedWidth(320)
+        layout.addWidget(progress, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addStretch()
+        return placeholder
 
-        # If we want to have the molecular orbitals, we need to initiate Tk before Qt
-        # That is why we have this weird if statement separated this way
-        if only_molecule:
-            logger.info('Running in molecule-only mode; skipping orbital mesh creation.')
-            if self._no_prev_tk_root:
-                self._run_internal_event_loop()
+    def _initialize_owned_viewer(
+        self,
+        filename: str | PathLike[str] | None,
+        content: str | None,
+        only_molecule: bool,
+        tabulator: Tabulator | None,
+        config: Config | MainConfig | Mapping[str, Any] | None,
+    ) -> None:
+        """Initialize a standalone viewer and report startup failures in Qt."""
+        if self._closing:
             return
-
-        self._orb_mesh = self._create_mo_mesh()
-        self._orb_actor: pv.Actor | None = None
-
-        # Values for MO, not the molecule
-        self._contour = config.mo.contour
-        self._opacity = config.mo.opacity
-
-        # Set colormap based on configuration
-        if config.mo.custom_colors:
-            # Create custom colormap from two colors
-            self._cmap = self._custom_cmap_from_colors(config.mo.custom_colors)
-        else:
-            self._cmap = config.mo.color_scheme
-
-        if not self._only_molecule:
-            self._selection_screen = _OrbitalSelectionScreen(self)
-            logger.debug('Orbital selection screen initialised.')
-            if not self._gtos_ready:
-                self._selection_screen._set_loading_state(True)  # ruff:ignore[private-member-access]
-
-        if self._no_prev_tk_root:
-            self._run_internal_event_loop()
-
-    def _run_internal_event_loop(self) -> None:
-        """Run the native GUI loop for a Plotter-owned Tk root."""
-        if sys.platform != 'darwin':
-            logger.debug('Entering Tk main loop.')
-            self._tk_root.mainloop()
-            return
-
-        logger.debug('Entering Qt main loop and polling Tk events on macOS.')
-        self._pv_plotter.add_callback(
-            self._tk_root.update,
-            interval=self._TK_UPDATE_MS,
-        )
-        self._pv_plotter.app.exec()
-
-    def wait_for_gtos(self, timeout: float | None = None) -> None:
-        """Block until the background GTO tabulation finishes."""
-        if self._gtos_ready:
-            return
-        if self._gto_job.future is None:
-            raise RuntimeError('GTO tabulation has not been scheduled.')
         try:
-            result = self._gto_job.wait(timeout=timeout)
-        except RuntimeError:
-            if self._gtos_ready:
-                return
-            raise
-        if not self._gtos_ready:
-            self._apply_gtos_ready(result, 0.0)
+            self._initialize_viewer(filename, content, only_molecule, tabulator, config)
+        except Exception as exc:
+            logger.exception('Unable to initialize the molecular viewer.')
+            self._show_error('Unable to launch moldenViz', exc)
+            self.close()
+
+    def _initialize_viewer(
+        self,
+        filename: str | PathLike[str] | None,
+        content: str | None,
+        only_molecule: bool,
+        tabulator: Tabulator | None,
+        config: Config | MainConfig | Mapping[str, Any] | None,
+    ) -> None:
+        """Construct the viewer and replace any loading placeholder."""
+        self.viewer = OrbitalViewer(
+            filename=filename,
+            content=content,
+            only_molecule=only_molecule,
+            tabulator=tabulator,
+            config=config,
+            parent=self,
+        )
+        self.setCentralWidget(self.viewer)
+        self._pv_plotter = self.viewer.interactor
+        self.viewer.error_occurred.connect(self._show_error)
+        self.viewer.export_requested.connect(self._handle_export_request)
+        self._build_menus(only_molecule)
+
+    @property
+    def tabulator(self) -> Tabulator:
+        """Tabulator used by the contained viewer."""
+        return self.viewer.tabulator
 
     @property
     def _gto_future(self) -> Future[_GTOResult] | None:
-        """Compatibility view of the pending background future."""
-        return self._gto_job.future
+        """Compatibility view of pending GTO computation."""
+        return self.viewer._gto_future  # ruff:ignore[private-member-access]
 
-    def _dispatch_gto_completion(self, callback: Callable[[], None]) -> None:
-        """Publish a completion callback without interacting with Tk."""
-        if self._on_screen:
-            self._gto_completions.put(callback)
+    def _build_menus(self, only_molecule: bool) -> None:
+        view_menu = self.menuBar().addMenu('View')
+        clear_action = QAction('Clear orbital', self)
+        clear_action.setEnabled(not only_molecule)
+        clear_action.triggered.connect(lambda: self.viewer.show_orbital(-1))
+        view_menu.addAction(clear_action)
+        reset_camera = QAction('Reset camera', self)
+        reset_camera.triggered.connect(self.viewer.interactor.reset_camera)
+        view_menu.addAction(reset_camera)
 
-    def _schedule_gto_completion_poll(self) -> None:
-        """Schedule completion polling from the Tk-owning thread."""
-        if self._tk_root is None or not self._on_screen:
-            return
-        self._gto_completion_poll_id = self._tk_root.after(
-            self._GTO_COMPLETION_POLL_MS,
-            self._poll_gto_completions,
+        settings_menu = self.menuBar().addMenu('Settings')
+        appearance_tab = self.viewer.controls.tabs.indexOf(self.viewer.controls.appearance_tab)
+        settings_tabs = (
+            ('Grid', self.viewer.controls.tabs.indexOf(self.viewer.controls.grid_tab)),
+            ('Appearance', appearance_tab),
         )
-
-    def _poll_gto_completions(self) -> None:
-        """Deliver queued background completions on the Tk-owning thread."""
-        self._gto_completion_poll_id = None
-        if not self._on_screen:
-            return
-        while not self._gto_completions.empty():
-            callback = self._gto_completions.get_nowait()
-            callback()
-            if not self._on_screen:
-                return
-        self._schedule_gto_completion_poll()
-
-    def _stop_gto_completion_poll(self) -> None:
-        """Stop polling and discard callbacks after the UI closes."""
-        if self._tk_root is not None and self._gto_completion_poll_id is not None:
-            self._tk_root.after_cancel(self._gto_completion_poll_id)
-            self._gto_completion_poll_id = None
-        while not self._gto_completions.empty():
-            self._gto_completions.get_nowait()
-
-    def _schedule_gto_tabulation(
-        self,
-        axes: tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]] | None = None,
-        grid_type: GridType | None = None,
-    ) -> None:
-        """Build a grid and tabulate its GTOs in the background."""
-        if self._only_molecule or self._gtos_ready or self._gto_job.pending:
-            return
-
-        if axes is None:
-            current_axes = self.tabulator.grid_axes
-            if current_axes is None:
-                raise RuntimeError('Structured grid axes are not available.')
-            resolved_axes = (current_axes[0], current_axes[1], current_axes[2])
-            resolved_grid_type = self.tabulator.grid_type
-            current_grid = self.tabulator.grid.copy()
-        elif grid_type is None:
-            raise ValueError('Grid type is required when scheduling new axes.')
-        else:
-            resolved_axes = axes
-            resolved_grid_type = grid_type
-            current_grid = None
-
-        frozen_axes = (
-            resolved_axes[0].copy(),
-            resolved_axes[1].copy(),
-            resolved_axes[2].copy(),
-        )
-        for axis in frozen_axes:
-            axis.setflags(write=False)
-
-        def build_and_tabulate() -> _GTOResult:
-            grid = current_grid
-            if grid is None:
-                grid = Tabulator._build_grid(  # ruff:ignore[private-member-access]
-                    *frozen_axes,
-                    resolved_grid_type,
-                )
-            grid.setflags(write=False)
-            return _GTOResult(
-                grid=grid,
-                axes=frozen_axes,
-                grid_type=resolved_grid_type,
-                gtos=self.tabulator.compute_gtos(grid),
+        for label, tab_index in settings_tabs:
+            action = QAction(label, self)
+            action.setEnabled(not only_molecule or tab_index == appearance_tab)
+            action.triggered.connect(
+                lambda _checked=False, index=tab_index: self.viewer.controls.tabs.setCurrentIndex(index),
             )
+            settings_menu.addAction(action)
+        save_action = QAction('Save settings', self)
+        save_action.triggered.connect(self._save_settings)
+        settings_menu.addAction(save_action)
 
-        logger.info('Starting background GTO tabulation...')
-        self._gto_job.start(
-            build_and_tabulate,
-            on_success=self._apply_gtos_ready,
-            on_error=self._handle_gto_error,
+        export_menu = self.menuBar().addMenu('Export')
+        data_action = QAction('Orbital data…', self)
+        data_action.setEnabled(not only_molecule)
+        data_action.triggered.connect(
+            lambda: self._handle_export_request(
+                'data',
+                {
+                    'format': self.viewer.controls.data_format.currentText(),
+                    'scope': self.viewer.controls.data_scope.currentData(),
+                },
+            ),
         )
-
-    def _handle_gto_error(self, exc: Exception) -> None:
-        """Restore usable UI state and report a failed GTO job."""
-        self._gtos_ready = self.tabulator.has_gtos
-        if self._selection_screen:
-            self._selection_screen._on_gtos_ready()  # ruff:ignore[private-member-access]
-        logger.error(
-            'Background GTO tabulation failed.',
-            exc_info=(type(exc), exc, exc.__traceback__),
+        export_menu.addAction(data_action)
+        image_action = QAction('Image…', self)
+        image_action.triggered.connect(
+            lambda: self._handle_export_request(
+                'image',
+                {
+                    'format': self.viewer.controls.image_format.currentText(),
+                    'transparent': self.viewer.controls.transparent_background.isChecked(),
+                },
+            ),
         )
-        messagebox.showerror('Orbital Tabulation Failed', f'Failed to tabulate orbitals:\n\n{exc!s}')
+        export_menu.addAction(image_action)
 
-    def _apply_gtos_ready(self, result: _GTOResult, elapsed: float) -> None:
-        """Store computed GTOs and update UI state."""
-        if not self._on_screen:
+    def _save_settings(self) -> None:
+        try:
+            self.viewer.save_settings()
+        except OSError as exc:
+            self._show_error('Saving settings failed', exc)
+        else:
+            QMessageBox.information(self, 'Settings saved', 'Configuration saved successfully.')
+
+    def _handle_export_request(self, kind: str, options: object) -> None:
+        values = dict(options) if isinstance(options, Mapping) else {}
+        if kind == 'data':
+            self._export_data(values)
+        elif kind == 'image':
+            self._export_image(values)
+        else:
+            self._show_error('Export failed', ValueError(f'Unknown export kind: {kind}'))
+
+    def _export_data(self, options: Mapping[str, Any]) -> None:
+        file_format = str(options.get('format', 'vtk'))
+        scope = str(options.get('scope', 'current'))
+        if scope == 'current' and self.viewer.current_orbital_index < 0:
+            self._show_error('Export failed', ValueError('No orbital is currently selected.'))
             return
-        self.tabulator._set_structured_grid(  # ruff:ignore[private-member-access]
-            result.grid,
-            result.axes,
-            result.grid_type,
-        )
-        self.tabulator.set_gtos(result.gtos)
-        self._gtos_ready = True
-        logger.info('GTO tabulation completed in %.2fs.', elapsed)
-        self._orb_mesh = self._create_mo_mesh()
-        if self._selection_screen:
-            self._selection_screen._on_gtos_ready()  # ruff:ignore[private-member-access]
-            if self._selection_screen.current_mo_ind >= 0:
-                self.plot_orbital(self._selection_screen.current_mo_ind)
+        suffix = f'.{file_format}'
+        default_name = f'orbital{suffix}' if scope == 'current' else f'orbitals_all{suffix}'
+        filters = 'VTK files (*.vtk)' if file_format == 'vtk' else 'Gaussian Cube files (*.cube)'
+        destination, _selected = QFileDialog.getSaveFileName(self, 'Export orbital data', default_name, filters)
+        if not destination:
+            return
+        try:
+            self.viewer.export_data(destination, file_format=file_format, scope=scope)
+        except (OSError, RuntimeError, ValueError) as exc:
+            self._show_error('Export failed', exc)
 
-    def _ensure_gtos_ready(self) -> bool:
-        """Return True if GTO data are ready for orbital operations.
+    def _export_image(self, options: Mapping[str, Any]) -> None:
+        file_format = str(options.get('format', 'png'))
+        transparent = bool(options.get('transparent', False))
+        suffix = '.jpg' if file_format == 'jpeg' else f'.{file_format}'
+        filters = {
+            'png': 'PNG files (*.png)',
+            'jpeg': 'JPEG files (*.jpg *.jpeg)',
+            'svg': 'SVG files (*.svg)',
+            'pdf': 'PDF files (*.pdf)',
+        }
+        destination, _selected = QFileDialog.getSaveFileName(
+            self,
+            'Export image',
+            f'moldenviz_export{suffix}',
+            filters[file_format],
+        )
+        if not destination:
+            return
+        try:
+            self.viewer.export_image(
+                Path(destination),
+                file_format=file_format,
+                transparent=transparent,
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            self._show_error('Export failed', exc)
+
+    def _show_error(self, title: str, exc: object) -> None:
+        QMessageBox.critical(self, title, str(exc))
+
+    def show_orbital(self, index: int) -> None:
+        """Delegate orbital selection to the contained viewer."""
+        self.viewer.show_orbital(index)
+
+    def plot_orbital(self, index: int) -> None:
+        """Compatibility alias for :meth:`show_orbital`."""
+        self.viewer.show_orbital(index)
+
+    def wait_for_gtos(self, timeout: float | None = None) -> None:
+        """Wait for background GTO tabulation."""
+        self.viewer.wait_for_gtos(timeout)
+
+    def toggle_molecule(self) -> None:
+        """Toggle all molecule actors."""
+        self.viewer.toggle_molecule()
+
+    def toggle_atoms(self) -> None:
+        """Toggle atom actors."""
+        self.viewer.toggle_atoms()
+
+    def toggle_bonds(self) -> None:
+        """Toggle bond actors."""
+        self.viewer.toggle_bonds()
+
+    def is_molecule_visible(self) -> bool:
+        """Return whether molecule actors are visible.
 
         Returns
         -------
         bool
-            True when orbital plots can be rendered immediately.
+            Whether at least one molecule actor is visible.
         """
-        if self._gtos_ready:
-            return True
-        logger.debug('Ignoring orbital request while GTOs are loading.')
-        return False
+        return self.viewer.is_molecule_visible()
 
-    def _cancel_gto_future(self) -> None:
-        """Cancel any pending GTO computation."""
-        if not self._on_screen:
-            self._stop_gto_completion_poll()
-        if not self._gto_job.pending:
-            return
-        future = self._gto_job.future
-        if future is not None and not future.done():
-            logger.info('Cancelling pending GTO tabulation job.')
-        self._gto_job.cancel()
+    def are_atoms_visible(self) -> bool:
+        """Return whether atom actors are visible.
+
+        Returns
+        -------
+        bool
+            Whether at least one atom actor is visible.
+        """
+        return self.viewer.are_atoms_visible()
+
+    def are_bonds_visible(self) -> bool:
+        """Return whether bond actors are visible.
+
+        Returns
+        -------
+        bool
+            Whether at least one bond actor is visible.
+        """
+        return self.viewer.are_bonds_visible()
+
+    def closeEvent(self, event: QCloseEvent) -> None:  # ruff: ignore[invalid-function-name]
+        """Close VTK resources before the top-level Qt window is destroyed."""
+        self._closing = True
+        viewer = getattr(self, 'viewer', None)
+        if viewer is not None:
+            viewer.close()
+        _OPEN_WINDOWS.discard(self)
+        event.accept()

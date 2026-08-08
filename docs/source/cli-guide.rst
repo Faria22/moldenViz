@@ -47,7 +47,11 @@ Render molecular orbitals from a Molden file:
 
    moldenViz path/to/file.molden
 
-This launches the interactive viewer with both the molecule structure and orbital visualization:
+This launches the standalone PySide6 viewer with both the molecule structure
+and orbital visualization. The CLI owns the Qt event loop until the window is
+closed. Its window appears first with a loading indicator while the VTK-backed
+renderer and molecule meshes initialize, then replaces that placeholder with
+the interactive viewer.
 
 The interactive window allows you to:
 

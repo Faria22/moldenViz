@@ -23,6 +23,7 @@ Key Features
 * **Grid Tabulation**: Create custom grids and tabulate Gaussian-type orbitals (GTOs)
 * **Export Capabilities**: Export orbital data to VTK/Gaussian cube formats and visualizations to PNG/JPEG/SVG/PDF
 * **CLI and Python API**: Use from command line or integrate into Python scripts
+* **Embeddable Qt Widget**: Add ``OrbitalViewer`` to an existing PySide6 layout without transferring event-loop ownership
 * **Example Molecules**: Built-in example molecules for testing and demonstration
 
 Quick Start
