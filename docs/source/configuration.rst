@@ -94,9 +94,9 @@ Control the grid used when tabulating molecular orbitals:
    num_z_points = 100
 
    [grid.adaptive]
-   num_x_points = 21
-   num_y_points = 21
-   num_z_points = 21
+   num_x_points = 20
+   num_y_points = 20
+   num_z_points = 20
    scale = 5.0
 
 The ``default_type`` option determines which grid type is used when the plotter is first loaded:
@@ -142,9 +142,9 @@ Select adaptive mode and configure its coarse resolution and fine scale:
    default_type = 'adaptive'
 
    [grid.adaptive]
-   num_x_points = 21
-   num_y_points = 21
-   num_z_points = 21
+   num_x_points = 20
+   num_y_points = 20
+   num_z_points = 20
    scale = 5.0
 
 Fine spacing is approximately ``coarse_spacing / scale``. The scale must be
@@ -194,10 +194,12 @@ Tradeoffs:
 Local benchmark
 ~~~~~~~~~~~~~~~
 
-The benchmark suite includes ``TimeInitialGridTabulation`` and
-``TimeAdaptiveGridPreparation`` in ``benchmarks/grids.py``. On the bundled CO
+The benchmark suite includes ``TimeInitialGridTabulation``,
+``TimeAdaptiveGridPreparation``, and ``TimeAdaptiveMeshRefinement`` in
+``benchmarks/grids.py``. On the bundled CO
 example over identical ``[-5, 5]`` Cartesian bounds, using an Apple M1 with
-8 GB RAM and three repetitions, the median development measurements were:
+8 GB RAM and at least three timed repetitions, the median development
+measurements were:
 
 .. list-table::
    :header-rows: 1
@@ -216,15 +218,16 @@ example over identical ``[-5, 5]`` Cartesian bounds, using an Apple M1 with
      - 1.84 MiB
    * - Full adaptive preparation (scale 5.0)
      - 177,787 fine points from 1,320 crossed cells
-     - 0.844 s
+     - 0.155 s
      - 35.3 MiB
 
 The initial coarse GTO stage was about 198 times faster and used about 108
-times less GTO storage than the uniform initial grid. Full adaptive preparation
-was slower than the uniform-grid calculation in this small CO case, but its
-retained fine GTO cache was about 5.6 times smaller. Results depend strongly on
-the molecule, contour, coarse resolution, scale, worker count, and hardware;
-run the ASV benchmarks locally before choosing production defaults.
+times less GTO storage than the uniform initial grid. After vectorizing fine-cell
+extraction, full adaptive preparation was about 1.6 times faster than the
+uniform-grid GTO calculation in this small CO case, and its retained fine GTO
+cache was about 5.6 times smaller. Results depend strongly on the molecule,
+contour, coarse resolution, scale, worker count, and hardware; run the ASV
+benchmarks locally before choosing production defaults.
 
 Molecular Orbital Settings
 --------------------------

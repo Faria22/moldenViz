@@ -527,6 +527,10 @@ class OrbitalControlPanel(QWidget):
         self.cartesian_grid.setVisible(not spherical)
         self.adaptive_scale_label.setVisible(grid_type == 'adaptive')
         self.adaptive_scale.setVisible(grid_type == 'adaptive')
+        if grid_type in {'cartesian', 'adaptive'}:
+            grid_config = getattr(self._viewer.config.grid, grid_type)
+            for axis, field_name in zip('xyz', ('num_x_points', 'num_y_points', 'num_z_points'), strict=True):
+                self.cartesian_fields[axis][2].setValue(getattr(grid_config, field_name))
 
     def _apply_grid(self) -> None:
         try:

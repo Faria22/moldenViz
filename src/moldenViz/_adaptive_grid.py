@@ -16,6 +16,8 @@ if TYPE_CHECKING:
 
 AdaptiveScale = float | tuple[float, float, float]
 _AXIS_COUNT = 3
+_HEXAHEDRON_POINT_COUNT = 8
+_VOXEL_TO_HEXAHEDRON = (0, 1, 3, 2, 4, 5, 7, 6)
 
 
 def parse_scale(value: str) -> AdaptiveScale:
@@ -155,53 +157,71 @@ def refined_grid(
     -------
     pyvista.UnstructuredGrid
         Refined cells with shared boundary points deduplicated.
+
+    Raises
+    ------
+    ValueError
+        If the source is not an axis-aligned Cartesian grid or a cell ID is
+        outside the source grid.
     """
     pv = import_module('pyvista')
     scales = normalize_scale(scale)
-    fractions = tuple(_axis_fractions(value) for value in scales)
-    point_ids: dict[tuple[float, float, float], int] = {}
-    points: list[tuple[float, float, float]] = []
-    hexes: list[list[int]] = []
-
-    def point_id(point: tuple[float, float, float]) -> int:
-        existing = point_ids.get(point)
-        if existing is not None:
-            return existing
-        new_id = len(points)
-        point_ids[point] = new_id
-        points.append(point)
-        return new_id
-
-    for cell_id in sorted({int(value) for value in cell_ids}):
-        bounds = coarse_grid.get_cell(cell_id).bounds
-        axes = tuple(
-            low + (high - low) * axis_fractions
-            for low, high, axis_fractions in zip(
-                (bounds.x_min, bounds.y_min, bounds.z_min),
-                (bounds.x_max, bounds.y_max, bounds.z_max),
-                fractions,
-                strict=True,
-            )
-        )
-        for ix in range(len(axes[0]) - 1):
-            for iy in range(len(axes[1]) - 1):
-                for iz in range(len(axes[2]) - 1):
-                    corners = (
-                        (axes[0][ix], axes[1][iy], axes[2][iz]),
-                        (axes[0][ix + 1], axes[1][iy], axes[2][iz]),
-                        (axes[0][ix + 1], axes[1][iy + 1], axes[2][iz]),
-                        (axes[0][ix], axes[1][iy + 1], axes[2][iz]),
-                        (axes[0][ix], axes[1][iy], axes[2][iz + 1]),
-                        (axes[0][ix + 1], axes[1][iy], axes[2][iz + 1]),
-                        (axes[0][ix + 1], axes[1][iy + 1], axes[2][iz + 1]),
-                        (axes[0][ix], axes[1][iy + 1], axes[2][iz + 1]),
-                    )
-                    hexes.append(
-                        [point_id((float(corner[0]), float(corner[1]), float(corner[2]))) for corner in corners],
-                    )
-
-    if not hexes:
+    selected_cell_ids = np.asarray(sorted({int(value) for value in cell_ids}), dtype=np.int64)
+    if selected_cell_ids.size == 0:
         return pv.UnstructuredGrid()
-    cells = np.column_stack((np.full(len(hexes), 8, dtype=np.int64), np.asarray(hexes, dtype=np.int64))).ravel()
-    cell_types = np.full(len(hexes), pv.CellType.HEXAHEDRON, dtype=np.uint8)
-    return pv.UnstructuredGrid(cells, cell_types, np.asarray(points))
+    if selected_cell_ids[0] < 0 or selected_cell_ids[-1] >= coarse_grid.n_cells:
+        raise ValueError('Cell IDs must identify cells in the coarse grid.')
+
+    fractions = tuple(_axis_fractions(value) for value in scales)
+    coarse_points = np.asarray(coarse_grid.points)
+    coarse_axes = tuple(np.unique(coarse_points[:, axis]).astype(np.float64) for axis in range(_AXIS_COUNT))
+    if np.prod([len(axis) for axis in coarse_axes]) != coarse_grid.n_points:
+        raise ValueError('Adaptive refinement requires an axis-aligned Cartesian grid.')
+
+    fine_axes: list[NDArray[np.float64]] = []
+    subdivisions: list[int] = []
+    for axis, axis_fractions in zip(coarse_axes, fractions, strict=True):
+        subdivisions.append(len(axis_fractions) - 1)
+        interval_points = axis[:-1, None] + np.diff(axis)[:, None] * axis_fractions[:-1]
+        fine_axes.append(np.concatenate((interval_points.ravel(), axis[-1:])))
+
+    coarse_centers = np.asarray(coarse_grid.cell_centers().points)[selected_cell_ids]
+    coarse_indices = tuple(
+        np.searchsorted(axis, coarse_centers[:, dimension], side='right') - 1
+        for dimension, axis in enumerate(coarse_axes)
+    )
+    fine_indices = tuple(
+        indices[:, None] * count + np.arange(count, dtype=np.int64)[None, :]
+        for indices, count in zip(coarse_indices, subdivisions, strict=True)
+    )
+    fine_x = fine_indices[0][:, :, None, None]
+    fine_y = fine_indices[1][:, None, :, None]
+    fine_z = fine_indices[2][:, None, None, :]
+    num_x_cells = len(fine_axes[0]) - 1
+    num_y_cells = len(fine_axes[1]) - 1
+    selected_fine_cells = (fine_x + num_x_cells * (fine_y + num_y_cells * fine_z)).ravel()
+
+    full_grid = pv.RectilinearGrid(*fine_axes)
+    result = full_grid.extract_cells(selected_fine_cells)
+
+    # ``extract_cells`` may materialize float32 points even when the rectilinear
+    # axes are float64. Reconstruct them from VTK's source IDs so tabulation sees
+    # the same coordinates as direct subdivision.
+    original_point_ids = np.asarray(result.point_data['vtkOriginalPointIds'])
+    num_x_points = len(fine_axes[0])
+    num_y_points = len(fine_axes[1])
+    point_x = original_point_ids % num_x_points
+    point_y = (original_point_ids // num_x_points) % num_y_points
+    point_z = original_point_ids // (num_x_points * num_y_points)
+    points = np.column_stack((fine_axes[0][point_x], fine_axes[1][point_y], fine_axes[2][point_z]))
+
+    voxel_cells = result.cells.reshape(-1, _HEXAHEDRON_POINT_COUNT + 1)
+    hexahedron_points = voxel_cells[:, 1:][:, _VOXEL_TO_HEXAHEDRON]
+    hexahedron_cells = np.column_stack(
+        (
+            np.full(result.n_cells, _HEXAHEDRON_POINT_COUNT, dtype=np.int64),
+            hexahedron_points,
+        ),
+    ).ravel()
+    cell_types = np.full(result.n_cells, pv.CellType.HEXAHEDRON, dtype=np.uint8)
+    return pv.UnstructuredGrid(hexahedron_cells, cell_types, points)

@@ -132,7 +132,7 @@ def test_valid_grid_type_adaptive() -> None:
     """Test that 'adaptive' is accepted as a valid grid type."""
     grid_config = config_module.GridConfig(default_type='adaptive')
     assert grid_config.default_type == 'adaptive'
-    assert grid_config.adaptive.num_x_points == 21  # ruff: ignore[magic-value-comparison]
+    assert grid_config.adaptive.num_x_points == 20  # ruff: ignore[magic-value-comparison]
     assert grid_config.adaptive.scale == pytest.approx(5.0)
 
 

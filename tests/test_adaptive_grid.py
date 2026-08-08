@@ -86,6 +86,58 @@ def test_fractional_refinement_is_conforming_across_adjacent_cells() -> None:
     assert np.isclose(fine.bounds.x_max, 1.0)
 
 
+@pytest.mark.parametrize(
+    ('scale', 'expected_cells', 'expected_points'),
+    [
+        (1.5, 16, 45),
+        ((2.0, 3.0, 2.5), 36, 80),
+    ],
+)
+def test_vectorized_refinement_preserves_fractional_and_anisotropic_geometry(
+    scale: float | tuple[float, float, float],
+    expected_cells: int,
+    expected_points: int,
+) -> None:
+    grid = structured_grid()
+    fine = refined_grid(grid, [0, 1], scale)
+
+    assert fine.n_cells == expected_cells
+    assert fine.n_points == expected_points
+    assert np.asarray(fine.points).dtype == np.float64
+    assert set(fine.celltypes) == {pv.CellType.HEXAHEDRON}
+
+
+def test_refinement_deduplicates_repeated_cell_ids() -> None:
+    grid = structured_grid()
+    expected = refined_grid(grid, [0, 1], 2.0)
+    actual = refined_grid(grid, [1, 0, 1, 0], 2.0)
+
+    assert actual.n_cells == expected.n_cells
+    assert actual.n_points == expected.n_points
+    np.testing.assert_allclose(
+        np.unique(actual.points, axis=0),
+        np.unique(expected.points, axis=0),
+    )
+
+
+def test_refined_cells_map_back_to_selected_coarse_cells() -> None:
+    grid = structured_grid()
+    selected = np.asarray([0, 3, 6])
+    fine = refined_grid(grid, selected, (2.0, 3.0, 2.5))
+
+    containing = grid.find_containing_cell(np.asarray(fine.cell_centers().points))
+    actual_ids, counts = np.unique(containing, return_counts=True)
+
+    np.testing.assert_array_equal(actual_ids, selected)
+    np.testing.assert_array_equal(counts, np.full(selected.size, 18))
+
+
+@pytest.mark.parametrize('cell_id', [-1, 8])
+def test_refinement_rejects_invalid_cell_ids(cell_id: int) -> None:
+    with pytest.raises(ValueError, match='Cell IDs'):
+        refined_grid(structured_grid(), [cell_id], 2.0)
+
+
 def test_scale_one_keeps_one_cell_per_selected_cell() -> None:
     grid = structured_grid()
     fine = refined_grid(grid, [0, 1], 1.0)

@@ -73,3 +73,24 @@ class TimeAdaptiveGridPreparation:
         cell_ids = crossed_cell_ids(self.coarse_grid, self.coarse_mos, 0.1)
         fine_grid = refined_grid(self.coarse_grid, cell_ids, 5.0)
         self.tabulator.compute_gtos(np.asarray(fine_grid.points))
+
+
+class TimeAdaptiveMeshRefinement:
+    """Measure vectorized extraction of contour-crossed fine cells."""
+
+    number = 1
+    repeat = (3, 10, 1.0)
+
+    def setup(self) -> None:
+        """Prepare the crossed coarse-cell IDs used by adaptive mode."""
+        tabulator = Tabulator(content=examples.co)
+        axis = np.linspace(-5.0, 5.0, 21)
+        tabulator.cartesian_grid(axis, axis, axis)
+        self.coarse_grid = pv.StructuredGrid()
+        self.coarse_grid.points = tabulator.grid
+        self.coarse_grid.dimensions = tabulator.grid_dimensions[::-1]
+        self.cell_ids = crossed_cell_ids(self.coarse_grid, tabulator.tabulate_mos(), 0.1)
+
+    def time_refine_crossed_cells(self) -> None:
+        """Refine selected coarse cells at matched Cartesian spacing."""
+        refined_grid(self.coarse_grid, self.cell_ids, 5.0)

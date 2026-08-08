@@ -142,6 +142,18 @@ def test_adaptive_grid_controls_show_scale_field() -> None:
     viewer.close()
 
 
+def test_switching_to_adaptive_grid_loads_coarse_point_counts() -> None:
+    viewer = OrbitalViewer()
+    controls = viewer.controls
+
+    controls.grid_type.setCurrentText('cartesian')
+    assert tuple(controls.cartesian_fields[axis][2].value() for axis in 'xyz') == (100, 100, 100)
+
+    controls.grid_type.setCurrentText('adaptive')
+    assert tuple(controls.cartesian_fields[axis][2].value() for axis in 'xyz') == (20, 20, 20)
+    viewer.close()
+
+
 def test_appearance_control_steps_and_contour_buttons() -> None:
     viewer = OrbitalViewer()
     controls = viewer.controls

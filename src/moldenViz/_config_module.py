@@ -55,9 +55,9 @@ class CartesianGridConfig(BaseModel):
 class AdaptiveGridConfig(BaseModel):
     """Configuration for cell-local adaptive Cartesian grids."""
 
-    num_x_points: int = Field(21, ge=2, description='Number of coarse x points')
-    num_y_points: int = Field(21, ge=2, description='Number of coarse y points')
-    num_z_points: int = Field(21, ge=2, description='Number of coarse z points')
+    num_x_points: int = Field(20, ge=2, description='Number of coarse x points')
+    num_y_points: int = Field(20, ge=2, description='Number of coarse y points')
+    num_z_points: int = Field(20, ge=2, description='Number of coarse z points')
     scale: AdaptiveScale = Field(5.0, description='Fine-grid resolution multiplier')
 
     @field_validator('scale')
