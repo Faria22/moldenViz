@@ -35,6 +35,37 @@ def test_root_all_defines_supported_api() -> None:
     assert moldenViz.__all__ == EXPECTED_ROOT_API
 
 
+def test_bare_root_import_defers_public_implementation_modules() -> None:
+    """A bare package import should not initialize NumPy or GUI backends."""
+    script = """
+import sys
+import moldenViz
+
+assert 'Atom' in dir(moldenViz)
+assert 'moldenViz.models' not in sys.modules
+assert 'moldenViz.parser' not in sys.modules
+assert 'moldenViz.tabulator' not in sys.modules
+assert 'numpy' not in sys.modules
+assert 'PySide6' not in sys.modules
+"""
+    subprocess.run([sys.executable, '-c', script], check=True)
+
+
+def test_plotter_import_defers_rendering_backend() -> None:
+    """Importing the GUI class should not initialize VTK before construction."""
+    script = """
+import sys
+from moldenViz import Plotter
+
+assert Plotter.__module__ == 'moldenViz.plotter'
+assert 'pyvista' not in sys.modules
+assert 'pyvistaqt' not in sys.modules
+assert 'pydantic' not in sys.modules
+assert 'matplotlib' not in sys.modules
+"""
+    subprocess.run([sys.executable, '-c', script], check=True)
+
+
 def test_public_models_are_parser_result_types() -> None:
     """Parser-facing models should be available from supported import paths."""
     assert parser_module.Atom is Atom
@@ -98,7 +129,7 @@ assert Parser.__module__ == 'moldenViz.parser'
 assert Tabulator.__module__ == 'moldenViz.tabulator'
 assert Atom.__module__ == 'moldenViz.models'
 assert 'moldenViz.plotter' not in sys.modules
-assert 'moldenViz._plotter_ui' not in sys.modules
+assert 'moldenViz.qt' not in sys.modules
 assert 'pyvista' not in sys.modules
 assert 'pydantic' not in sys.modules
 assert not (pathlib.Path.home() / '.config' / 'moldenViz').exists()

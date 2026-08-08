@@ -17,7 +17,7 @@ _Dispatch = Callable[[Callable[[], None]], None]
 class BackgroundJob(Generic[_ResultT]):
     """Run one replaceable background job and deliver its result.
 
-    The controller deliberately has no dependency on Tk, Qt, or PyVista. The
+    The controller deliberately has no dependency on a GUI toolkit or PyVista. The
     caller supplies a dispatcher that transfers completion work to its owning
     event loop.
 

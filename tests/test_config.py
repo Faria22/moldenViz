@@ -102,6 +102,14 @@ def test_invalid_background_color_raises_error() -> None:
         config_module.MainConfig(background_color='not_a_valid_color')
 
 
+def test_config_accepts_nested_per_instance_overrides() -> None:
+    """Constructor mappings override user/default values using public field names."""
+    config = config_module.Config({'background_color': '#123456', 'mo': {'opacity': 0.25}})
+
+    assert config.background_color == '#123456'
+    assert config.mo.opacity == pytest.approx(0.25)
+
+
 def test_default_grid_type() -> None:
     """Test that default grid type is 'spherical'."""
     grid_config = config_module.GridConfig()

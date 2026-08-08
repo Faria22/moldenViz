@@ -1,12 +1,14 @@
 # type: ignore[reportArgumentType]
 import json
+from collections.abc import Mapping
+from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Literal
 
 import matplotlib.colors as mcolors
-import matplotlib.pyplot as plt
 import toml
+from matplotlib import colormaps
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ._adaptive_grid import AdaptiveScale, normalize_scale
@@ -121,12 +123,9 @@ class MOConfig(BaseModel):
         ValueError
             If the color scheme is not a valid matplotlib colormap.
         """
-        try:
-            plt.get_cmap(v)
-        except ValueError as e:
-            raise ValueError(f'Color scheme must be a valid matplotlib colormap. Got: {v}') from e
-        else:
-            return v
+        if v not in colormaps:
+            raise ValueError(f'Color scheme must be a valid matplotlib colormap. Got: {v}')
+        return v
 
     @field_validator('custom_colors')
     @classmethod
@@ -234,7 +233,7 @@ class MainConfig(BaseModel):
 class Config:
     """Configuration class to manage default and custom configurations."""
 
-    def __init__(self) -> None:
+    def __init__(self, overrides: MainConfig | Mapping[str, Any] | None = None) -> None:
         default_config = self._load_default_config()
         custom_config = self._load_custom_config()
 
@@ -242,6 +241,13 @@ class Config:
 
         # Validate and merge configuration using pydantic
         merged_config_dict = self._recursive_merge(default_config, custom_config)
+        if overrides is not None:
+            override_dict = (
+                overrides.model_dump(by_alias=True) if isinstance(overrides, MainConfig) else deepcopy(dict(overrides))
+            )
+            if 'mo' in override_dict and 'MO' not in override_dict:
+                override_dict['MO'] = override_dict.pop('mo')
+            merged_config_dict = self._recursive_merge(merged_config_dict, override_dict)
 
         # Validate the merged configuration with pydantic
         try:

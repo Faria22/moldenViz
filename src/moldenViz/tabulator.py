@@ -5,6 +5,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor, wait
 from enum import Enum
 from math import factorial
+from os import PathLike
 from pathlib import Path
 from typing import Any
 
@@ -58,8 +59,12 @@ class Tabulator:
 
     Parameters
     ----------
-    source : str | list[str]
-        The path to the molden file, or the lines from the file.
+    filename : str | os.PathLike[str] | None, optional
+        Path to the Molden file. Exactly one of ``filename`` and ``content``
+        must be provided.
+    content : str | None, optional
+        Complete contents of a Molden file. Exactly one of ``filename`` and
+        ``content`` must be provided.
     only_molecule : bool, optional
         Only parse the atoms and skip molecular orbitals.
         Default is ``False``.
@@ -85,18 +90,19 @@ class Tabulator:
 
     def __init__(
         self,
-        source: str | list[str],
-        only_molecule: bool = False,
         *,
+        filename: str | PathLike[str] | None = None,
+        content: str | None = None,
+        only_molecule: bool = False,
         max_workers: int | None = None,
     ) -> None:
-        """Initialize the Tabulator with a Molden file or its content."""
+        """Initialize the Tabulator with a filename or complete Molden content."""
         if isinstance(max_workers, bool) or (max_workers is not None and not isinstance(max_workers, int)):
             raise TypeError('max_workers must be a positive integer or None.')
         if max_workers is not None and max_workers < 1:
             raise ValueError('max_workers must be at least 1.')
 
-        self._parser = Parser(source, only_molecule)
+        self._parser = Parser(filename=filename, content=content, only_molecule=only_molecule)
 
         self._only_molecule = only_molecule
         self._configured_max_workers = max_workers
@@ -216,12 +222,12 @@ class Tabulator:
 
     @property
     def atoms(self) -> list[Atom]:
-        """Atoms parsed from the Molden source."""
+        """Atoms parsed from the Molden input."""
         return self._parser.atoms
 
     @property
     def molecular_orbitals(self) -> list[MolecularOrbital]:
-        """Molecular-orbital metadata parsed from the Molden source."""
+        """Molecular-orbital metadata parsed from the Molden input."""
         return self._parser.mos
 
     @property

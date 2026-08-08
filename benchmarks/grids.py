@@ -19,7 +19,7 @@ class TimeGridCreation:
 
     def setup(self, edge_size: int) -> None:
         """Create reusable parser state and grid axes."""
-        self.tabulator = Tabulator(examples.co)
+        self.tabulator = Tabulator(content=examples.co)
         self.axis = np.linspace(-3.0, 3.0, edge_size)
 
     def time_create_cartesian_grid(self, edge_size: int) -> None:
@@ -43,7 +43,7 @@ class TimeInitialGridTabulation:
     def setup(self, mode: str) -> None:
         """Create the requested initial Cartesian grid."""
         edge_size = 100 if mode == 'uniform-100' else 21
-        self.tabulator = Tabulator(examples.co)
+        self.tabulator = Tabulator(content=examples.co)
         axis = np.linspace(-5.0, 5.0, edge_size)
         self.tabulator.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
 
@@ -60,7 +60,7 @@ class TimeAdaptiveGridPreparation:
 
     def setup(self) -> None:
         """Prepare a default coarse CO grid and its orbital values."""
-        self.tabulator = Tabulator(examples.co)
+        self.tabulator = Tabulator(content=examples.co)
         axis = np.linspace(-5.0, 5.0, 21)
         self.tabulator.cartesian_grid(axis, axis, axis)
         self.coarse_grid = pv.StructuredGrid()

@@ -1084,7 +1084,7 @@ wheels = [
 
 [[package]]
 name = "moldenviz"
-version = "1.11.0"
+version = "2.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -1137,7 +1137,7 @@ requires-dist = [
     { name = "pydantic", marker = "extra == 'gui'", specifier = ">=2.12.0" },
     { name = "pyside6", marker = "extra == 'gui'", specifier = ">=6.10" },
     { name = "pyvista", marker = "extra == 'gui'" },
-    { name = "pyvistaqt", marker = "extra == 'gui'" },
+    { name = "pyvistaqt", marker = "extra == 'gui'", specifier = ">=0.11.4" },
     { name = "toml", marker = "extra == 'gui'", specifier = ">=0.10" },
 ]
 provides-extras = ["gui"]
@@ -1152,7 +1152,7 @@ dev = [
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-cov", specifier = ">=5.0" },
     { name = "pyvista" },
-    { name = "pyvistaqt" },
+    { name = "pyvistaqt", specifier = ">=0.11.4" },
     { name = "ruff", specifier = ">=0.15.22" },
     { name = "toml", specifier = ">=0.10" },
 ]

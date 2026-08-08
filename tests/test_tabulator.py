@@ -72,6 +72,30 @@ def test_spherical_cartesian_roundtrip() -> None:
     assert np.allclose(phi_vals, phi2)
 
 
+def test_tabulator_accepts_filename_or_complete_content() -> None:
+    """Both explicit input forms should construct equivalent tabulators."""
+    from_filename = Tabulator(filename=MOLDEN_PATH)
+    from_content = Tabulator(content=MOLDEN_PATH.read_text(encoding='utf-8'))
+
+    assert [atom.atomic_number for atom in from_filename.atoms] == [atom.atomic_number for atom in from_content.atoms]
+    assert from_filename.molecular_orbitals == from_content.molecular_orbitals
+    np.testing.assert_allclose(from_filename._parser.mo_coeffs, from_content._parser.mo_coeffs)  # ruff:ignore[private-member-access]
+
+
+def test_tabulator_requires_exactly_one_input() -> None:
+    """Tabulator should expose the parser's explicit input contract."""
+    with pytest.raises(ValueError, match='Exactly one'):
+        Tabulator()
+    with pytest.raises(ValueError, match='Exactly one'):
+        Tabulator(filename=MOLDEN_PATH, content='contents')
+
+
+def test_tabulator_rejects_removed_positional_input() -> None:
+    """The removed positional source argument must not remain callable."""
+    with pytest.raises(TypeError):
+        Tabulator(str(MOLDEN_PATH))  # type: ignore[misc]
+
+
 def test_cartesian_to_spherical_handles_zero_radius() -> None:
     """Zero-radius points should not emit warnings or NaNs."""
     x = np.array([0.0])
@@ -91,14 +115,14 @@ def test_cartesian_to_spherical_handles_zero_radius() -> None:
 
 def test_tabulate_gtos_requires_grid() -> None:
     """Test that tabulate_gtos raises RuntimeError if grid is not set."""
-    tab = Tabulator(str(MOLDEN_PATH))
+    tab = Tabulator(filename=str(MOLDEN_PATH))
     with pytest.raises(RuntimeError):
         tab.tabulate_gtos()
 
 
 def test_tabulate_gtos_cached_values_cover_all_coeffs() -> None:
     """Ensure tabulate_gtos populates every MO coefficient on the grid."""
-    tab = Tabulator(str(MOLDEN_PATH))
+    tab = Tabulator(filename=str(MOLDEN_PATH))
     axis = np.linspace(-1.0, 1.0, 4)
     tab.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
 
@@ -114,7 +138,7 @@ def test_tabulate_gtos_cached_values_cover_all_coeffs() -> None:
 
 def test_compute_gtos_uses_explicit_grid_without_updating_cache() -> None:
     """Explicit-grid computation should not read or update live grid state."""
-    tab = Tabulator(str(MOLDEN_PATH))
+    tab = Tabulator(filename=str(MOLDEN_PATH))
     live_axis = np.linspace(-1.0, 1.0, 2)
     tab.cartesian_grid(live_axis, live_axis, live_axis, tabulate_gtos=False)
     live_grid = tab.grid.copy()
@@ -130,7 +154,7 @@ def test_compute_gtos_uses_explicit_grid_without_updating_cache() -> None:
 @pytest.mark.parametrize('point_chunk_size', [1, 17, 10_000])
 def test_compute_gtos_chunks_match_full_grid(point_chunk_size: int) -> None:
     """Point chunks should preserve GTO values, shape, and basis ordering."""
-    tab = Tabulator(str(MOLDEN_PATH))
+    tab = Tabulator(filename=str(MOLDEN_PATH))
     axis = np.linspace(-1.0, 1.0, 5)
     tab.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
 
@@ -143,7 +167,7 @@ def test_compute_gtos_chunks_match_full_grid(point_chunk_size: int) -> None:
 @pytest.mark.parametrize('point_chunk_size', [0, -1, True, 1.5])
 def test_compute_gtos_rejects_invalid_point_chunk_size(point_chunk_size: object) -> None:
     """Chunk sizes must be positive integers or None."""
-    tab = Tabulator(str(MOLDEN_PATH))
+    tab = Tabulator(filename=str(MOLDEN_PATH))
     axis = np.linspace(-1.0, 1.0, 2)
     tab.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
 
@@ -153,7 +177,7 @@ def test_compute_gtos_rejects_invalid_point_chunk_size(point_chunk_size: object)
 
 def test_compute_gtos_default_bounds_worker_point_slices(monkeypatch: pytest.MonkeyPatch) -> None:
     """The default policy should keep each worker task at or below 32,768 points."""
-    tab = Tabulator(str(MOLDEN_PATH))
+    tab = Tabulator(filename=str(MOLDEN_PATH))
     grid = np.zeros((32_769, 3))
     chunk_lengths: list[int] = []
     block_shapes: list[tuple[int, int]] = []
@@ -189,9 +213,9 @@ def test_gto_worker_policy_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
     explicit_worker_count = 2
     monkeypatch.setattr(tabulator_module.os, 'cpu_count', lambda: 64)
 
-    default_tabulator = Tabulator(str(MOLDEN_PATH))
-    explicit_tabulator = Tabulator(str(MOLDEN_PATH), max_workers=explicit_worker_count)
-    capped_tabulator = Tabulator(str(MOLDEN_PATH), max_workers=64)
+    default_tabulator = Tabulator(filename=str(MOLDEN_PATH))
+    explicit_tabulator = Tabulator(filename=str(MOLDEN_PATH), max_workers=explicit_worker_count)
+    capped_tabulator = Tabulator(filename=str(MOLDEN_PATH), max_workers=64)
 
     assert default_tabulator.max_workers == default_worker_count
     assert explicit_tabulator.max_workers == explicit_worker_count
@@ -206,8 +230,8 @@ def test_gto_worker_policy_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_default_gto_workers_switch_to_sequential_for_large_grids() -> None:
     """Default concurrency should avoid costly large-grid memory amplification."""
     largest_parallel_grid = 125_000
-    tabulator = Tabulator(str(MOLDEN_PATH))
-    explicit_tabulator = Tabulator(str(MOLDEN_PATH), max_workers=4)
+    tabulator = Tabulator(filename=str(MOLDEN_PATH))
+    explicit_tabulator = Tabulator(filename=str(MOLDEN_PATH), max_workers=4)
 
     assert tabulator._workers_for_grid(largest_parallel_grid) == tabulator.max_workers  # ruff:ignore[private-member-access]
     assert tabulator._workers_for_grid(largest_parallel_grid + 1) == 1  # ruff:ignore[private-member-access]
@@ -220,9 +244,9 @@ def test_default_gto_workers_switch_to_sequential_for_large_grids() -> None:
 def test_gto_worker_policy_rejects_invalid_limits() -> None:
     """Worker limits must be positive integers."""
     with pytest.raises(TypeError, match='positive integer'):
-        Tabulator(str(MOLDEN_PATH), max_workers=True)
+        Tabulator(filename=str(MOLDEN_PATH), max_workers=True)
     with pytest.raises(ValueError, match='at least 1'):
-        Tabulator(str(MOLDEN_PATH), max_workers=0)
+        Tabulator(filename=str(MOLDEN_PATH), max_workers=0)
 
 
 @pytest.mark.parametrize(
@@ -235,8 +259,8 @@ def test_gto_worker_policy_rejects_invalid_limits() -> None:
 def test_parallel_and_sequential_gtos_are_equivalent(molden_path: Path) -> None:
     """Bounded parallel work should preserve sequential numerical results."""
     axis = np.linspace(-2.0, 2.0, 5)
-    sequential = Tabulator(str(molden_path), max_workers=1)
-    parallel = Tabulator(str(molden_path), max_workers=4)
+    sequential = Tabulator(filename=str(molden_path), max_workers=1)
+    parallel = Tabulator(filename=str(molden_path), max_workers=4)
     sequential.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
     parallel.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
 
@@ -253,7 +277,7 @@ def test_gto_calls_reuse_process_executor(monkeypatch: pytest.MonkeyPatch) -> No
         raise AssertionError('GTO tabulation created a new executor.')
 
     monkeypatch.setattr(tabulator_module, 'ThreadPoolExecutor', fail_executor_creation)
-    tabulator = Tabulator(str(MOLDEN_PATH), max_workers=2)
+    tabulator = Tabulator(filename=str(MOLDEN_PATH), max_workers=2)
     axis = np.linspace(-1.0, 1.0, 3)
     tabulator.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
 
@@ -274,7 +298,7 @@ def test_tabulate_atom_reuses_exponentials_for_compatible_shells(monkeypatch: py
     d_shell = normalized_shell(2, [2.0], [1.0])
     atom = Atom('X', 0, np.zeros(3), [s_shell, p_shell, d_shell])
 
-    tab = Tabulator(str(MOLDEN_PATH))
+    tab = Tabulator(filename=str(MOLDEN_PATH))
     grid = np.array(
         [
             [0.0, 0.0, 0.0],
@@ -317,7 +341,7 @@ def test_tabulate_atom_reuses_exponentials_for_compatible_shells(monkeypatch: py
 
 def test_clear_gtos_releases_cache_and_reports_missing_data() -> None:
     """Manual cache eviction should retain the grid and expose a clear state."""
-    tab = Tabulator(str(MOLDEN_PATH))
+    tab = Tabulator(filename=str(MOLDEN_PATH))
     axis = np.linspace(-1.0, 1.0, 2)
     tab.cartesian_grid(axis, axis, axis)
     grid = tab.grid
@@ -335,7 +359,7 @@ def test_clear_gtos_releases_cache_and_reports_missing_data() -> None:
 
 def test_cartesian_grid_shape() -> None:
     """Test that the Cartesian grid is created with the correct shape."""
-    tab = Tabulator(str(MOLDEN_PATH))
+    tab = Tabulator(filename=str(MOLDEN_PATH))
     x, y, z = np.linspace(-1, 1, 3), np.linspace(-1, 1, 4), np.linspace(-1, 1, 2)
     tab.cartesian_grid(x, y, z, tabulate_gtos=False)
     assert tab.grid is not None
@@ -344,7 +368,7 @@ def test_cartesian_grid_shape() -> None:
 
 def test_spherical_grid_shape() -> None:
     """Test that the spherical grid is created with the correct shape."""
-    tab = Tabulator(str(MOLDEN_PATH))
+    tab = Tabulator(filename=str(MOLDEN_PATH))
     r, theta, phi = np.r_[1.0, 2.0], np.r_[0.0, np.pi / 2, np.pi], np.r_[-np.pi, 0.0, np.pi / 2, np.pi]
     tab.spherical_grid(r, theta, phi, tabulate_gtos=False)
     assert tab.grid is not None
@@ -353,7 +377,7 @@ def test_spherical_grid_shape() -> None:
 
 def test_set_grid_is_the_explicit_arbitrary_grid_mutator() -> None:
     """Arbitrary grids should reset structured metadata and cached GTOs."""
-    tab = Tabulator(str(MOLDEN_PATH))
+    tab = Tabulator(filename=str(MOLDEN_PATH))
     axis = np.linspace(-1.0, 1.0, 2)
     tab.cartesian_grid(axis, axis, axis)
 
@@ -369,7 +393,7 @@ def test_set_grid_is_the_explicit_arbitrary_grid_mutator() -> None:
 
 def test_set_grid_exits_early_when_only_molecule_is_enabled() -> None:
     """Molecule-only tabulators should reject grid creation before validation."""
-    tab = Tabulator(str(MOLDEN_PATH), only_molecule=True)
+    tab = Tabulator(filename=str(MOLDEN_PATH), only_molecule=True)
 
     with pytest.raises(RuntimeError, match='Grid creation is not allowed'):
         tab.set_grid(None)
@@ -377,7 +401,7 @@ def test_set_grid_exits_early_when_only_molecule_is_enabled() -> None:
 
 def test_private_set_grid_rejects_unknown_grid_type() -> None:
     """Structured grids require a known coordinate system."""
-    tab = Tabulator(str(MOLDEN_PATH))
+    tab = Tabulator(filename=str(MOLDEN_PATH))
     axis = np.linspace(-1.0, 1.0, 2)
 
     with pytest.raises(ValueError, match='Grid type cannot be unknown'):
@@ -386,7 +410,7 @@ def test_private_set_grid_rejects_unknown_grid_type() -> None:
 
 def test_grid_property_is_read_only() -> None:
     """Grid replacement should go through ``set_grid`` rather than assignment."""
-    tab = Tabulator(str(MOLDEN_PATH))
+    tab = Tabulator(filename=str(MOLDEN_PATH))
 
     with pytest.raises(AttributeError):
         tab.grid = np.zeros((1, 3))  # type: ignore[misc]
@@ -500,7 +524,7 @@ def test_cartesian_gto_tabulation_matches_spherical_implementation(
     molden_path: Path,
 ) -> None:
     """Representative Molden inputs should match the previous GTO kernel."""
-    tab = Tabulator(str(molden_path))
+    tab = Tabulator(filename=str(molden_path))
     axis = np.linspace(-2.0, 2.0, 7)
     tab.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
     actual = tab.tabulate_gtos()
@@ -526,7 +550,7 @@ def test_cartesian_gto_tabulation_matches_spherical_implementation(
 @pytest.mark.parametrize('mo_inds', [None, 0, [0], [0, 1, 2], [0, 1, 2, 3, 4], range(1, 10)])
 def test_tabulate_mos(mo_inds: int | list[int] | range | None) -> None:
     """Test that tabulate_mos returns an array of the correct shape."""
-    tab = Tabulator(str(MOLDEN_PATH))
+    tab = Tabulator(filename=str(MOLDEN_PATH))
     tab.cartesian_grid(np.linspace(-1, 1, 5), np.linspace(-1, 1, 5), np.linspace(-1, 1, 5))
     mo_data = tab.tabulate_mos(mo_inds)
 
@@ -542,7 +566,7 @@ def test_tabulate_mos(mo_inds: int | list[int] | range | None) -> None:
 
 def test_tabulate_mos_with_explicit_gtos_does_not_replace_cache() -> None:
     """Explicit adaptive GTO values should be contracted without mutation."""
-    tab = Tabulator(str(MOLDEN_PATH))
+    tab = Tabulator(filename=str(MOLDEN_PATH))
     axis = np.linspace(-1, 1, 3)
     tab.cartesian_grid(axis, axis, axis)
     cached_gtos = tab.gtos.copy()
@@ -556,7 +580,7 @@ def test_tabulate_mos_with_explicit_gtos_does_not_replace_cache() -> None:
 
 def test_tabulate_mos_rejects_invalid_explicit_gtos() -> None:
     """Explicit GTO matrices must match the parsed basis dimension."""
-    tab = Tabulator(str(MOLDEN_PATH))
+    tab = Tabulator(filename=str(MOLDEN_PATH))
     with pytest.raises(ValueError, match='GTO data must have shape'):
         tab.tabulate_mos(0, gtos=np.ones((2, 1)))
 
@@ -564,7 +588,7 @@ def test_tabulate_mos_rejects_invalid_explicit_gtos() -> None:
 @pytest.mark.parametrize('mo_inds', [0, [0, 1, 2], None])
 def test_tabulate_mos_matches_sum_reduction(mo_inds: int | list[int] | None) -> None:
     """Matrix contractions should match the previous sum reduction."""
-    tab = Tabulator(str(MOLDEN_PATH))
+    tab = Tabulator(filename=str(MOLDEN_PATH))
     axis = np.linspace(-1.0, 1.0, 5)
     tab.cartesian_grid(axis, axis, axis)
 
@@ -582,7 +606,7 @@ def test_tabulate_mos_matches_sum_reduction(mo_inds: int | list[int] | None) -> 
 @pytest.mark.parametrize('mo_inds', [-1, range(0), range(-1, 1), [0, -1], [1, 2, 3, -1], [0, 178]])
 def test_invalid_mo_inds(mo_inds: int | list[int] | range | None) -> None:
     """Test that tabulate_mos raises ValueError for invalid mo_inds."""
-    tab = Tabulator(str(MOLDEN_PATH))
+    tab = Tabulator(filename=str(MOLDEN_PATH))
     tab.cartesian_grid(np.linspace(-1, 1, 5), np.linspace(-1, 1, 5), np.linspace(-1, 1, 5))
 
     with pytest.raises(ValueError, match=r'Provided mo_ind.* Please provide valid .*'):
@@ -591,7 +615,7 @@ def test_invalid_mo_inds(mo_inds: int | list[int] | range | None) -> None:
 
 def test_export_cube_creates_file(tmp_path: Path) -> None:
     """Ensure exporting a cube file writes the expected artifact."""
-    tab = Tabulator(str(MOLDEN_PATH))
+    tab = Tabulator(filename=str(MOLDEN_PATH))
     axis = np.linspace(-1.0, 1.0, 2)
     tab.cartesian_grid(axis, axis, axis)
 
@@ -609,7 +633,7 @@ def test_export_cube_creates_file(tmp_path: Path) -> None:
 
 def test_export_cube_requires_cartesian_grid(tmp_path: Path) -> None:
     """Cube export should fail when the grid is spherical."""
-    tab = Tabulator(str(MOLDEN_PATH))
+    tab = Tabulator(filename=str(MOLDEN_PATH))
     r, theta, phi = np.r_[1.0, 2.0], np.r_[0.0, np.pi / 2], np.r_[-np.pi, 0.0]
     tab.spherical_grid(r, theta, phi)
 
@@ -619,7 +643,7 @@ def test_export_cube_requires_cartesian_grid(tmp_path: Path) -> None:
 
 def test_export_cube_requires_mo_index(tmp_path: Path) -> None:
     """Cube export must receive an orbital index."""
-    tab = Tabulator(str(MOLDEN_PATH))
+    tab = Tabulator(filename=str(MOLDEN_PATH))
     axis = np.linspace(-0.5, 0.5, 2)
     tab.cartesian_grid(axis, axis, axis)
 
@@ -631,7 +655,7 @@ def test_export_vtk_writes_multiblock(tmp_path: Path) -> None:
     """VTK export should emit a multiblock file with molecule and atom data."""
     pv = pytest.importorskip('pyvista')
 
-    tab = Tabulator(str(MOLDEN_PATH))
+    tab = Tabulator(filename=str(MOLDEN_PATH))
     axis = np.linspace(-0.5, 0.5, 2)
     tab.cartesian_grid(axis, axis, axis)
 

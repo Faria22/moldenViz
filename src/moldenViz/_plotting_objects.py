@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from enum import Enum
+from functools import lru_cache
 from typing import TYPE_CHECKING, cast
 
 import numpy as np
@@ -18,12 +19,20 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-config = Config()
-
-ATOM_TYPES = config.atom_types
-
 # Default atom type for invalid atomic numbers
 ATOM_X = AtomType(name='X', color='000000', radius=1.0, max_num_bonds=0)
+
+
+@lru_cache(maxsize=1)
+def _default_config() -> Config:
+    """Load the process-wide default used by direct plotting-object calls.
+
+    Returns
+    -------
+    Config
+        Lazily initialized user and package configuration.
+    """
+    return Config()
 
 
 class Atom:
@@ -41,6 +50,7 @@ class Atom:
         self,
         atomic_number: int,
         center: NDArray[np.floating],
+        config: Config | None = None,
     ) -> None:
         """Initialize an atom for visualization.
 
@@ -51,7 +61,8 @@ class Atom:
         center : NDArray[np.floating]
             Cartesian coordinates of the atom centre in Angstroms.
         """
-        self.atom_type = ATOM_TYPES.get(atomic_number, ATOM_X)
+        resolved_config = _default_config() if config is None else config
+        self.atom_type = resolved_config.atom_types.get(atomic_number, ATOM_X)
         if self.atom_type is ATOM_X:
             logger.warning(
                 "Invalid atomic number: %d. Atom type could not be determined. Using atom 'X' instead.",
@@ -96,7 +107,7 @@ class Bond:
         UNIFORM = 'uniform'
         SPLIT = 'split'
 
-    def __init__(self, atom_a: Atom, atom_b: Atom, config: Config = config) -> None:
+    def __init__(self, atom_a: Atom, atom_b: Atom, config: Config | None = None) -> None:
         """Initialize a bond between two atoms for visualization.
 
         Parameters
@@ -106,20 +117,21 @@ class Bond:
         atom_b : Atom
             Second atom participating in the bond.
         """
+        resolved_config = _default_config() if config is None else config
         bond_vec = atom_a.center - atom_b.center
         center = (atom_a.center + atom_b.center) / 2
 
         length = cast(float, np.linalg.norm(bond_vec))
         self.length = length
-        self.radius = config.molecule.bond.radius
-        self.color_type = self.ColorType(config.molecule.bond.color_type.lower())
+        self.radius = resolved_config.molecule.bond.radius
+        self.color_type = self.ColorType(resolved_config.molecule.bond.color_type.lower())
         self.mesh: pv.PolyData | list[pv.PolyData] | None
         self.atom_a = atom_a
         self.atom_b = atom_b
         self.plotted = False
 
         if self.color_type is self.ColorType.UNIFORM:
-            self.color = config.molecule.bond.color
+            self.color = resolved_config.molecule.bond.color
         else:
             self.color = [atom_a.atom_type.color, atom_b.atom_type.color]
 
@@ -251,7 +263,7 @@ class Bond:
 class Molecule:
     """Composite object storing rendered atoms and inferred bonds."""
 
-    def __init__(self, atoms: list[ParsedAtom], config: Config = config) -> None:
+    def __init__(self, atoms: list[ParsedAtom], config: Config | None = None) -> None:
         """Initialize a molecule from parsed atom data.
 
         Parameters
@@ -259,7 +271,7 @@ class Molecule:
         atoms : list[ParsedAtom]
             Parsed atoms emitted by :class:`moldenViz.parser.Parser`.
         """
-        self.config = config
+        self.config = _default_config() if config is None else config
 
         # Max radius is used later for plotting
         self.max_radius = 0
@@ -276,7 +288,10 @@ class Molecule:
         """
         atomic_numbers = [atom.atomic_number for atom in atoms]
         atom_centers = np.asarray([atom.position for atom in atoms], dtype=float)
-        self.atoms = list(map(Atom, atomic_numbers, atom_centers))
+        self.atoms = [
+            Atom(atomic_number, center, self.config)
+            for atomic_number, center in zip(atomic_numbers, atom_centers, strict=True)
+        ]
         self.max_radius = np.max(np.linalg.norm(atom_centers, axis=1))
 
         atom_a_indices, atom_b_indices = np.triu_indices(len(atom_centers), k=1)
@@ -300,7 +315,11 @@ class Molecule:
             for atom in self.atoms:
                 atom._remove_extra_bonds()  # ruff:ignore[private-member-access]
 
-    def _add_meshes(self, plotter: pv.Plotter, opacity: float = config.molecule.opacity) -> tuple[list[pv.Actor], ...]:
+    def _add_meshes(
+        self,
+        plotter: pv.Plotter,
+        opacity: float | None = None,
+    ) -> tuple[list[pv.Actor], ...]:
         """Add all molecule meshes (atoms and bonds) to the PyVista plotter.
 
         Parameters
@@ -315,6 +334,7 @@ class Molecule:
         tuple[list[pv.Actor], ...]
             A list containing all added actors, a list for the atom actors, and one for the bond actors.
         """
+        resolved_opacity = self.config.molecule.opacity if opacity is None else opacity
         atom_actors = []
         bond_actors = []
         for atom in self.atoms:
@@ -324,7 +344,7 @@ class Molecule:
                         atom.mesh,
                         color=atom.atom_type.color,
                         smooth_shading=self.config.smooth_shading,
-                        opacity=opacity,
+                        opacity=resolved_opacity,
                     ),
                 )
 
@@ -338,11 +358,11 @@ class Molecule:
 
                 if isinstance(bond.mesh, list):
                     for mesh, color in zip(bond.mesh, bond.color, strict=False):
-                        bond_actors.append(plotter.add_mesh(mesh, color=color, opacity=opacity))
+                        bond_actors.append(plotter.add_mesh(mesh, color=color, opacity=resolved_opacity))
                 else:
                     if not isinstance(bond.color, str):
                         raise TypeError('Bond color should be a string for uniform color type.')
-                    bond_actors.append(plotter.add_mesh(bond.mesh, color=bond.color, opacity=opacity))
+                    bond_actors.append(plotter.add_mesh(bond.mesh, color=bond.color, opacity=resolved_opacity))
                 bond.plotted = True
 
         return atom_actors + bond_actors, atom_actors, bond_actors

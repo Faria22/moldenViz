@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import ast
+from importlib import import_module
 from typing import TYPE_CHECKING
 
 import numpy as np
-import pyvista as pv
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
+    import pyvista as pv
     from numpy.typing import NDArray
 
 AdaptiveScale = float | tuple[float, float, float]
@@ -155,6 +156,7 @@ def refined_grid(
     pyvista.UnstructuredGrid
         Refined cells with shared boundary points deduplicated.
     """
+    pv = import_module('pyvista')
     scales = normalize_scale(scale)
     fractions = tuple(_axis_fractions(value) for value in scales)
     point_ids: dict[tuple[float, float, float], int] = {}
