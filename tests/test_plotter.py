@@ -609,8 +609,17 @@ def seed_tabulator_with_cartesian_grid(tabulator: FakeTabulator) -> None:
 
 
 class RecordingTabulator(FakeTabulator):
-    def __init__(self, source: Any = None, only_molecule: bool = False, **kwargs: Any) -> None:
-        super().__init__(source, only_molecule=only_molecule, **kwargs)
+    def __init__(
+        self,
+        *,
+        filename: Any = None,
+        content: Any = None,
+        only_molecule: bool = False,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(filename=filename, content=content, only_molecule=only_molecule, **kwargs)
+        self.filename = filename
+        self.content = content
         self.spherical_calls: list[tuple[np.ndarray, np.ndarray, np.ndarray]] = []
         self.cartesian_calls: list[tuple[np.ndarray, np.ndarray, np.ndarray]] = []
 
@@ -715,14 +724,40 @@ def plotter_env(monkeypatch: pytest.MonkeyPatch) -> Any:
         ) -> Any:
             root = root or self.make_root()
             tabulator = tabulator or self.make_tabulator()
-            return plotter_module.Plotter('dummy', tabulator=tabulator, only_molecule=only_molecule, tk_root=root)
+            return plotter_module.Plotter(tabulator=tabulator, only_molecule=only_molecule, tk_root=root)
 
     return Env()
 
 
-def test_describe_source_reports_list_length() -> None:
-    assert plotter_module._describe_source('sample.molden') == 'sample.molden'
-    assert plotter_module._describe_source(['a', 'b', 'c']) == '3 molden lines'
+def test_describe_input_reports_filename_or_content_length() -> None:
+    assert plotter_module._describe_input('sample.molden', None) == 'sample.molden'
+    assert plotter_module._describe_input(None, 'a\nb\nc\n') == '3 molden lines'
+
+
+def test_plotter_validates_input_before_creating_ui(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Invalid input combinations must fail before allocating GUI resources."""
+    monkeypatch.setattr(plotter_module.tk, 'Tk', lambda: pytest.fail('Tk should not be created'))
+
+    with pytest.raises(ValueError, match='Exactly one'):
+        plotter_module.Plotter()
+    with pytest.raises(ValueError, match='Exactly one'):
+        plotter_module.Plotter(filename='sample.molden', content='contents')
+    with pytest.raises(ValueError, match='must not be provided'):
+        plotter_module.Plotter(filename='sample.molden', tabulator=FakeTabulator())
+    with pytest.raises(TypeError):
+        plotter_module.Plotter('sample.molden')  # type: ignore[misc]
+
+
+@pytest.mark.usefixtures('plotter_env')
+def test_plotter_forwards_complete_content(monkeypatch: pytest.MonkeyPatch, plotter_env: Any) -> None:
+    """Plotter should forward complete content without converting it to lines."""
+    monkeypatch.setattr(plotter_module, 'Tabulator', RecordingTabulator)
+
+    plotter = plotter_module.Plotter(content='complete content', only_molecule=True, tk_root=plotter_env.make_root())
+
+    assert isinstance(plotter.tabulator, RecordingTabulator)
+    assert plotter.tabulator.filename is None
+    assert plotter.tabulator.content == 'complete content'
 
 
 def test_custom_cmap_from_colors_uses_endpoints() -> None:
@@ -879,10 +914,10 @@ def test_plotter_requires_tabulated_gtos(plotter_env: Any) -> None:
 
 def test_plotter_accepts_real_tabulator_with_cached_gtos(plotter_env: Any) -> None:
     axis = np.linspace(-1.0, 1.0, 2)
-    tabulator = Tabulator(str(MOLDEN_PATH))
+    tabulator = Tabulator(filename=str(MOLDEN_PATH))
     tabulator.cartesian_grid(axis, axis, axis)
 
-    plotter = plotter_module.Plotter(str(MOLDEN_PATH), tabulator=tabulator, tk_root=plotter_env.make_root())
+    plotter = plotter_module.Plotter(tabulator=tabulator, tk_root=plotter_env.make_root())
 
     assert plotter.tabulator is tabulator
     assert plotter._gtos_ready
@@ -922,7 +957,7 @@ def test_plotter_uses_qt_event_loop_for_internal_tk_root_on_macos(
     monkeypatch.setattr(plotter_module.tk, 'Tk', fake_tk)
     monkeypatch.setattr(plotter_module.sys, 'platform', 'darwin')
 
-    plotter = plotter_module.Plotter('dummy', only_molecule=True)
+    plotter = plotter_module.Plotter(filename='dummy', only_molecule=True)
 
     assert created
     assert created[0].withdrawn
@@ -945,7 +980,7 @@ def test_plotter_preserves_tk_event_loop_off_macos(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(plotter_module.tk, 'Tk', fake_tk)
     monkeypatch.setattr(plotter_module.sys, 'platform', 'linux')
 
-    plotter = plotter_module.Plotter('dummy', only_molecule=True)
+    plotter = plotter_module.Plotter(filename='dummy', only_molecule=True)
 
     assert created[0].mainloop_calls == 1
     assert plotter._pv_plotter.app.exec_calls == 0
@@ -961,7 +996,7 @@ def test_plotter_generates_default_spherical_grid(monkeypatch: pytest.MonkeyPatc
     plotter_module.config.grid.min_radius = 1
     plotter_module.config.grid.max_radius_multiplier = 1
 
-    plotter = plotter_module.Plotter('dummy', tk_root=plotter_env.make_root())
+    plotter = plotter_module.Plotter(filename='dummy', tk_root=plotter_env.make_root())
 
     tabulator = plotter.tabulator
     assert isinstance(tabulator, RecordingTabulator)
@@ -982,7 +1017,7 @@ def test_plotter_generates_default_cartesian_grid(monkeypatch: pytest.MonkeyPatc
     plotter_module.config.grid.max_radius_multiplier = 1
     plotter_module.config.grid.min_radius = 1
 
-    plotter = plotter_module.Plotter('dummy', tk_root=plotter_env.make_root())
+    plotter = plotter_module.Plotter(filename='dummy', tk_root=plotter_env.make_root())
 
     tabulator = plotter.tabulator
     assert isinstance(tabulator, RecordingTabulator)
@@ -1015,7 +1050,7 @@ def test_plotter_builds_menus_and_overrides_clear(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(_plotter_ui_module, 'isValid', lambda _action: True)
 
     root = DummyTk()
-    plotter = plotter_module.Plotter('dummy', tk_root=root)
+    plotter = plotter_module.Plotter(filename='dummy', tk_root=root)
 
     main_menu = plotter._pv_plotter.main_menu
     assert [menu.title for menu in main_menu.menus] == ['Settings', 'Export']
@@ -1983,7 +2018,7 @@ def test_update_settings_button_states(plotter_env: Any) -> None:
 def test_pv_plotter_close_signal_closes_windows(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(plotter_module, 'Tabulator', RecordingTabulator)
     monkeypatch.setattr(plotter_module.tk, 'Tk', DummyTk)
-    plotter = plotter_module.Plotter('dummy')
+    plotter = plotter_module.Plotter(filename='dummy')
     callbacks = plotter._pv_plotter.app_window.signal_close.callbacks
     assert callbacks
 

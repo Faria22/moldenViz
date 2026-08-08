@@ -62,8 +62,8 @@ operating system (``brew install python-tk`` on macOS,
   ```python
   from moldenViz import Parser, Tabulator
 
-  parser = Parser('my.molden')
-  tabulator = Tabulator(parser)
+  parser = Parser(filename='my.molden')
+  tabulator = Tabulator(filename='my.molden')
   ```
 
 - With the GUI extra installed, launch a viewer from Python:
@@ -71,7 +71,7 @@ operating system (``brew install python-tk`` on macOS,
   ```python
   from moldenViz import Plotter
 
-  Plotter('my.molden')
+  Plotter(filename='my.molden')
   ```
 
 Full CLI usage, configuration examples, and API walkthroughs live in the docs.

@@ -315,6 +315,6 @@ The CLI and API automatically load your config file:
    from moldenViz import Plotter
    from moldenViz.examples import benzene
 
-   Plotter(benzene)
+   Plotter(content=benzene)
 
 No extra arguments are required—the overrides take effect as soon as the file exists.

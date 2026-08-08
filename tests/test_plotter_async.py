@@ -262,7 +262,7 @@ def test_plotter_defers_gto_tabulation(monkeypatch: pytest.MonkeyPatch) -> None:
     plotter: plotter_module.Plotter | None = None
     try:
         root = _fake_tk_root()
-        plotter = plotter_module.Plotter(_sample_molden(), tk_root=root)
+        plotter = plotter_module.Plotter(filename=_sample_molden(), tk_root=root)
 
         assert cartesian_args['tabulate_gtos'] is False
         assert start_event.wait(timeout=1.0)
@@ -294,7 +294,7 @@ def test_wait_for_gtos_populates_data(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(plotter_module.Tabulator, 'compute_gtos', fake_compute_gtos)
 
-    plotter = plotter_module.Plotter(_sample_molden(), tk_root=_fake_tk_root())
+    plotter = plotter_module.Plotter(filename=_sample_molden(), tk_root=_fake_tk_root())
     plotter.wait_for_gtos()
 
     assert plotter._gtos_ready is True
@@ -326,7 +326,7 @@ def test_replacing_grid_discards_running_generation(monkeypatch: pytest.MonkeyPa
         return np.full((grid.shape[0], 1), 2.0)
 
     monkeypatch.setattr(plotter_module.Tabulator, 'compute_gtos', controlled_compute)
-    plotter = plotter_module.Plotter(_sample_molden(), tk_root=_fake_tk_root())
+    plotter = plotter_module.Plotter(filename=_sample_molden(), tk_root=_fake_tk_root())
     assert first_started.wait(timeout=1.0)
     selection_screen = plotter._selection_screen
     assert isinstance(selection_screen, FakeSelectionScreen)
@@ -370,7 +370,7 @@ def test_rapid_grid_replacements_only_apply_latest(monkeypatch: pytest.MonkeyPat
         return np.full((grid.shape[0], 1), call_index + 1.0)
 
     monkeypatch.setattr(plotter_module.Tabulator, 'compute_gtos', controlled_compute)
-    plotter = plotter_module.Plotter(_sample_molden(), tk_root=_fake_tk_root())
+    plotter = plotter_module.Plotter(filename=_sample_molden(), tk_root=_fake_tk_root())
 
     try:
         assert started[0].wait(timeout=1.0)
@@ -430,8 +430,8 @@ def test_simultaneous_plotters_keep_results_isolated(monkeypatch: pytest.MonkeyP
         return np.full((grid.shape[0], 1), call_index + 4.0)
 
     monkeypatch.setattr(plotter_module.Tabulator, 'compute_gtos', controlled_compute)
-    first = plotter_module.Plotter(_sample_molden(), tk_root=_fake_tk_root())
-    second = plotter_module.Plotter(_sample_molden(), tk_root=_fake_tk_root())
+    first = plotter_module.Plotter(filename=_sample_molden(), tk_root=_fake_tk_root())
+    second = plotter_module.Plotter(filename=_sample_molden(), tk_root=_fake_tk_root())
 
     try:
         assert started[0].wait(timeout=1.0)
@@ -469,7 +469,7 @@ def test_closing_plotter_discards_running_generation(monkeypatch: pytest.MonkeyP
         return np.ones((grid.shape[0], 1))
 
     monkeypatch.setattr(plotter_module.Tabulator, 'compute_gtos', controlled_compute)
-    plotter = plotter_module.Plotter(_sample_molden(), tk_root=_fake_tk_root())
+    plotter = plotter_module.Plotter(filename=_sample_molden(), tk_root=_fake_tk_root())
     assert started.wait(timeout=1.0)
     selection_screen = plotter._selection_screen
     assert isinstance(selection_screen, FakeSelectionScreen)
@@ -503,7 +503,7 @@ def test_selection_window_close_during_work_preserves_custom_root(
 
     monkeypatch.setattr(plotter_module.Tabulator, 'compute_gtos', controlled_compute)
     root = cast(FakeTk, _fake_tk_root())
-    plotter = plotter_module.Plotter(_sample_molden(), tk_root=cast(Any, root))
+    plotter = plotter_module.Plotter(filename=_sample_molden(), tk_root=cast(Any, root))
 
     try:
         assert started.wait(timeout=1.0)
@@ -537,7 +537,7 @@ def test_plotter_window_close_during_work_preserves_custom_root(
 
     monkeypatch.setattr(plotter_module.Tabulator, 'compute_gtos', controlled_compute)
     root = cast(FakeTk, _fake_tk_root())
-    plotter = plotter_module.Plotter(_sample_molden(), tk_root=cast(Any, root))
+    plotter = plotter_module.Plotter(filename=_sample_molden(), tk_root=cast(Any, root))
     plotter_module._PlotterRendering._connect_pv_plotter_close_signal(plotter)
 
     try:
@@ -566,7 +566,7 @@ def test_gto_success_is_delivered_by_tk_thread(monkeypatch: pytest.MonkeyPatch) 
 
     monkeypatch.setattr(plotter_module.Tabulator, 'compute_gtos', fake_compute_gtos)
     root = cast(FakeTk, _fake_tk_root())
-    plotter = plotter_module.Plotter(_sample_molden(), tk_root=cast(Any, root))
+    plotter = plotter_module.Plotter(filename=_sample_molden(), tk_root=cast(Any, root))
 
     _pump_until(root, lambda: plotter._gtos_ready)
 
@@ -598,7 +598,7 @@ def test_gto_success_is_delivered_by_real_tcl_event_loop(
     monkeypatch.setattr(plotter_module.Tabulator, 'compute_gtos', fake_compute_gtos)
     monkeypatch.setattr(plotter_module.Plotter, '_apply_gtos_ready', record_apply)
     root = cast(Any, plotter_module.tk.Tcl())
-    plotter = plotter_module.Plotter(_sample_molden(), tk_root=root)
+    plotter = plotter_module.Plotter(filename=_sample_molden(), tk_root=root)
 
     try:
         deadline = time.monotonic() + 1.0
@@ -631,7 +631,7 @@ def test_gto_failure_is_delivered_by_tk_thread(
     monkeypatch.setattr(plotter_module.Tabulator, 'compute_gtos', fail_compute)
     monkeypatch.setattr(plotter_module.messagebox, 'showerror', fake_showerror)
     root = cast(FakeTk, _fake_tk_root())
-    plotter_module.Plotter(_sample_molden(), tk_root=cast(Any, root))
+    plotter_module.Plotter(filename=_sample_molden(), tk_root=cast(Any, root))
 
     _pump_until(root, lambda: bool(shown_on_threads))
 
@@ -659,7 +659,7 @@ def test_failed_grid_replacement_preserves_previous_state(
         lambda _title, message: shown_errors.append(message),
     )
     root = cast(FakeTk, _fake_tk_root())
-    plotter = plotter_module.Plotter(_sample_molden(), tk_root=cast(Any, root))
+    plotter = plotter_module.Plotter(filename=_sample_molden(), tk_root=cast(Any, root))
     _pump_until(root, lambda: plotter._gtos_ready)
 
     previous_grid = plotter.tabulator.grid
@@ -691,7 +691,7 @@ def test_close_stops_gto_delivery(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(plotter_module.Tabulator, 'compute_gtos', fake_compute_gtos)
     root = cast(FakeTk, _fake_tk_root())
-    plotter = plotter_module.Plotter(_sample_molden(), tk_root=cast(Any, root))
+    plotter = plotter_module.Plotter(filename=_sample_molden(), tk_root=cast(Any, root))
 
     plotter._on_screen = False
     plotter._cancel_gto_future()

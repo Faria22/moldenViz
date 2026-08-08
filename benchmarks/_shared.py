@@ -49,18 +49,18 @@ class GenericSolidHarmonicTabulator(Tabulator):
         )
 
 
-def example_source(name: str) -> list[str]:
-    """Return the bundled Molden source named by ``name``.
+def example_content(name: str) -> str:
+    """Return the bundled Molden content named by ``name``.
 
     Returns
     -------
-    list[str]
-        Molden input lines for the requested example.
+    str
+        Complete Molden input for the requested example.
     """
-    source = getattr(examples, name)
-    if not isinstance(source, list):
-        raise TypeError(f'Example {name!r} did not provide Molden input lines.')
-    return source
+    content = getattr(examples, name)
+    if not isinstance(content, str):
+        raise TypeError(f'Example {name!r} did not provide Molden content.')
+    return content
 
 
 def grid_axis(edge_size: int) -> np.ndarray:

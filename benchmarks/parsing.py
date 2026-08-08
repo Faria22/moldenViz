@@ -2,7 +2,7 @@
 
 from moldenViz.tabulator import Tabulator
 
-from ._shared import EXAMPLE_NAMES, example_source
+from ._shared import EXAMPLE_NAMES, example_content
 
 
 class TimeParsing:
@@ -15,4 +15,4 @@ class TimeParsing:
 
     def time_parse_example(self, molecule: str) -> None:
         """Parse a bundled Molden input."""
-        Tabulator(example_source(molecule))
+        Tabulator(content=example_content(molecule))

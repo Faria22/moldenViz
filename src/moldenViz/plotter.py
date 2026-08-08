@@ -18,32 +18,37 @@ from ._config_module import Config
 from ._plotter_jobs import BackgroundJob
 from ._plotter_rendering import _PlotterRendering
 from ._plotter_ui import _OrbitalSelectionScreen, _PlotterUI
+from .parser import _validate_molden_input
 from .tabulator import GridType, Tabulator
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from concurrent.futures import Future
+    from os import PathLike
 
     import pyvista as pv
     from numpy.typing import NDArray
 
 
-def _describe_source(source: str | list[str]) -> str:
-    """Return a human readable description of the data source.
+def _describe_input(filename: str | PathLike[str] | None, content: str | None) -> str:
+    """Return a human-readable description of the Molden input.
 
     Parameters
     ----------
-    source : str | list[str]
-        Path to a Molden file or the raw lines read from one.
+    filename : str | os.PathLike[str] | None
+        Path to a Molden file.
+    content : str | None
+        Complete Molden file content.
 
     Returns
     -------
     str
         Description suitable for logging output.
     """
-    if isinstance(source, str):
-        return source
-    return f'{len(source)} molden lines'
+    if filename is not None:
+        return str(filename)
+    assert content is not None
+    return f'{len(content.splitlines())} molden lines'
 
 
 logger = logging.getLogger(__name__)
@@ -73,8 +78,12 @@ class Plotter(_PlotterUI, _PlotterRendering):
 
     Parameters
     ----------
-    source : str | list[str]
-        The path to the molden file, or the lines from the file.
+    filename : str | os.PathLike[str] | None, optional
+        Path to the Molden file. Required when neither ``content`` nor
+        ``tabulator`` is provided.
+    content : str | None, optional
+        Complete contents of a Molden file. Required when neither ``filename``
+        nor ``tabulator`` is provided.
     only_molecule : bool, optional
         Only parse the atoms and skip molecular orbitals.
         Default is `False`.
@@ -109,12 +118,20 @@ class Plotter(_PlotterUI, _PlotterRendering):
 
     def __init__(
         self,
-        source: str | list[str],
+        *,
+        filename: str | PathLike[str] | None = None,
+        content: str | None = None,
         only_molecule: bool = False,
         tabulator: Tabulator | None = None,
         tk_root: tk.Tk | None = None,
     ) -> None:
         logger.info('Initialising Plotter (only_molecule=%s)', only_molecule)
+
+        if tabulator is not None:
+            if filename is not None or content is not None:
+                raise ValueError('filename and content must not be provided with tabulator.')
+        else:
+            _validate_molden_input(filename, content)
 
         self._on_screen = True
         self._only_molecule = only_molecule
@@ -145,7 +162,7 @@ class Plotter(_PlotterUI, _PlotterRendering):
         self._connect_pv_plotter_close_signal()
         self._override_clear_all_button()
 
-        if tabulator:
+        if tabulator is not None:
             logger.info('Using provided Tabulator instance with grid type %s', tabulator.grid_type.value)
             if not hasattr(tabulator, 'grid'):
                 raise ValueError('Tabulator does not have grid attribute.')
@@ -158,15 +175,15 @@ class Plotter(_PlotterUI, _PlotterRendering):
 
             self.tabulator = tabulator
         else:
-            logger.info('Creating Tabulator for source %s', _describe_source(source))
-            self.tabulator = Tabulator(source, only_molecule=only_molecule)
+            logger.info('Creating Tabulator for input %s', _describe_input(filename, content))
+            self.tabulator = Tabulator(filename=filename, content=content, only_molecule=only_molecule)
         self._gtos_ready = self._only_molecule or self.tabulator.has_gtos
 
         self._molecule_opacity = config.molecule.opacity
         self._load_molecule(config)
 
         # If no tabulator was passed, create default grid
-        if not only_molecule and not tabulator:
+        if not only_molecule and tabulator is None:
             if config.grid.default_type == 'spherical':
                 logger.info(
                     'Generating default spherical grid with %dx%dx%d samples.',
