@@ -1,6 +1,7 @@
 """Read and parse a molden file."""
 
 import logging
+from os import PathLike
 from pathlib import Path
 from typing import Literal
 
@@ -16,13 +17,27 @@ BOHR_PER_ANGSTROM = 1.8897259886
 logger = logging.getLogger(__name__)
 
 
+def _validate_molden_input(filename: str | PathLike[str] | None, content: str | None) -> None:
+    """Validate the mutually exclusive Molden input arguments."""
+    if filename is not None and not isinstance(filename, (str, PathLike)):
+        raise TypeError('filename must be a string or path-like object.')
+    if content is not None and not isinstance(content, str):
+        raise TypeError('content must be a string.')
+    if (filename is None) == (content is None):
+        raise ValueError('Exactly one of filename or content must be provided.')
+
+
 class Parser:
     """Parser for molden files.
 
     Parameters
     ----------
-    source : str | list[str]
-        The path to the molden file, or the lines from the file.
+    filename : str | os.PathLike[str] | None, optional
+        Path to the Molden file. Exactly one of ``filename`` and ``content``
+        must be provided.
+    content : str | None, optional
+        Complete contents of a Molden file. Exactly one of ``filename`` and
+        ``content`` must be provided.
     only_molecule : bool, optional
         Only parse the atoms and skip molecular orbitals.
         Default is `False`.
@@ -48,31 +63,34 @@ class Parser:
     Raises
     ------
     TypeError
-        If the source is not a valid molden file path, or molden file lines.
+        If ``filename`` is not a string or path-like object, or ``content`` is
+        not a string.
     ValueError
-        If ``mo_order`` is not ``'energy'`` or ``'file'``.
+        If exactly one input is not provided, or if ``mo_order`` is not
+        ``'energy'`` or ``'file'``.
     """
 
     def __init__(
         self,
-        source: str | list[str],
+        *,
+        filename: str | PathLike[str] | None = None,
+        content: str | None = None,
         only_molecule: bool = False,
         mo_order: Literal['energy', 'file'] = 'energy',
     ) -> None:
-        """Initialize the Parser with either a filename or molden lines."""
+        """Initialize the Parser with a filename or complete Molden content."""
         if mo_order not in {'energy', 'file'}:
             raise ValueError("'mo_order' must be either 'energy' or 'file'.")
 
-        if isinstance(source, str):
-            with Path(source).open('r') as file:
-                self._molden_lines = file.readlines()
-        elif isinstance(source, list):
-            self._molden_lines = source
+        _validate_molden_input(filename, content)
+        if filename is not None:
+            molden_content = Path(filename).read_text(encoding='utf-8')
         else:
-            raise TypeError('Source must be a filename (str) or list of lines (list[str]).')
+            assert content is not None
+            molden_content = content
 
         # Remove leading/trailing whitespace and newline characters
-        self._molden_lines = [line.strip() for line in self._molden_lines]
+        self._molden_lines = [line.strip() for line in molden_content.splitlines()]
 
         self._check_molden_format()
 

@@ -12,7 +12,7 @@ from ._shared import (
     WORKER_COUNTS,
     GenericSolidHarmonicTabulator,
     MOSelection,
-    example_source,
+    example_content,
     grid_axis,
     mo_indices,
     pyscf_spherical_path,
@@ -31,7 +31,7 @@ class TimeHighAngularMomentumGTOTabulation:
     def setup(self, molecule: str, edge_size: int, implementation: str) -> None:
         """Create a sequential cc-pVQZ tabulator with an uncomputed grid."""
         tabulator_class = GenericSolidHarmonicTabulator if implementation == 'generic' else Tabulator
-        self.tabulator = tabulator_class(str(pyscf_spherical_path(molecule)), max_workers=1)
+        self.tabulator = tabulator_class(filename=pyscf_spherical_path(molecule), max_workers=1)
         axis = grid_axis(edge_size)
         self.tabulator.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
 
@@ -51,7 +51,7 @@ class TimeGTOTabulation:
 
     def setup(self, molecule: str, edge_size: int) -> None:
         """Create a tabulator with an uncomputed Cartesian grid."""
-        self.tabulator = Tabulator(example_source(molecule))
+        self.tabulator = Tabulator(content=example_content(molecule))
         axis = grid_axis(edge_size)
         self.tabulator.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
 
@@ -71,7 +71,7 @@ class TimeGTOChunkSizes:
 
     def setup(self, molecule: str, edge_size: int, point_chunk_size: int | None) -> None:
         """Create a tabulator with an uncomputed Cartesian grid."""
-        self.tabulator = Tabulator(example_source(molecule))
+        self.tabulator = Tabulator(content=example_content(molecule))
         axis = grid_axis(edge_size)
         self.tabulator.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
 
@@ -91,7 +91,7 @@ class TimeGTOWorkerScaling:
 
     def setup(self, molecule: str, edge_size: int, max_workers: int) -> None:
         """Create an uncomputed grid with an explicit worker limit."""
-        self.tabulator = Tabulator(example_source(molecule), max_workers=max_workers)
+        self.tabulator = Tabulator(content=example_content(molecule), max_workers=max_workers)
         axis = grid_axis(edge_size)
         self.tabulator.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
 
@@ -111,7 +111,7 @@ class TimeMOContraction:
 
     def setup(self, molecule: str, edge_size: int, mo_selection: MOSelection) -> None:
         """Precompute GTOs so the timed region contains only MO contraction."""
-        self.tabulator = Tabulator(example_source(molecule))
+        self.tabulator = Tabulator(content=example_content(molecule))
         axis = grid_axis(edge_size)
         self.tabulator.cartesian_grid(axis, axis, axis)
         self.indices = mo_indices(self.tabulator, mo_selection)

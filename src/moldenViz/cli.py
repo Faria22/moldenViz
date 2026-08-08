@@ -85,11 +85,11 @@ def main() -> None:
     """
     parser = argparse.ArgumentParser(prog='moldenViz')
     parser.add_argument('-V', '--version', action='version', version=f'%(prog)s {__version__}')
-    source = parser.add_mutually_exclusive_group(required=True)
+    input_group = parser.add_mutually_exclusive_group(required=True)
 
-    source.add_argument('file', nargs='?', default=None, help='Optional molden file path', type=str)
+    input_group.add_argument('file', nargs='?', default=None, help='Optional molden file path', type=str)
     parser.add_argument('-m', '--only-molecule', action='store_true', help='Only plots the molecule')
-    source.add_argument(
+    input_group.add_argument(
         '-e',
         '--example',
         type=str,
@@ -121,12 +121,14 @@ def main() -> None:
 
     logger.debug('Parsed CLI arguments: %s', vars(args))
 
-    source_path = args.file or _all_examples[args.example]
-    source_label = args.file or f'example {args.example}'
-    logger.info('Launching plotter for %s', source_label)
+    input_label = args.file or f'example {args.example}'
+    logger.info('Launching plotter for %s', input_label)
 
     plotter_cls = _resolve_plotter()
-    plotter_cls(source_path, only_molecule=args.only_molecule)
+    if args.file:
+        plotter_cls(filename=args.file, only_molecule=args.only_molecule)
+    else:
+        plotter_cls(content=_all_examples[args.example], only_molecule=args.only_molecule)
 
 
 if __name__ == '__main__':

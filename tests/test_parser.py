@@ -29,7 +29,7 @@ def parser_obj() -> Parser:
     -------
         Parser object
     """
-    return Parser(str(MOLDEN_PATH))
+    return Parser(filename=MOLDEN_PATH)
 
 
 # ----------------------------------------------------------------------
@@ -89,9 +89,10 @@ def test_mo_order_can_preserve_file_order() -> None:
     blocks = [mo_lines[start : start + block_length] for start in block_starts]
     reversed_lines = prefix + [line for block in reversed(blocks) for line in block]
 
-    original_file_ordered = Parser(lines, mo_order='file')
-    file_ordered = Parser(reversed_lines, mo_order='file')
-    energy_ordered = Parser(reversed_lines, mo_order='energy')
+    original_file_ordered = Parser(content=''.join(lines), mo_order='file')
+    reversed_content = ''.join(reversed_lines)
+    file_ordered = Parser(content=reversed_content, mo_order='file')
+    energy_ordered = Parser(content=reversed_content, mo_order='energy')
 
     file_energies = [mo.energy for mo in file_ordered.mos]
     assert file_energies == list(reversed([mo.energy for mo in original_file_ordered.mos]))
@@ -101,43 +102,68 @@ def test_mo_order_can_preserve_file_order() -> None:
 def test_invalid_mo_order_is_rejected() -> None:
     """Only the documented molecular-orbital order values are accepted."""
     with pytest.raises(ValueError, match='mo_order'):
-        Parser(str(MOLDEN_PATH), mo_order='input')  # type: ignore[arg-type]
+        Parser(filename=MOLDEN_PATH, mo_order='input')  # type: ignore[arg-type]
 
 
-@pytest.mark.parametrize('source', [None, 1, 1.0, {}, set()])
-def test_parser_invalid_input_type(source: Any) -> None:
-    """
-    Parser must raise TypeError if input is not str or list of str.
+@pytest.mark.parametrize('filename', [1, 1.0, {}, set()])
+def test_parser_rejects_invalid_filename_type(filename: Any) -> None:
+    """Filename input must be a string or path-like object."""
+    with pytest.raises(TypeError, match='filename'):
+        Parser(filename=filename)
 
-    Raises
-    ------
-        TypeError
-    """
+
+@pytest.mark.parametrize('content', [1, 1.0, {}, set(), ['line']])
+def test_parser_rejects_invalid_content_type(content: Any) -> None:
+    """Content input must be one complete string, not pre-split lines."""
+    with pytest.raises(TypeError, match='content'):
+        Parser(content=content)
+
+
+def test_parser_requires_exactly_one_input() -> None:
+    """Filename and content inputs must be mutually exclusive and required."""
+    with pytest.raises(ValueError, match='Exactly one'):
+        Parser()
+    with pytest.raises(ValueError, match='Exactly one'):
+        Parser(filename=MOLDEN_PATH, content=MOLDEN_PATH.read_text(encoding='utf-8'))
+
+
+def test_parser_rejects_removed_positional_input() -> None:
+    """The removed positional source argument must not remain callable."""
     with pytest.raises(TypeError):
-        Parser(source)
+        Parser(str(MOLDEN_PATH))  # type: ignore[misc]
 
 
 # ----------------------------------------------------------------------
 # reproducibility checks
 # ----------------------------------------------------------------------
-def test_file_vs_lines_consistency(tmp_path: Path) -> None:
-    """Parsing via filename or via pre-read lines must give identical results."""
-    lines = MOLDEN_PATH.read_text().splitlines(True)
-
-    p_from_lines = Parser(lines)
+def test_filename_vs_content_consistency(tmp_path: Path) -> None:
+    """Parsing via filename or complete content must give identical results."""
+    content = MOLDEN_PATH.read_text(encoding='utf-8')
+    p_from_content = Parser(content=content)
 
     tmp_file = tmp_path / 'copy.molden'
-    tmp_file.write_text(''.join(lines))
-    p_from_file = Parser(str(tmp_file))
+    tmp_file.write_text(content, encoding='utf-8')
+    p_from_file = Parser(filename=tmp_file)
 
-    # Quick invariants - if these match, deeper structures are identical
-    assert [a.atomic_number for a in p_from_lines.atoms] == [a.atomic_number for a in p_from_file.atoms]
-    assert [mo.energy for mo in p_from_lines.mos] == [mo.energy for mo in p_from_file.mos]
+    assert [a.atomic_number for a in p_from_content.atoms] == [a.atomic_number for a in p_from_file.atoms]
+    np.testing.assert_allclose(
+        [atom.position for atom in p_from_content.atoms],
+        [atom.position for atom in p_from_file.atoms],
+    )
+    assert [shell.l for shell in p_from_content.shells] == [shell.l for shell in p_from_file.shells]
+    assert p_from_content.mos == p_from_file.mos
+    np.testing.assert_allclose(p_from_content.mo_coeffs, p_from_file.mo_coeffs)
+
+
+def test_empty_content_uses_existing_format_validation() -> None:
+    """Empty content should fail as an empty Molden document."""
+    with pytest.raises(ValueError, match='empty'):
+        Parser(content='')
 
 
 def test_only_molecule_has_stable_result_attributes() -> None:
     """Molecule-only parsing should expose empty orbital result containers."""
-    parser = Parser(str(MOLDEN_PATH), only_molecule=True)
+    parser = Parser(filename=MOLDEN_PATH, only_molecule=True)
 
     assert parser.shells == []
     assert parser.mos == []
@@ -146,7 +172,7 @@ def test_only_molecule_has_stable_result_attributes() -> None:
 
 def test_pyscf_spherical_fixture() -> None:
     """PySCF's parenthesized atom units and lowercase basis tags should parse."""
-    parser = Parser(str(PYSCF_SPHERICAL_PATH))
+    parser = Parser(filename=PYSCF_SPHERICAL_PATH)
 
     assert len(parser.atoms) == CO_ATOM_COUNT
     assert max(shell.l for shell in parser.shells) == PYSCF_LMAX

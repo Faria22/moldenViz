@@ -18,7 +18,7 @@ File Not Found
    from moldenViz import Parser
    
    try:
-       Parser('missing-file.inp')
+       Parser(filename='missing-file.inp')
    except FileNotFoundError:
        print('Molden file not found')
 
@@ -30,7 +30,7 @@ Invalid Molden Format
    from moldenViz import Parser
    
    try:
-       Parser('invalid.inp')
+       Parser(filename='invalid.inp')
    except ValueError as exc:
        print(f'Invalid molden file: {exc}')
 
@@ -43,7 +43,7 @@ Grids With ``only_molecule=True``
 
    from moldenViz import Tabulator
    
-   tab = Tabulator('molden.inp', only_molecule=True)
+   tab = Tabulator(filename='molden.inp', only_molecule=True)
    
    try:
        tab.cartesian_grid(x, y, z)
@@ -61,7 +61,7 @@ next time you construct a viewer:
    from moldenViz import Plotter
    
    try:
-       Plotter('molden.inp')
+       Plotter(filename='molden.inp')
    except ValueError as exc:
        print(f'Configuration error: {exc}')
        print('Review your TOML configuration and try again')

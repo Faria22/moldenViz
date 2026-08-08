@@ -81,7 +81,7 @@ def test_viewer_can_hide_and_restore_builtin_controls() -> None:
 
 
 def test_orbital_columns_fit_their_contents_with_padding() -> None:
-    viewer = OrbitalViewer(str(MOLDEN_PATH), only_molecule=False)
+    viewer = OrbitalViewer(filename=str(MOLDEN_PATH), only_molecule=False)
     table = viewer.controls.orbital_table
 
     assert all(table.columnWidth(column) > table.sizeHintForColumn(column) for column in range(table.columnCount()))
@@ -239,12 +239,12 @@ def test_viewers_have_isolated_configuration() -> None:
     second.close()
 
 
-def test_deferred_molecule_source_loading() -> None:
+def test_deferred_molecule_input_loading() -> None:
     viewer = OrbitalViewer(config={'molecule': {'bond': {'show': False}}})
     ready_calls: list[bool] = []
-    viewer.source_ready.connect(lambda: ready_calls.append(True))
+    viewer.input_ready.connect(lambda: ready_calls.append(True))
 
-    viewer.set_source(str(MOLDEN_PATH), only_molecule=True)
+    viewer.set_input(filename=str(MOLDEN_PATH), only_molecule=True)
 
     assert viewer.tabulator.atoms
     assert viewer.gtos_ready
@@ -253,9 +253,9 @@ def test_deferred_molecule_source_loading() -> None:
     viewer.close()
 
 
-def test_orbital_source_tabulation_and_selection() -> None:
+def test_orbital_input_tabulation_and_selection() -> None:
     viewer = OrbitalViewer(
-        str(MOLDEN_PATH),
+        filename=MOLDEN_PATH,
         config={
             'grid': {
                 'spherical': {'num_r_points': 3, 'num_theta_points': 3, 'num_phi_points': 3},
@@ -337,21 +337,41 @@ def test_dashboard_grid_convenience_methods(monkeypatch: pytest.MonkeyPatch) -> 
     viewer.close()
 
 
-def test_grid_update_requires_a_source() -> None:
+def test_grid_update_requires_input() -> None:
     viewer = OrbitalViewer(show_controls=False)
 
-    with pytest.raises(RuntimeError, match='Load a source'):
+    with pytest.raises(RuntimeError, match='Load input'):
         viewer.set_spherical_grid(radius=4.0, radial_points=3, theta_points=4, phi_points=5)
 
     viewer.close()
 
 
-def test_set_source_rejects_closed_viewer() -> None:
+def test_set_input_rejects_closed_viewer() -> None:
     viewer = OrbitalViewer()
     viewer.close()
 
     with pytest.raises(RuntimeError, match='closed'):
-        viewer.set_source(str(MOLDEN_PATH), only_molecule=True)
+        viewer.set_input(filename=str(MOLDEN_PATH), only_molecule=True)
+
+
+def test_viewer_accepts_complete_content() -> None:
+    viewer = OrbitalViewer(content=MOLDEN_PATH.read_text(encoding='utf-8'), only_molecule=True)
+
+    assert viewer.tabulator.atoms
+    assert viewer.gtos_ready
+    viewer.close()
+
+
+def test_viewer_rejects_conflicting_inputs() -> None:
+    with pytest.raises(ValueError, match='Exactly one'):
+        OrbitalViewer(filename=MOLDEN_PATH, content='contents')
+
+
+def test_viewer_rejects_input_with_tabulator() -> None:
+    tabulator = qt_module.Tabulator(filename=MOLDEN_PATH, only_molecule=True)
+
+    with pytest.raises(ValueError, match='must not be provided'):
+        OrbitalViewer(filename=MOLDEN_PATH, tabulator=tabulator)
 
 
 def test_close_releases_interactor_once() -> None:
@@ -379,7 +399,7 @@ def test_errors_are_emitted_without_dialogs() -> None:
 
 def test_exports_use_explicit_paths(tmp_path: Path) -> None:
     viewer = OrbitalViewer(
-        str(MOLDEN_PATH),
+        filename=MOLDEN_PATH,
         config={
             'grid': {
                 'spherical': {'num_r_points': 3, 'num_theta_points': 3, 'num_phi_points': 3},
@@ -410,15 +430,25 @@ def test_cube_export_rejects_all_orbitals(tmp_path: Path) -> None:
 
 
 def test_plotter_returns_inside_existing_application() -> None:
-    window = Plotter(str(MOLDEN_PATH), only_molecule=True)
+    window = Plotter(filename=str(MOLDEN_PATH), only_molecule=True)
 
     assert window.viewer.isVisible()
     assert not window._owns_application  # ruff: ignore[private-member-access]
     window.close()
 
 
+def test_plotter_rejects_removed_positional_input() -> None:
+    with pytest.raises(TypeError):
+        Plotter(str(MOLDEN_PATH))  # type: ignore[misc]
+
+
+def test_plotter_rejects_conflicting_inputs() -> None:
+    with pytest.raises(ValueError, match='Exactly one'):
+        Plotter(filename=MOLDEN_PATH, content='contents')
+
+
 def test_plotter_menus_follow_reordered_tabs_and_export_values(monkeypatch: pytest.MonkeyPatch) -> None:
-    window = Plotter(str(MOLDEN_PATH), only_molecule=True)
+    window = Plotter(filename=str(MOLDEN_PATH), only_molecule=True)
     actions = {action.text(): action for action in window.findChildren(QAction)}
 
     actions['Grid'].setEnabled(True)
@@ -451,7 +481,7 @@ def initialize_then_close(window, *args, **kwargs):
     QTimer.singleShot(0, window.close)
 Plotter._initialize_viewer = initialize_then_close
 with without_rendering():
-    window = Plotter({str(MOLDEN_PATH)!r}, only_molecule=True)
+    window = Plotter(filename={str(MOLDEN_PATH)!r}, only_molecule=True)
 assert window._owns_application
 assert window.viewer is not None
 """

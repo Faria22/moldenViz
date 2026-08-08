@@ -1,14 +1,14 @@
 """Get example files from folder and make them available to the package.
 
 This module provides access to pre-loaded molecular structures for demonstration
-and testing purposes. All examples are stored as lists of lines from molden files.
+and testing purposes. All examples are stored as complete Molden file contents.
 """
 
 from pathlib import Path
 
 
-def _read_file(path: Path) -> list[str]:
-    """Read a molden file and return its contents as a list of lines.
+def _read_file(path: Path) -> str:
+    """Read a Molden file and return its complete contents.
 
     Parameters
     ----------
@@ -17,11 +17,10 @@ def _read_file(path: Path) -> list[str]:
 
     Returns
     -------
-    list[str]
-        List of lines from the molden file.
+    str
+        Complete contents of the Molden file.
     """
-    with path.open('r') as f:
-        return f.readlines()
+    return path.read_text(encoding='utf-8')
 
 
 _molden_files_folder = Path(__file__).parent / 'molden_files'

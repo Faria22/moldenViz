@@ -10,7 +10,7 @@ from ._shared import (
     REPRESENTATIVE_EXAMPLES,
     WORKER_COUNTS,
     GenericSolidHarmonicTabulator,
-    example_source,
+    example_content,
     grid_axis,
     pyscf_spherical_path,
 )
@@ -52,7 +52,7 @@ class PeakMemoryHighAngularMomentumGTOTabulation:
     def setup(self, molecule: str, edge_size: int, implementation: str) -> None:
         """Create a sequential cc-pVQZ tabulator with an uncomputed grid."""
         tabulator_class = GenericSolidHarmonicTabulator if implementation == 'generic' else Tabulator
-        self.tabulator = tabulator_class(str(pyscf_spherical_path(molecule)), max_workers=1)
+        self.tabulator = tabulator_class(filename=pyscf_spherical_path(molecule), max_workers=1)
         axis = grid_axis(edge_size)
         self.tabulator.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
 
@@ -70,7 +70,7 @@ class PeakMemoryGTOTabulation:
 
     def setup(self, molecule: str, edge_size: int) -> None:
         """Create a tabulator with an uncomputed Cartesian grid."""
-        self.tabulator = Tabulator(example_source(molecule))
+        self.tabulator = Tabulator(content=example_content(molecule))
         axis = grid_axis(edge_size)
         self.tabulator.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
 
@@ -88,7 +88,7 @@ class PeakMemoryGTOChunkSizes:
 
     def setup(self, molecule: str, edge_size: int, point_chunk_size: int | None) -> None:
         """Create a tabulator with an uncomputed Cartesian grid."""
-        self.tabulator = Tabulator(example_source(molecule))
+        self.tabulator = Tabulator(content=example_content(molecule))
         axis = grid_axis(edge_size)
         self.tabulator.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
 
@@ -106,7 +106,7 @@ class PeakMemoryGTOWorkerScaling:
 
     def setup(self, molecule: str, edge_size: int, max_workers: int) -> None:
         """Create a representative large grid with an explicit worker limit."""
-        self.tabulator = Tabulator(example_source(molecule), max_workers=max_workers)
+        self.tabulator = Tabulator(content=example_content(molecule), max_workers=max_workers)
         axis = grid_axis(edge_size)
         self.tabulator.cartesian_grid(axis, axis, axis, tabulate_gtos=False)
 
@@ -124,7 +124,7 @@ class PeakMemoryAllMOContraction:
 
     def setup(self, molecule: str, edge_size: int) -> None:
         """Precompute the GTO input for the all-MO contraction."""
-        self.tabulator = Tabulator(example_source(molecule))
+        self.tabulator = Tabulator(content=example_content(molecule))
         axis = grid_axis(edge_size)
         self.tabulator.cartesian_grid(axis, axis, axis)
 

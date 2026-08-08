@@ -90,8 +90,9 @@ def test_cli_logging_levels(
     """Ensure verbosity flags set the expected logging level."""
     calls: dict[str, Any] = {}
 
-    def fake_plotter(source: Any, *, only_molecule: bool = False) -> None:
-        calls['source'] = source
+    def fake_plotter(*, filename: Any = None, content: Any = None, only_molecule: bool = False) -> None:
+        calls['filename'] = filename
+        calls['content'] = content
         calls['only_molecule'] = only_molecule
 
     cli = _reload_cli(monkeypatch, fake_plotter)
@@ -100,7 +101,8 @@ def test_cli_logging_levels(
 
     cli.main()
 
-    assert calls['source'] == str(sample_file)
+    assert calls['filename'] == str(sample_file)
+    assert calls['content'] is None
     assert calls['only_molecule'] is False
     assert logging.getLogger().getEffectiveLevel() == expected_level
 
@@ -109,8 +111,9 @@ def test_cli_example_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
     """Confirm the ``--example`` flag dispatches bundled Molden data."""
     calls: dict[str, Any] = {}
 
-    def fake_plotter(source: Any, *, only_molecule: bool = False) -> None:
-        calls['source'] = source
+    def fake_plotter(*, filename: Any = None, content: Any = None, only_molecule: bool = False) -> None:
+        calls['filename'] = filename
+        calls['content'] = content
         calls['only_molecule'] = only_molecule
 
     cli = _reload_cli(monkeypatch, fake_plotter)
@@ -118,8 +121,9 @@ def test_cli_example_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
 
     cli.main()
 
-    assert isinstance(calls['source'], list)
-    assert len(calls['source']) > 0
+    assert calls['filename'] is None
+    assert isinstance(calls['content'], str)
+    assert len(calls['content']) > 0
     assert calls['only_molecule'] is False
 
 
@@ -127,8 +131,9 @@ def test_cli_uses_hyphenated_only_molecule_flag(monkeypatch: pytest.MonkeyPatch)
     """The v2 CLI should use the conventional hyphenated long option."""
     calls: dict[str, Any] = {}
 
-    def fake_plotter(source: Any, *, only_molecule: bool = False) -> None:
-        calls['source'] = source
+    def fake_plotter(*, filename: Any = None, content: Any = None, only_molecule: bool = False) -> None:
+        calls['filename'] = filename
+        calls['content'] = content
         calls['only_molecule'] = only_molecule
 
     cli = _reload_cli(monkeypatch, fake_plotter)

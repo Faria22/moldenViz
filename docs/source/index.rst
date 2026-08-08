@@ -48,7 +48,7 @@ Or use the Python API:
    from moldenViz import Plotter
    from moldenViz.examples import benzene
 
-   Plotter(benzene)
+   Plotter(content=benzene)
 
 For a guided walk-through, continue with :doc:`Getting Started <getting-started>`.
 

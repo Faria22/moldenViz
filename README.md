@@ -60,8 +60,8 @@ ownership of their existing Qt event loop.
   ```python
   from moldenViz import Parser, Tabulator
 
-  parser = Parser('my.molden')
-  tabulator = Tabulator(parser)
+  parser = Parser(filename='my.molden')
+  tabulator = Tabulator(filename='my.molden')
   ```
 
 - With the GUI extra installed, launch a viewer from Python:
@@ -69,7 +69,7 @@ ownership of their existing Qt event loop.
   ```python
   from moldenViz import Plotter
 
-  Plotter('my.molden')
+  Plotter(filename='my.molden')
   ```
 
 - Embed the same controls and renderer in an existing PySide6 application:
@@ -79,14 +79,14 @@ ownership of their existing Qt event loop.
 
   viewer = OrbitalViewer(parent=page)
   page.layout().addWidget(viewer)
-  viewer.set_source('my.molden')
+  viewer.set_input(filename='my.molden')
   ```
 
   A host-owned dashboard can hide the built-in controls and drive the public
   viewer API directly:
 
   ```python
-  viewer = OrbitalViewer('my.molden', parent=page, show_controls=False)
+  viewer = OrbitalViewer(filename='my.molden', parent=page, show_controls=False)
   viewer.show_orbital(0)
   viewer.update_appearance(contour=0.05, mo_opacity=0.8)
   viewer.set_controls_visible(True)  # Restore the built-in panel when needed.

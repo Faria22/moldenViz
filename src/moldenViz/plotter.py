@@ -22,10 +22,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .parser import _validate_molden_input
 from .qt import OrbitalViewer
 
 if TYPE_CHECKING:
     from concurrent.futures import Future
+    from os import PathLike
 
     from ._config_module import Config, MainConfig
     from .qt import _GTOResult
@@ -50,8 +52,12 @@ class Plotter(QMainWindow):
 
     Parameters
     ----------
-    source : str | list[str]
-        Molden path or raw Molden lines.
+    filename : str | os.PathLike[str] | None, optional
+        Path to the Molden file. Required when neither ``content`` nor
+        ``tabulator`` is provided.
+    content : str | None, optional
+        Complete contents of a Molden file. Required when neither ``filename``
+        nor ``tabulator`` is provided.
     only_molecule : bool, optional
         Skip molecular-orbital parsing and controls.
     tabulator : Tabulator, optional
@@ -64,13 +70,20 @@ class Plotter(QMainWindow):
 
     def __init__(
         self,
-        source: str | list[str],
+        *,
+        filename: str | PathLike[str] | None = None,
+        content: str | None = None,
         only_molecule: bool = False,
         tabulator: Tabulator | None = None,
-        *,
         config: Config | MainConfig | Mapping[str, Any] | None = None,
         parent: QWidget | None = None,
     ) -> None:
+        if tabulator is not None:
+            if filename is not None or content is not None:
+                raise ValueError('filename and content must not be provided with tabulator.')
+        else:
+            _validate_molden_input(filename, content)
+
         application = QApplication.instance()
         self._owns_application = application is None
         if application is None:
@@ -92,7 +105,8 @@ class Plotter(QMainWindow):
             self.show()
             initialize = partial(
                 self._initialize_owned_viewer,
-                source,
+                filename,
+                content,
                 only_molecule,
                 tabulator,
                 config,
@@ -100,7 +114,7 @@ class Plotter(QMainWindow):
             QTimer.singleShot(_LOADING_DELAY_MS, initialize)
             self._application.exec()
         else:
-            self._initialize_viewer(source, only_molecule, tabulator, config)
+            self._initialize_viewer(filename, content, only_molecule, tabulator, config)
             self.show()
 
     def _create_loading_placeholder(self) -> QWidget:
@@ -128,7 +142,8 @@ class Plotter(QMainWindow):
 
     def _initialize_owned_viewer(
         self,
-        source: str | list[str],
+        filename: str | PathLike[str] | None,
+        content: str | None,
         only_molecule: bool,
         tabulator: Tabulator | None,
         config: Config | MainConfig | Mapping[str, Any] | None,
@@ -137,7 +152,7 @@ class Plotter(QMainWindow):
         if self._closing:
             return
         try:
-            self._initialize_viewer(source, only_molecule, tabulator, config)
+            self._initialize_viewer(filename, content, only_molecule, tabulator, config)
         except Exception as exc:
             logger.exception('Unable to initialize the molecular viewer.')
             self._show_error('Unable to launch moldenViz', exc)
@@ -145,14 +160,16 @@ class Plotter(QMainWindow):
 
     def _initialize_viewer(
         self,
-        source: str | list[str],
+        filename: str | PathLike[str] | None,
+        content: str | None,
         only_molecule: bool,
         tabulator: Tabulator | None,
         config: Config | MainConfig | Mapping[str, Any] | None,
     ) -> None:
         """Construct the viewer and replace any loading placeholder."""
         self.viewer = OrbitalViewer(
-            source,
+            filename=filename,
+            content=content,
             only_molecule=only_molecule,
             tabulator=tabulator,
             config=config,

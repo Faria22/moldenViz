@@ -36,11 +36,13 @@ from PySide6.QtWidgets import (
 
 from ._plotter_jobs import BackgroundJob
 from ._plotter_rendering import _PlotterRendering
+from .parser import _validate_molden_input
 from .tabulator import GridType, Tabulator
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from concurrent.futures import Future
+    from os import PathLike
 
     import pyvista as pv
     from numpy.typing import NDArray
@@ -648,8 +650,10 @@ class OrbitalViewer(QWidget, _PlotterRendering):
 
     Parameters
     ----------
-    source : str | list[str], optional
-        Molden path or raw Molden lines.
+    filename : str | os.PathLike[str] | None, optional
+        Path to the Molden file.
+    content : str | None, optional
+        Complete contents of a Molden file.
     only_molecule : bool, optional
         Skip molecular-orbital parsing and controls.
     tabulator : Tabulator, optional
@@ -664,15 +668,16 @@ class OrbitalViewer(QWidget, _PlotterRendering):
     """
 
     loading_changed = Signal(bool)
-    source_ready = Signal()
+    input_ready = Signal()
     orbital_changed = Signal(int)
     error_occurred = Signal(str, object)
     export_requested = Signal(str, object)
 
     def __init__(
         self,
-        source: str | list[str] | None = None,
         *,
+        filename: str | PathLike[str] | None = None,
+        content: str | None = None,
         only_molecule: bool = False,
         tabulator: Tabulator | None = None,
         config: Config | MainConfig | Mapping[str, Any] | None = None,
@@ -724,8 +729,13 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         self.controls.sync_from_viewer()
         self.set_controls_visible(show_controls)
 
-        if source is not None or tabulator is not None:
-            self.set_source(source, tabulator=tabulator, only_molecule=only_molecule)
+        if filename is not None or content is not None or tabulator is not None:
+            self.set_input(
+                filename=filename,
+                content=content,
+                tabulator=tabulator,
+                only_molecule=only_molecule,
+            )
 
     @property
     def config(self) -> Config:
@@ -765,18 +775,22 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         """Compatibility view of the pending background future."""
         return self._gto_job.future
 
-    def set_source(
+    def set_input(
         self,
-        source: str | list[str] | None,
         *,
+        filename: str | PathLike[str] | None = None,
+        content: str | None = None,
         tabulator: Tabulator | None = None,
         only_molecule: bool | None = None,
     ) -> None:
-        """Load or replace the Molden source displayed by this widget."""
+        """Load or replace the Molden input displayed by this widget."""
         if self._closed:
-            raise RuntimeError('Cannot load a source into a closed OrbitalViewer.')
-        if source is None and tabulator is None:
-            raise ValueError('source is required when tabulator is not provided.')
+            raise RuntimeError('Cannot load input into a closed OrbitalViewer.')
+        if tabulator is not None:
+            if filename is not None or content is not None:
+                raise ValueError('filename and content must not be provided with tabulator.')
+        else:
+            _validate_molden_input(filename, content)
         self._cancel_gto_future()
         self._clear_scene()
         self._current_orbital_index = -1
@@ -792,8 +806,11 @@ class OrbitalViewer(QWidget, _PlotterRendering):
                 raise ValueError('Tabulator does not have tabulated GTOs.')
             self.tabulator = tabulator
         else:
-            assert source is not None
-            self.tabulator = Tabulator(source, only_molecule=self._only_molecule)
+            self.tabulator = Tabulator(
+                filename=filename,
+                content=content,
+                only_molecule=self._only_molecule,
+            )
 
         self._gtos_ready = self._only_molecule or self.tabulator.has_gtos
         self._molecule_opacity = self._config.molecule.opacity
@@ -820,7 +837,7 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         self.controls.set_loading_state(not self._gtos_ready)
         if not self._gtos_ready:
             self._schedule_gto_tabulation()
-        self.source_ready.emit()
+        self.input_ready.emit()
 
     def _create_default_grid(self) -> None:
         radius = max(
@@ -880,7 +897,7 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         if self._only_molecule:
             raise RuntimeError('Molecule-only viewers do not have an orbital grid.')
         if not hasattr(self, 'tabulator'):
-            raise RuntimeError('Load a source before updating the orbital grid.')
+            raise RuntimeError('Load input before updating the orbital grid.')
 
     def set_spherical_grid(
         self,

@@ -106,7 +106,7 @@ Create plots programmatically by importing the high-level API:
    from moldenViz import Plotter
    from moldenViz.examples import benzene
 
-   Plotter(benzene)
+   Plotter(content=benzene)
 
 This opens an interactive PySide6 window with the orbital controls and 3D
 renderer side by side.

@@ -12,10 +12,24 @@ Read a Molden file and access its atoms and orbitals:
 
    from moldenViz import Parser
 
-   parser = Parser('molden.inp')
+   parser = Parser(filename='molden.inp')
 
    atoms = parser.atoms
    mos = parser.mos
+
+To parse data already held in memory, pass the complete file as one string.
+``filename`` and ``content`` are mutually exclusive:
+
+.. code-block:: python
+
+   from pathlib import Path
+
+   content = Path('molden.inp').read_text(encoding='utf-8')
+   parser = Parser(content=content)
+
+``Tabulator`` and ``Plotter`` accept the same explicit input keywords. When a
+configured tabulator is supplied to ``Plotter``, omit both input keywords and
+use ``Plotter(tabulator=tab)``.
 
 The returned objects use public parser model types, so they can also be
 imported for annotations or construction:
@@ -31,15 +45,15 @@ Skip molecular orbital parsing when you only need the structure:
 
 .. code-block:: python
 
-   parser = Parser('molden.inp', only_molecule=True)
+   parser = Parser(filename='molden.inp', only_molecule=True)
 
 Choose whether molecular orbitals are sorted by energy or retain their order
 in the source file:
 
 .. code-block:: python
 
-   energy_ordered = Parser('molden.inp', mo_order='energy')
-   file_ordered = Parser('molden.inp', mo_order='file')
+   energy_ordered = Parser(filename='molden.inp', mo_order='energy')
+   file_ordered = Parser(filename='molden.inp', mo_order='file')
 
 Example Molecules
 -----------------
@@ -51,7 +65,7 @@ The ``moldenViz.examples`` module bundles molecules you can use without providin
    from moldenViz import Plotter
    from moldenViz.examples import co
 
-   Plotter(co)
+   Plotter(content=co)
 
 Plotting Molecules
 ------------------
@@ -63,10 +77,10 @@ The ``Plotter`` class renders atoms, bonds, and (optionally) orbital isosurfaces
    from moldenViz import Plotter
 
    # Plot molecule with orbitals
-   Plotter('molden.inp')
+   Plotter(filename='molden.inp')
 
    # Plot only the molecular structure
-   Plotter('molden.inp', only_molecule=True)
+   Plotter(filename='molden.inp', only_molecule=True)
 
 ``Plotter`` is the free-floating convenience API. It creates and runs a
 ``QApplication`` when no Qt application exists. Inside an existing PySide6
@@ -92,7 +106,7 @@ and event loop:
 
    viewer = OrbitalViewer(parent=page)
    layout.addWidget(viewer)
-   viewer.set_source('molden.inp')
+   viewer.set_input(filename='molden.inp')
 
    page.show()
    app.exec()
@@ -110,7 +124,7 @@ export operations do not depend on the panel being visible:
 
 .. code-block:: python
 
-   viewer = OrbitalViewer('molden.inp', parent=page, show_controls=False)
+   viewer = OrbitalViewer(filename='molden.inp', parent=page, show_controls=False)
 
    # Populate a host-owned orbital picker.
    for index, orbital in enumerate(viewer.molecular_orbitals):
@@ -127,7 +141,7 @@ export operations do not depend on the panel being visible:
 
 ``current_orbital_index`` reports the current selection, with ``-1`` meaning
 that no orbital is displayed. ``orbital_changed``, ``loading_changed``, and
-``source_ready`` let host controls follow viewer state. Appearance updates are
+``input_ready`` let host controls follow viewer state. Appearance updates are
 partial: omitted values retain their current per-viewer setting. Cartesian
 grids can be configured with ``set_cartesian_grid``; callers with pre-built
 NumPy axes can use ``update_grid`` directly.
@@ -137,7 +151,7 @@ The built-in panel can be restored later with
 made through the public viewer API.
 
 For a free-floating viewer inside an application whose event loop is already
-running, use ``window = Plotter('molden.inp')``. This is the PySide6 replacement
+running, use ``window = Plotter(filename='molden.inp')``. This is the PySide6 replacement
 for the former ``tk_root`` integration argument.
 
 Embedded viewers do not open file or message dialogs. Export operations accept
@@ -163,7 +177,7 @@ viewer:
 .. code-block:: python
 
    viewer = OrbitalViewer(
-       'molden.inp',
+       filename='molden.inp',
        parent=page,
        config={'background_color': '#202124', 'mo': {'opacity': 0.8}},
    )
@@ -244,7 +258,7 @@ Use ``Tabulator`` to build grids and evaluate molecular orbitals:
    from moldenViz import Tabulator
    import numpy as np
 
-   tab = Tabulator('molden.inp')
+   tab = Tabulator(filename='molden.inp')
 
    tab.spherical_grid(
        r=np.linspace(0, 5, 20),
@@ -292,14 +306,14 @@ Supply a pre-configured ``Tabulator`` to ``Plotter`` for re-use or fine-grained 
    from moldenViz import Tabulator, Plotter
    import numpy as np
 
-   tab = Tabulator('molden.inp')
+   tab = Tabulator(filename='molden.inp')
    tab.cartesian_grid(
        x=np.linspace(-3, 3, 30),
        y=np.linspace(-3, 3, 30),
        z=np.linspace(-3, 3, 30)
    )
 
-   Plotter('molden.inp', tabulator=tab)
+   Plotter(tabulator=tab)
 
 When orbital rendering is enabled, pass a ``Tabulator`` only after it has a spherical or cartesian grid and cached GTO values. The grid helpers tabulate GTOs by default; if you call them with ``tabulate_gtos=False``, call ``tab.tabulate_gtos()`` before constructing ``Plotter``. Molecule-only viewers do not require cached GTOs.
 
@@ -317,13 +331,13 @@ and measured peak memory rises sharply at that scale:
 .. code-block:: python
 
    # Default: at most four workers.
-   tab = Tabulator('molden.inp')
+   tab = Tabulator(filename='molden.inp')
 
    # Deterministic sequential execution.
-   sequential_tab = Tabulator('molden.inp', max_workers=1)
+   sequential_tab = Tabulator(filename='molden.inp', max_workers=1)
 
    # A lower per-tabulation concurrency limit.
-   two_worker_tab = Tabulator('molden.inp', max_workers=2)
+   two_worker_tab = Tabulator(filename='molden.inp', max_workers=2)
 
 The configured ceiling is available as ``tab.max_workers``. Supplying an explicit
 value overrides the large-grid sequential policy; values above four are still
@@ -347,7 +361,7 @@ You can export orbitals without opening the GUI. Create a grid, tabulate orbital
    from moldenViz import Tabulator
    import numpy as np
 
-   tab = Tabulator('molecule.molden')
+   tab = Tabulator(filename='molecule.molden')
    tab.cartesian_grid(
        x=np.linspace(-8, 8, 120),
        y=np.linspace(-8, 8, 120),
@@ -396,7 +410,7 @@ To reuse tabulation results in a notebook without re-computation:
 
 .. code-block:: python
 
-   tab = Tabulator('molecule.molden')
+   tab = Tabulator(filename='molecule.molden')
    tab.spherical_grid(
        r=np.linspace(0, 10, 90),
        theta=np.linspace(0, np.pi, 60),
@@ -404,7 +418,7 @@ To reuse tabulation results in a notebook without re-computation:
    )
 
    # Keep tabulator to reuse precomputed GTOs
-   Plotter('molecule.molden', tabulator=tab)
+   Plotter(tabulator=tab)
 
    # Later, export the same grid to VTK
    tab.export('exports/spherical_0.vtk', mo_index=0)
@@ -418,7 +432,7 @@ Loop over atoms, shells, and orbitals for deeper analysis:
 
    from moldenViz import Parser
 
-   parser = Parser('molden.inp')
+   parser = Parser(filename='molden.inp')
 
    for atom in parser.atoms:
        print(f"Atom: {atom.label}, Position: {atom.position}")

@@ -16,7 +16,7 @@ class TimeGridCreation:
 
     def setup(self, edge_size: int) -> None:
         """Create reusable parser state and grid axes."""
-        self.tabulator = Tabulator(examples.co)
+        self.tabulator = Tabulator(content=examples.co)
         self.axis = np.linspace(-3.0, 3.0, edge_size)
 
     def time_create_cartesian_grid(self, edge_size: int) -> None:
