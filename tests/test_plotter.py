@@ -1,90 +1,30 @@
 """Tests for the Qt-native viewer and standalone facade."""
-# ruff:file-ignore[no-self-use, undocumented-public-function, undocumented-public-method]
+# ruff:file-ignore[undocumented-public-function]
 
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 from unittest.mock import Mock
 
 import numpy as np
 import pytest
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QAbstractSpinBox, QApplication, QWidget
 
 import moldenViz.qt as qt_module
 from moldenViz.plotter import Plotter
 from moldenViz.qt import OrbitalViewer
+from moldenViz.testing import NullInteractor, without_rendering
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 MOLDEN_PATH = Path(__file__).parent / 'sample_molden.inp'
-
-
-class FakeActor:
-    """Small VTK actor stand-in."""
-
-    def __init__(self) -> None:
-        self.visible = True
-        self.opacity = 1.0
-
-    def GetVisibility(self) -> bool:  # ruff: ignore[invalid-function-name]
-        return self.visible
-
-    def SetVisibility(self, visible: bool) -> None:  # ruff: ignore[invalid-function-name]
-        self.visible = visible
-
-    def GetProperty(self) -> FakeActor:  # ruff: ignore[invalid-function-name]
-        return self
-
-    def SetOpacity(self, opacity: float) -> None:  # ruff: ignore[invalid-function-name]
-        self.opacity = opacity
-
-
-class FakeInteractor(QWidget):
-    """Headless ``QtInteractor`` replacement for widget unit tests."""
-
-    instances: list[FakeInteractor] = []
-
-    def __init__(self, parent: QWidget | None = None, **_kwargs: object) -> None:
-        super().__init__(parent)
-        self.background = ''
-        self.closed_count = 0
-        self.actors: list[FakeActor] = []
-        self.saved_graphic: Path | None = None
-        self.saved_screenshot: tuple[Path, bool] | None = None
-        self.reset_count = 0
-        self.__class__.instances.append(self)
-
-    def set_background(self, color: str) -> None:
-        self.background = color
-
-    def show_axes(self) -> None:
-        return
-
-    def add_mesh(self, _mesh: object, **_kwargs: object) -> FakeActor:
-        actor = FakeActor()
-        self.actors.append(actor)
-        return actor
-
-    def remove_actor(self, actor: FakeActor) -> None:
-        if actor in self.actors:
-            self.actors.remove(actor)
-
-    def update(self) -> None:
-        return
-
-    def close(self) -> None:  # type: ignore[override]
-        self.closed_count += 1
-
-    def save_graphic(self, path: Path) -> None:
-        self.saved_graphic = path
-
-    def screenshot(self, path: Path, *, transparent_background: bool) -> None:
-        self.saved_screenshot = path, transparent_background
-
-    def reset_camera(self) -> None:
-        self.reset_count += 1
 
 
 @pytest.fixture(scope='session')
@@ -101,11 +41,11 @@ def qapplication() -> QApplication:
 
 
 @pytest.fixture(autouse=True)
-def fake_interactor(monkeypatch: pytest.MonkeyPatch, qapplication: QApplication) -> None:
-    """Avoid creating native VTK windows in unit tests."""
+def null_interactor(qapplication: QApplication) -> Iterator[None]:
+    """Use the supported non-rendering context for widget tests."""
     del qapplication
-    FakeInteractor.instances.clear()
-    monkeypatch.setattr(qt_module, '_load_qt_interactor', lambda: FakeInteractor)
+    with without_rendering():
+        yield
 
 
 def test_viewer_requires_existing_qapplication(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -122,6 +62,7 @@ def test_viewer_is_parentable_and_does_not_show_itself(qapplication: QApplicatio
     assert viewer.isAncestorOf(viewer.interactor)
     assert not viewer.isVisible()
     assert QApplication.instance() is qapplication
+    assert isinstance(viewer.interactor, NullInteractor)
 
     viewer.close()
 
@@ -261,6 +202,27 @@ def test_export_scope_uses_descriptive_labels_and_stable_values() -> None:
     scope.setCurrentIndex(scope.findData('all'))
     viewer.controls.data_format.setCurrentText('cube')
     assert scope.currentData() == 'current'
+    viewer.close()
+
+
+def test_export_buttons_warn_without_host_handler(caplog: pytest.LogCaptureFixture) -> None:
+    viewer = OrbitalViewer()
+
+    assert not viewer.has_export_handler
+    with caplog.at_level(logging.WARNING, logger='moldenViz.qt'):
+        viewer.controls.image_export_button.click()
+    assert 'without an export_requested receiver' in caplog.text
+
+    requests: list[tuple[str, object]] = []
+    viewer.export_requested.connect(lambda kind, options: requests.append((kind, options)))
+    caplog.clear()
+    with caplog.at_level(logging.WARNING, logger='moldenViz.qt'):
+        viewer.controls.image_export_button.click()
+
+    assert viewer.has_export_handler
+    assert requests
+    assert requests[-1][0] == 'image'
+    assert 'without an export_requested receiver' not in caplog.text
     viewer.close()
 
 
@@ -447,8 +409,7 @@ def test_cube_export_rejects_all_orbitals(tmp_path: Path) -> None:
     viewer.close()
 
 
-def test_plotter_returns_inside_existing_application(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(qt_module, '_load_qt_interactor', lambda: FakeInteractor)
+def test_plotter_returns_inside_existing_application() -> None:
     window = Plotter(str(MOLDEN_PATH), only_molecule=True)
 
     assert window.viewer.isVisible()
@@ -456,14 +417,32 @@ def test_plotter_returns_inside_existing_application(monkeypatch: pytest.MonkeyP
     window.close()
 
 
+def test_plotter_menus_follow_reordered_tabs_and_export_values(monkeypatch: pytest.MonkeyPatch) -> None:
+    window = Plotter(str(MOLDEN_PATH), only_molecule=True)
+    actions = {action.text(): action for action in window.findChildren(QAction)}
+
+    actions['Grid'].setEnabled(True)
+    actions['Grid'].trigger()
+    assert window.viewer.controls.tabs.currentWidget() is window.viewer.controls.grid_tab
+    actions['Appearance'].trigger()
+    assert window.viewer.controls.tabs.currentWidget() is window.viewer.controls.appearance_tab
+
+    window.viewer.controls.data_scope.setCurrentIndex(window.viewer.controls.data_scope.findData('all'))
+    handle_export_request = Mock()
+    monkeypatch.setattr(window, '_handle_export_request', handle_export_request)
+    actions['Orbital data…'].setEnabled(True)
+    actions['Orbital data…'].trigger()
+
+    assert handle_export_request.call_args.args[1]['scope'] == 'all'
+    window.close()
+
+
 def test_plotter_owns_event_loop_when_it_creates_application() -> None:
     script = f"""
 from PySide6.QtCore import QTimer
-import moldenViz.qt as qt_module
 from moldenViz.plotter import Plotter
-from tests.test_plotter import FakeInteractor
+from moldenViz.testing import without_rendering
 
-qt_module._load_qt_interactor = lambda: FakeInteractor
 original_initialize = Plotter._initialize_viewer
 def initialize_then_close(window, *args, **kwargs):
     assert window.isVisible()
@@ -471,13 +450,35 @@ def initialize_then_close(window, *args, **kwargs):
     original_initialize(window, *args, **kwargs)
     QTimer.singleShot(0, window.close)
 Plotter._initialize_viewer = initialize_then_close
-window = Plotter({str(MOLDEN_PATH)!r}, only_molecule=True)
+with without_rendering():
+    window = Plotter({str(MOLDEN_PATH)!r}, only_molecule=True)
 assert window._owns_application
 assert window.viewer is not None
 """
     environment = os.environ.copy()
     environment['QT_QPA_PLATFORM'] = 'offscreen'
     subprocess.run([sys.executable, '-c', script], check=True, env=environment)
+
+
+def test_offscreen_viewer_fails_cleanly_without_testing_context() -> None:
+    script = """
+from PySide6.QtWidgets import QApplication
+from moldenViz.qt import OrbitalViewer
+
+application = QApplication([])
+try:
+    OrbitalViewer()
+except RuntimeError as exc:
+    assert 'without_rendering' in str(exc)
+else:
+    raise AssertionError('Expected the offscreen safety guard')
+"""
+    environment = os.environ.copy()
+    environment['QT_QPA_PLATFORM'] = 'offscreen'
+
+    result = subprocess.run([sys.executable, '-c', script], env=environment, check=False)
+
+    assert result.returncode == 0
 
 
 def test_qt_gui_import_path_does_not_load_tkinter() -> None:

@@ -150,6 +150,12 @@ buttons emit ``export_requested`` so the host can present its own interface:
    viewer.export_requested.connect(handle_export_request)
    viewer.export_image('scene.png', file_format='png', transparent=True)
 
+When the built-in controls are visible, the host must connect
+``export_requested`` for those buttons to perform an action. If no receiver is
+connected, the viewer logs a warning and does not open a dialog itself. Hosts
+that provide their own controls can call ``export_data`` and ``export_image``
+directly with explicit destinations.
+
 Viewer configuration is per instance. Nested constructor overrides take
 precedence over the defaults and the user's TOML file without changing another
 viewer:

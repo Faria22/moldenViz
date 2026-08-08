@@ -185,8 +185,12 @@ class Plotter(QMainWindow):
         view_menu.addAction(reset_camera)
 
         settings_menu = self.menuBar().addMenu('Settings')
-        appearance_tab = 2
-        for label, tab_index in (('Grid', 1), ('Appearance', appearance_tab)):
+        appearance_tab = self.viewer.controls.tabs.indexOf(self.viewer.controls.appearance_tab)
+        settings_tabs = (
+            ('Grid', self.viewer.controls.tabs.indexOf(self.viewer.controls.grid_tab)),
+            ('Appearance', appearance_tab),
+        )
+        for label, tab_index in settings_tabs:
             action = QAction(label, self)
             action.setEnabled(not only_molecule or tab_index == appearance_tab)
             action.triggered.connect(
@@ -205,7 +209,7 @@ class Plotter(QMainWindow):
                 'data',
                 {
                     'format': self.viewer.controls.data_format.currentText(),
-                    'scope': self.viewer.controls.data_scope.currentText(),
+                    'scope': self.viewer.controls.data_scope.currentData(),
                 },
             ),
         )

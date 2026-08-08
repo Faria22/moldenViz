@@ -91,6 +91,16 @@ def _load_qt_interactor() -> type[QtInteractor]:
     type[QtInteractor]
         PyVista's Qt interactor class.
     """
+    testing = import_module('moldenViz.testing')
+    override = testing._get_interactor_override()  # ruff: ignore[private-member-access]
+    if override is not None:
+        return cast('type[QtInteractor]', override)
+    application = QApplication.instance()
+    if isinstance(application, QApplication) and application.platformName() == 'offscreen':
+        raise RuntimeError(
+            'OrbitalViewer cannot create a VTK QtInteractor with QT_QPA_PLATFORM=offscreen. '
+            'Use moldenViz.testing.without_rendering() for UI smoke tests.',
+        )
     return import_module('pyvistaqt').QtInteractor
 
 
@@ -267,6 +277,7 @@ class OrbitalControlPanel(QWidget):
 
     def _build_appearance_tab(self) -> None:
         tab = QWidget(self)
+        self.appearance_tab = tab
         layout = QVBoxLayout(tab)
 
         self.orbital_group = QGroupBox('Molecular orbital', tab)
@@ -349,14 +360,14 @@ class OrbitalControlPanel(QWidget):
         self.image_format.addItems(['png', 'jpeg', 'svg', 'pdf'])
         self.transparent_background = QCheckBox('Transparent PNG background', tab)
         self.image_format.currentTextChanged.connect(self._update_transparency_option)
-        image_button = QPushButton('Export image…', tab)
-        image_button.clicked.connect(self._request_image_export)
+        self.image_export_button = QPushButton('Export image…', tab)
+        self.image_export_button.clicked.connect(self._request_image_export)
         layout.addRow('Data format', self.data_format)
         layout.addRow('Scope', self.data_scope)
         layout.addRow(self.data_export_button)
         layout.addRow('Image format', self.image_format)
         layout.addRow(self.transparent_background)
-        layout.addRow(image_button)
+        layout.addRow(self.image_export_button)
         self.tabs.addTab(tab, 'Export')
 
     @staticmethod
@@ -605,12 +616,14 @@ class OrbitalControlPanel(QWidget):
         if scope == 'current' and self.current_mo_ind < 0:
             self._viewer.report_error('Export failed', ValueError('No orbital is currently selected.'))
             return
+        self._warn_if_export_unhandled()
         self._viewer.export_requested.emit(
             'data',
             {'format': self.data_format.currentText(), 'scope': scope},
         )
 
     def _request_image_export(self) -> None:
+        self._warn_if_export_unhandled()
         self._viewer.export_requested.emit(
             'image',
             {
@@ -618,6 +631,13 @@ class OrbitalControlPanel(QWidget):
                 'transparent': self.transparent_background.isChecked(),
             },
         )
+
+    def _warn_if_export_unhandled(self) -> None:
+        if not self._viewer.has_export_handler:
+            logger.warning(
+                'Export button clicked without an export_requested receiver; '
+                'connect the signal or call export_data/export_image directly.',
+            )
 
 
 class OrbitalViewer(QWidget, _PlotterRendering):
@@ -726,6 +746,12 @@ class OrbitalViewer(QWidget, _PlotterRendering):
     def current_orbital_index(self) -> int:
         """Currently displayed orbital index, or ``-1`` when cleared."""
         return self._current_orbital_index
+
+    @property
+    def has_export_handler(self) -> bool:
+        """Whether a host has connected a receiver to ``export_requested``."""
+        signal_index = self.metaObject().indexOfSignal('export_requested(QString,PyObject)')
+        return signal_index >= 0 and self.isSignalConnected(self.metaObject().method(signal_index))
 
     @property
     def molecular_orbitals(self) -> tuple[MolecularOrbital, ...]:

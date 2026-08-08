@@ -96,6 +96,31 @@ If an embedded page is rebuilt, call ``viewer.close()`` during teardown. This
 cancels result delivery and explicitly releases the VTK render window before
 Qt destroys the surrounding layout.
 
+Headless Qt Tests
+-----------------
+
+``pyvistaqt.QtInteractor`` requires a working OpenGL context. Constructing a
+real ``OrbitalViewer`` with ``QT_QPA_PLATFORM=offscreen`` can terminate the
+process inside VTK before Python can raise an exception. moldenViz detects this
+unsupported combination and raises ``RuntimeError`` first.
+
+For page construction, layout, and lifecycle smoke tests, use the supported
+non-rendering context:
+
+.. code-block:: python
+
+   from moldenViz.testing import without_rendering
+
+   def test_orbital_page(qapp):
+       with without_rendering():
+           page = build_orbital_page()
+           assert page.viewer is not None
+           page.close()
+
+The contained ``NullInteractor`` records basic scene operations but does not
+create a VTK render window. Rendering and image-output tests still require a
+platform plugin with a real OpenGL context, such as a virtual display.
+
 Export Errors
 -------------
 

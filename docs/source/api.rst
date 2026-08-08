@@ -15,6 +15,9 @@ Package exports
 The public ``moldenViz.qt`` module exports ``OrbitalViewer`` for embedding and
 ``ViewerConfig`` for validated per-instance configuration.
 
+The public ``moldenViz.testing`` module exports ``without_rendering`` and
+``NullInteractor`` for Qt host smoke tests that do not exercise VTK rendering.
+
 Parser data models
 ------------------
 
@@ -71,9 +74,16 @@ OrbitalViewer
 -------------
 
 .. autoclass:: moldenViz.qt.OrbitalViewer
-   :members: config, gtos_ready, controls_visible, current_orbital_index, molecular_orbitals, set_source, show_orbital, set_controls_visible, update_grid, set_spherical_grid, set_cartesian_grid, apply_appearance, update_appearance, set_background_color, export_data, export_image, save_settings, wait_for_gtos, close
+   :members: config, gtos_ready, controls_visible, current_orbital_index, has_export_handler, molecular_orbitals, set_source, show_orbital, set_controls_visible, update_grid, set_spherical_grid, set_cartesian_grid, apply_appearance, update_appearance, set_background_color, export_data, export_image, save_settings, wait_for_gtos, close
    :member-order: bysource
    :show-inheritance:
 
 .. autoclass:: moldenViz.qt.ViewerConfig
    :members:
+
+Testing Qt hosts
+----------------
+
+.. autofunction:: moldenViz.testing.without_rendering
+
+.. autoclass:: moldenViz.testing.NullInteractor
