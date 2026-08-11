@@ -92,9 +92,11 @@ class Parser:
         # Remove leading/trailing whitespace and newline characters
         self._molden_lines = [line.strip() for line in molden_content.splitlines()]
 
-        self._check_molden_format()
+        self._check_molden_format(only_molecule=only_molecule)
 
-        self._atom_ind, self._gto_ind, self._mo_ind = self._divide_molden_lines()
+        self._atom_ind, self._gto_ind, self._mo_ind = self._divide_molden_lines(
+            only_molecule=only_molecule,
+        )
 
         self.atoms = self._parse_atoms()
         self.shells: list[Shell] = []
@@ -107,8 +109,14 @@ class Parser:
         self.shells = self._parse_shells()
         self.mos, self.mo_coeffs = self._parse_mos(sort=mo_order == 'energy')
 
-    def _check_molden_format(self) -> None:
+    def _check_molden_format(self, *, only_molecule: bool = False) -> None:
         """Check if the provided molden lines conform to the expected format.
+
+        Parameters
+        ----------
+        only_molecule : bool, optional
+            Whether only the atom section will be parsed. When true, basis and
+            molecular-orbital sections are not required or validated.
 
         Raises
         ------
@@ -126,6 +134,10 @@ class Parser:
         if not any('[ATOMS]' in line for line in uppercase_lines):
             raise ValueError("No '[Atoms]' section found in the molden file.")
 
+        if only_molecule:
+            logger.info('Molden molecule format check passed.')
+            return
+
         if '[GTO]' not in uppercase_lines:
             raise ValueError("No '[GTO]' section found in the molden file.")
 
@@ -137,8 +149,14 @@ class Parser:
 
         logger.info('Molden format check passed.')
 
-    def _divide_molden_lines(self) -> tuple[int, int, int]:
+    def _divide_molden_lines(self, *, only_molecule: bool = False) -> tuple[int, int, int]:
         """Divide the molden lines into sections for atoms, GTOs, and MOs.
+
+        Parameters
+        ----------
+        only_molecule : bool, optional
+            Whether only the atom section will be parsed. When true, the next
+            section header or end of input bounds the atom lines.
 
         Returns
         -------
@@ -163,6 +181,18 @@ class Parser:
         )
         if atom_ind is None:
             raise ValueError('No (AU/Angs) in [Atoms] section found in the molden file.')
+
+        if only_molecule:
+            atom_end_ind = next(
+                (
+                    index
+                    for index, line in enumerate(uppercase_lines[atom_ind + 1 :], start=atom_ind + 1)
+                    if line.startswith('[')
+                ),
+                len(uppercase_lines),
+            )
+            logger.info('Finished dividing molecule lines.')
+            return atom_ind, atom_end_ind, atom_end_ind
 
         gto_ind = uppercase_lines.index('[GTO]')
         mo_ind = uppercase_lines.index('[MO]')

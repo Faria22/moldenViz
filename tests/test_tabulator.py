@@ -399,6 +399,20 @@ def test_set_grid_exits_early_when_only_molecule_is_enabled() -> None:
         tab.set_grid(None)
 
 
+def test_only_molecule_tabulator_accepts_atom_only_content() -> None:
+    """Molecule-only tabulators should support inputs without orbital sections."""
+    tab = Tabulator(
+        content="""[Molden Format]
+[Atoms] AU
+H 1 1 0.0 0.0 0.0
+""",
+        only_molecule=True,
+    )
+
+    assert len(tab.atoms) == 1
+    assert tab.molecular_orbitals == []
+
+
 def test_private_set_grid_rejects_unknown_grid_type() -> None:
     """Structured grids require a known coordinate system."""
     tab = Tabulator(filename=str(MOLDEN_PATH))
