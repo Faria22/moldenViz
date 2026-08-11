@@ -62,6 +62,7 @@ class NullInteractor(QWidget):
     def __init__(self, parent: QWidget | None = None, **_kwargs: object) -> None:
         super().__init__(parent)
         self.background = ''
+        self.axes_visible = False
         self.closed_count = 0
         self.actors: list[_NullActor] = []
         self.saved_graphic: Path | None = None
@@ -73,7 +74,12 @@ class NullInteractor(QWidget):
         self.background = color
 
     def show_axes(self) -> None:
-        """Accept an axes request without rendering it."""
+        """Record that the orientation axes are visible."""
+        self.axes_visible = True
+
+    def hide_axes(self) -> None:
+        """Record that the orientation axes are hidden."""
+        self.axes_visible = False
 
     def add_mesh(self, _mesh: object, **_kwargs: object) -> _NullActor:
         """Record a mesh addition and return a minimal actor stand-in.

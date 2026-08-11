@@ -87,6 +87,11 @@ def test_default_background_color() -> None:
     assert main_config.background_color == 'white'
 
 
+def test_axes_are_shown_by_default() -> None:
+    """The orientation axes default to visible."""
+    assert config_module.MainConfig().show_axes
+
+
 def test_valid_background_color() -> None:
     """Test that valid matplotlib colors are accepted for background."""
     valid_colors = ['white', 'black', 'red', 'blue', '#FF0000', '#FFFFFF', 'lightgray']

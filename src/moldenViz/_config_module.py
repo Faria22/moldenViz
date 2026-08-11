@@ -201,6 +201,7 @@ class MainConfig(BaseModel):
 
     smooth_shading: bool = Field(True, description='Enable smooth shading')
     background_color: str = Field('white', description='Background color for 3D visualization')
+    show_axes: bool = Field(True, description='Show the orientation axes')
     grid: GridConfig = Field(default_factory=GridConfig)
     mo: MOConfig = Field(default_factory=MOConfig, alias='MO')
     molecule: MoleculeConfig = Field(default_factory=MoleculeConfig)
@@ -448,6 +449,7 @@ class Config:
         config_dict = {
             'smooth_shading': self.config.smooth_shading,
             'background_color': self.config.background_color,
+            'show_axes': self.config.show_axes,
             'grid': {
                 'min_radius': self.config.grid.min_radius,
                 'max_radius_multiplier': self.config.grid.max_radius_multiplier,

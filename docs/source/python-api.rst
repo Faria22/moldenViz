@@ -136,6 +136,7 @@ export operations do not depend on the panel being visible:
        host_picker.addItem(f'{index + 1}: {orbital.sym}')
 
    host_picker.currentIndexChanged.connect(viewer.show_orbital)
+   viewer.set_axes_visible(False)
    viewer.update_appearance(contour=0.05, mo_opacity=0.8)
    viewer.set_spherical_grid(
        radius=5.0,
@@ -149,7 +150,8 @@ that no orbital is displayed. ``orbital_changed``, ``loading_changed``, and
 ``input_ready`` let host controls follow viewer state. Appearance updates are
 partial: omitted values retain their current per-viewer setting. Cartesian
 grids can be configured with ``set_cartesian_grid``; callers with pre-built
-NumPy axes can use ``update_grid`` directly.
+NumPy axes can use ``update_grid`` directly. ``axes_visible`` reports whether
+the orientation axes are shown.
 
 The built-in panel can be restored later with
 ``viewer.set_controls_visible(True)``. It remains synchronized with changes

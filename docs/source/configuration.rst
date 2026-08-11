@@ -31,6 +31,7 @@ Control the appearance of the 3D visualization window:
 .. code-block:: toml
 
    background_color = 'white'  # Background color for the 3D plot window
+   show_axes = true             # Show the orientation axes
 
 The ``background_color`` option accepts any valid matplotlib color format (color names, hex codes). Common choices include:
 
@@ -48,6 +49,8 @@ Examples:
 
    # Or use a custom gray with hex code
    background_color = '#2A2A2A'
+
+Set ``show_axes = false`` to keep the orientation axes hidden when viewers open.
 
 Bond Settings
 -------------

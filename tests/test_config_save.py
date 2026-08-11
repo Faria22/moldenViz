@@ -48,6 +48,7 @@ def test_save_current_config_preserves_values(tmp_path: Path, monkeypatch: pytes
 
     # Modify some values
     config.config.background_color = BACKGROUND_COLOR
+    config.config.show_axes = False
     config.config.mo.contour = MO_CONTOUR
     config.config.mo.opacity = MO_OPACITY
     config.config.grid.min_radius = GRID_MIN_RADIUS
@@ -63,6 +64,7 @@ def test_save_current_config_preserves_values(tmp_path: Path, monkeypatch: pytes
         saved_config = toml.load(f)
 
     assert saved_config['background_color'] == BACKGROUND_COLOR
+    assert saved_config['show_axes'] is False
     assert saved_config['MO']['contour'] == MO_CONTOUR
     assert saved_config['MO']['opacity'] == MO_OPACITY
     assert saved_config['grid']['min_radius'] == GRID_MIN_RADIUS

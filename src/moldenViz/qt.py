@@ -757,7 +757,7 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         self.interactor = interactor_class(self, auto_update=5.0)
         self._pv_plotter = self.interactor
         self.interactor.set_background(self._config.background_color)
-        self.interactor.show_axes()
+        self.set_axes_visible(self._config.show_axes)
         self.controls = OrbitalControlPanel(self)
         self._selection_screen = self.controls
         splitter = QSplitter(Qt.Orientation.Horizontal, self)
@@ -788,6 +788,25 @@ class OrbitalViewer(QWidget, _PlotterRendering):
     def gtos_ready(self) -> bool:
         """Whether orbital data can be rendered."""
         return self._gtos_ready and (self._grid_mode != 'adaptive' or self._adaptive_ready)
+
+    @property
+    def axes_visible(self) -> bool:
+        """Whether the orientation axes are visible."""
+        return bool(self._config.show_axes)
+
+    def set_axes_visible(self, visible: bool) -> None:
+        """Show or hide the orientation axes.
+
+        Parameters
+        ----------
+        visible : bool
+            Whether the orientation axes should be visible.
+        """
+        self._config.config.show_axes = visible
+        if visible:
+            self.interactor.show_axes()
+        else:
+            self.interactor.hide_axes()
 
     @property
     def controls_visible(self) -> bool:
