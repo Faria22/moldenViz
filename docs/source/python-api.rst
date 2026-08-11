@@ -47,6 +47,11 @@ Skip molecular orbital parsing when you only need the structure:
 
    parser = Parser(filename='molden.inp', only_molecule=True)
 
+In this mode, only a valid ``[Atoms]`` section is required. ``[GTO]``,
+``[MO]``, and basis-representation declarations are not validated or parsed,
+so atom-only Molden content is accepted and any trailing orbital sections are
+ignored.
+
 Choose whether molecular orbitals are sorted by energy or retain their order
 in the source file:
 

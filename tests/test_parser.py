@@ -170,6 +170,54 @@ def test_only_molecule_has_stable_result_attributes() -> None:
     assert parser.mo_coeffs.shape == (0, 0)
 
 
+def test_only_molecule_accepts_atoms_without_orbital_sections() -> None:
+    """Molecule-only parsing should require only a valid atom section."""
+    parser = Parser(
+        content="""[Molden Format]
+[Atoms] Angs
+H 1 1 1.0 2.0 3.0
+""",
+        only_molecule=True,
+    )
+
+    assert len(parser.atoms) == 1
+    np.testing.assert_allclose(parser.atoms[0].position, np.array([1.0, 2.0, 3.0]) * parser_module.BOHR_PER_ANGSTROM)
+    assert parser.shells == []
+    assert parser.mos == []
+    assert parser.mo_coeffs.shape == (0, 0)
+
+
+def test_only_molecule_ignores_invalid_orbital_sections() -> None:
+    """Molecule-only parsing should not validate or parse trailing orbital data."""
+    parser = Parser(
+        content="""[Molden Format]
+[Atoms] AU
+H 1 1 0.0 0.0 0.0
+[GTO]
+invalid basis data
+[MO]
+invalid molecular orbital data
+""",
+        only_molecule=True,
+    )
+
+    assert len(parser.atoms) == 1
+    assert parser.shells == []
+    assert parser.mos == []
+    assert parser.mo_coeffs.shape == (0, 0)
+
+
+def test_full_parser_still_requires_orbital_sections() -> None:
+    """Full parsing should retain its existing section requirements."""
+    content = """[Molden Format]
+[Atoms] AU
+H 1 1 0.0 0.0 0.0
+"""
+
+    with pytest.raises(ValueError, match=r"No '\[GTO\]' section"):
+        Parser(content=content)
+
+
 def test_pyscf_spherical_fixture() -> None:
     """PySCF's parenthesized atom units and lowercase basis tags should parse."""
     parser = Parser(filename=PYSCF_SPHERICAL_PATH)
