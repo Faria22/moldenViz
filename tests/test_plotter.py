@@ -80,6 +80,20 @@ def test_viewer_can_hide_and_restore_builtin_controls() -> None:
     viewer.close()
 
 
+@pytest.mark.parametrize('initially_visible', [True, False])
+def test_viewer_axes_follow_config_and_public_api(initially_visible: bool) -> None:
+    viewer = OrbitalViewer(config={'show_axes': initially_visible})
+
+    assert viewer.axes_visible is initially_visible
+    assert viewer.interactor.axes_visible is initially_visible
+
+    viewer.set_axes_visible(not initially_visible)
+
+    assert viewer.axes_visible is not initially_visible
+    assert viewer.interactor.axes_visible is not initially_visible
+    viewer.close()
+
+
 def test_orbital_columns_fit_their_contents_with_padding() -> None:
     viewer = OrbitalViewer(filename=str(MOLDEN_PATH), only_molecule=False)
     table = viewer.controls.orbital_table
@@ -531,6 +545,23 @@ def test_plotter_menus_follow_reordered_tabs_and_export_values(monkeypatch: pyte
     actions['Orbital data…'].trigger()
 
     assert handle_export_request.call_args.args[1]['scope'] == 'all'
+    window.close()
+
+
+def test_plotter_view_menu_toggles_axes() -> None:
+    window = Plotter(filename=str(MOLDEN_PATH), only_molecule=True, config={'show_axes': False})
+    actions = {action.text(): action for action in window.findChildren(QAction)}
+    show_axes = actions['Show axes']
+
+    assert show_axes.isCheckable()
+    assert not show_axes.isChecked()
+    assert not window.viewer.axes_visible
+
+    show_axes.trigger()
+
+    assert show_axes.isChecked()
+    assert window.viewer.axes_visible
+    assert window.viewer.interactor.axes_visible
     window.close()
 
 
