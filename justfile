@@ -21,6 +21,9 @@ test *args:
 bench revision="HEAD^!" *args:
     uv run --locked --group dev asv run {{ args }} {{ revision }}
 
+bench-open:
+    uv run --locked --group dev asv preview
+
 bench-check:
     uv run --locked --group dev asv check --python=same
 
