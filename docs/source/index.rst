@@ -15,6 +15,13 @@ moldenViz Documentation
 
 ``moldenViz`` is a Python package for parsing Molden files, tabulating molecular orbitals, and visualizing them through intuitive 3D plots. It provides both a command-line interface and a Python API for working with quantum chemistry calculation results.
 
+.. figure:: _static/viewer-orbital.png
+   :alt: moldenViz displaying the highest occupied molecular orbital of benzene with the orbital table visible
+   :align: center
+   :width: 100%
+
+   Explore bundled molecules and their orbitals in the standalone viewer.
+
 Key Features
 ------------
 

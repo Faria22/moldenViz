@@ -85,6 +85,42 @@ The package root uses module ``__getattr__`` to preserve its public re-exports
 without importing NumPy or GUI dependencies for ``import moldenViz``. Add new
 root exports to the lazy import map and retain them in ``__all__``.
 
+Refresh Documentation Screenshots
+---------------------------------
+
+The README and viewer guides use reproducible screenshots of the bundled
+benzene example. Start from a clean checkout with the locked development
+environment installed, leave the standalone viewer at its default 1200 by 760
+logical-pixel size, and keep the default white renderer background, ``bwr``
+orbital colors, 0.1 contour, full opacity, and visible axes.
+
+Create the orbital screenshots with:
+
+.. code-block:: bash
+
+   moldenViz -e benzene
+
+Wait for orbital tabulation to finish, then select orbital 21 (``B2g``,
+occupation 2, energy -0.3378 au). Capture the Orbitals tab for
+``viewer-orbital.png`` and the Appearance tab for ``viewer-appearance.png``.
+Create the molecule-only screenshot with:
+
+.. code-block:: bash
+
+   moldenViz -e benzene -m
+
+Keep its default Appearance tab visible for ``viewer-molecule.png``. Capture
+only the application window with Codex Computer Use, then open each capture in
+Shottr. Apply the saved blue ``ColorMix`` mesh-gradient backdrop (first preset,
+Backdrop 11.66, Shadow 10, Inset 0, and zero outer and inner radius) with
+Shottr's ``K`` shortcut. Save lossless 1300 by 904 PNG files under
+``docs/source/_static/`` using the filenames above.
+
+Before committing refreshed images, verify that all three use the same camera
+angle, window geometry, backdrop, and crop; contain no desktop content or
+personal information; and remain paired with descriptive alt text and useful
+captions in the README and Sphinx sources.
+
 Pull Request Checklist
 ----------------------
 

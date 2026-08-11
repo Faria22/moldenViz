@@ -66,6 +66,14 @@ Show only the molecular structure (skip orbital surfaces):
 
    moldenViz path/to/file.molden -m
 
+.. figure:: _static/viewer-molecule.png
+   :alt: Benzene displayed without molecular-orbital surfaces in the moldenViz viewer
+   :align: center
+   :width: 100%
+
+   Molecule-only mode keeps the structure and appearance controls available
+   while skipping orbital parsing and rendering.
+
 Bundled Examples
 ----------------
 
