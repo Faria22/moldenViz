@@ -325,6 +325,8 @@ class OrbitalControlPanel(QWidget):
         self.molecule_opacity = self._double_spin(0.0, 1.0, 1.0, step=0.1)
         self.show_atoms = QCheckBox('Show atoms', tab)
         self.show_bonds = QCheckBox('Show bonds', tab)
+        self.show_axes = QCheckBox('Show axes', tab)
+        self.show_axes.toggled.connect(self._viewer.set_axes_visible)
         self.bond_max_length = self._double_spin(0.001, 1_000.0, 4.0)
         self.bond_radius = self._double_spin(0.001, 100.0, 0.15, step=0.05)
         self.bond_color_type = QComboBox(tab)
@@ -334,6 +336,7 @@ class OrbitalControlPanel(QWidget):
         molecule_form.addRow('Opacity', self.molecule_opacity)
         molecule_form.addRow(self.show_atoms)
         molecule_form.addRow(self.show_bonds)
+        molecule_form.addRow(self.show_axes)
         molecule_form.addRow('Bond max length', self.bond_max_length)
         molecule_form.addRow('Bond radius', self.bond_radius)
         molecule_form.addRow('Bond colors', self.bond_color_type)
@@ -464,6 +467,7 @@ class OrbitalControlPanel(QWidget):
         self.molecule_opacity.setValue(config.molecule.opacity)
         self.show_atoms.setChecked(config.molecule.atom.show)
         self.show_bonds.setChecked(config.molecule.bond.show)
+        self.show_axes.setChecked(config.show_axes)
         self.bond_max_length.setValue(config.molecule.bond.max_length)
         self.bond_radius.setValue(config.molecule.bond.radius)
         self.bond_color_type.setCurrentText(config.molecule.bond.color_type)
@@ -807,6 +811,8 @@ class OrbitalViewer(QWidget, _PlotterRendering):
             self.interactor.show_axes()
         else:
             self.interactor.hide_axes()
+        if hasattr(self, 'controls'):
+            self.controls.show_axes.setChecked(visible)
 
     @property
     def controls_visible(self) -> bool:
