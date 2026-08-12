@@ -90,9 +90,9 @@ Refresh Documentation Screenshots
 
 The README and viewer guides use reproducible screenshots of the bundled
 benzene example. Start from a clean checkout with the locked development
-environment installed, leave the standalone viewer at its default 1200 by 760
-logical-pixel size, and keep the default white renderer background, ``bwr``
-orbital colors, 0.1 contour, full opacity, and visible axes.
+environment installed, maximize the standalone viewer, and keep the default
+white renderer background, ``bwr`` orbital colors, 0.1 contour, full opacity,
+and visible axes.
 
 Create the orbital screenshots with:
 
@@ -109,12 +109,16 @@ Create the molecule-only screenshot with:
 
    moldenViz -e benzene -m
 
-Keep its default Appearance tab visible for ``viewer-molecule.png``. Capture
-only the application window with Codex Computer Use, then open each capture in
-Shottr. Apply the saved blue ``ColorMix`` mesh-gradient backdrop (first preset,
+Keep its default Appearance tab visible for ``viewer-molecule.png``. Use a
+native Retina window capture, never an area or rectangular selection, and open
+each capture in Shottr. In Shottr's General settings, use a transparent Window
+Screenshot Background and leave ``Downscale to 1x when saving`` disabled.
+Apply the saved blue ``ColorMix`` mesh-gradient backdrop (first preset,
 Backdrop 11.66, Shadow 10, Inset 0, and zero outer and inner radius) with
-Shottr's ``K`` shortcut. Save lossless 1300 by 904 PNG files under
-``docs/source/_static/`` using the filenames above.
+Shottr's ``K`` shortcut. Save lossless PNG files under
+``docs/source/_static/`` using the filenames above. On the reference Retina
+display, the orbital and Appearance images are 3376 by 2236 pixels and the
+molecule-only image is 3288 by 2148 pixels.
 
 Before committing refreshed images, verify that all three use the same camera
 angle, window geometry, backdrop, and crop; contain no desktop content or
