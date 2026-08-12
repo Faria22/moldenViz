@@ -6,6 +6,10 @@
 
 -----
 
+![moldenViz viewer displaying the highest occupied molecular orbital of benzene with the orbital table visible](docs/source/_static/viewer-orbital.png)
+
+*Explore bundled molecules and their orbitals in the standalone viewer.*
+
 ## Installation
 
 Install the core parser and tabulator:

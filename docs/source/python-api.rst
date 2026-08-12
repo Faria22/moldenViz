@@ -209,6 +209,14 @@ The plotter window provides several interactive controls:
 * **Grid Settings**: Change grid resolution and type (spherical/cartesian/adaptive)
 * **Export Options**: Access data and image export through the menu bar
 
+.. figure:: _static/viewer-appearance.png
+   :alt: moldenViz Appearance tab beside the highest occupied molecular orbital of benzene
+   :align: center
+   :width: 100%
+
+   The Appearance tab updates orbital colors and contours, molecule styling,
+   and the renderer background from one synchronized control panel.
+
 When ``Plotter`` creates its own grid, it tabulates Gaussian-type orbitals in the background so the molecule window can appear first. Orbital controls become usable when that work finishes; failures are reported in the GUI instead of leaving the viewer silently unavailable.
 
 Exporting from the GUI
