@@ -14,7 +14,7 @@ from unittest.mock import Mock
 import numpy as np
 import pytest
 from PySide6.QtGui import QAction
-from PySide6.QtWidgets import QAbstractSpinBox, QApplication, QWidget
+from PySide6.QtWidgets import QAbstractSpinBox, QApplication, QCheckBox, QWidget
 
 import moldenViz.qt as qt_module
 from moldenViz.plotter import Plotter
@@ -86,11 +86,32 @@ def test_viewer_axes_follow_config_and_public_api(initially_visible: bool) -> No
 
     assert viewer.axes_visible is initially_visible
     assert viewer.interactor.axes_visible is initially_visible
+    assert viewer.controls.show_axes.isChecked() is initially_visible
 
     viewer.set_axes_visible(not initially_visible)
 
     assert viewer.axes_visible is not initially_visible
     assert viewer.interactor.axes_visible is not initially_visible
+    assert viewer.controls.show_axes.isChecked() is not initially_visible
+    viewer.close()
+
+
+def test_axes_toggle_is_alongside_molecule_visibility_controls() -> None:
+    viewer = OrbitalViewer(config={'show_axes': False})
+    controls = viewer.controls
+
+    assert controls.show_axes.parentWidget() is controls.show_atoms.parentWidget()
+    assert controls.show_axes.parentWidget() is controls.show_bonds.parentWidget()
+    assert [checkbox.text() for checkbox in controls.appearance_tab.findChildren(QCheckBox)] == [
+        'Show atoms',
+        'Show bonds',
+        'Show axes',
+    ]
+
+    controls.show_axes.setChecked(True)
+
+    assert viewer.axes_visible
+    assert viewer.interactor.axes_visible
     viewer.close()
 
 
@@ -548,20 +569,10 @@ def test_plotter_menus_follow_reordered_tabs_and_export_values(monkeypatch: pyte
     window.close()
 
 
-def test_plotter_view_menu_toggles_axes() -> None:
-    window = Plotter(filename=str(MOLDEN_PATH), only_molecule=True, config={'show_axes': False})
-    actions = {action.text(): action for action in window.findChildren(QAction)}
-    show_axes = actions['Show axes']
+def test_plotter_view_menu_omits_axes_toggle() -> None:
+    window = Plotter(filename=str(MOLDEN_PATH), only_molecule=True)
 
-    assert show_axes.isCheckable()
-    assert not show_axes.isChecked()
-    assert not window.viewer.axes_visible
-
-    show_axes.trigger()
-
-    assert show_axes.isChecked()
-    assert window.viewer.axes_visible
-    assert window.viewer.interactor.axes_visible
+    assert 'Show axes' not in {action.text() for action in window.findChildren(QAction)}
     window.close()
 
 

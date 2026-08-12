@@ -200,11 +200,6 @@ class Plotter(QMainWindow):
         reset_camera = QAction('Reset camera', self)
         reset_camera.triggered.connect(self.viewer.interactor.reset_camera)
         view_menu.addAction(reset_camera)
-        show_axes = QAction('Show axes', self)
-        show_axes.setCheckable(True)
-        show_axes.setChecked(self.viewer.axes_visible)
-        show_axes.toggled.connect(self.viewer.set_axes_visible)
-        view_menu.addAction(show_axes)
 
         settings_menu = self.menuBar().addMenu('Settings')
         appearance_tab = self.viewer.controls.tabs.indexOf(self.viewer.controls.appearance_tab)
