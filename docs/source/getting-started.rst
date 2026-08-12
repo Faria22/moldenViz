@@ -45,6 +45,17 @@ Or install the CLI as a standalone uv tool:
 
 This makes the ``moldenViz`` command available on your ``PATH``.
 
+Upgrade an existing standalone tool explicitly when a new release is
+available:
+
+.. code-block:: bash
+
+   uv tool upgrade moldenViz
+   moldenViz --version
+
+The version command reports the package installed in the executable's uv tool
+environment. It does not query PyPI for the newest available release.
+
 The GUI extra uses PySide6 as the supported Qt binding. The root package keeps
 ``Atom``, ``Parser``, ``Tabulator``, and the parser result types as intentional
 eager imports; importing them loads NumPy. The visualization-specific

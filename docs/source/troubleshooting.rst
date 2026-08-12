@@ -3,6 +3,27 @@ Troubleshooting
 
 Use this page to diagnose common issues when running ``moldenViz``.
 
+Unexpected Version Output
+-------------------------
+
+``moldenViz --version`` reports the version in the environment that owns the
+executable on ``PATH``. A standalone uv tool remains on its installed version
+until it is explicitly upgraded, even after a newer release is published.
+
+Inspect the executable and uv tool environment, then upgrade it:
+
+.. code-block:: bash
+
+   command -v moldenViz
+   uv tool list
+   uv tool upgrade moldenViz
+   moldenViz --version
+
+If the output is still unexpected, ``command -v moldenViz`` may point to a
+different pip, virtual-environment, or uv installation than the one you
+updated. Activate the intended environment or adjust ``PATH`` before checking
+again.
+
 Parser Exceptions
 -----------------
 

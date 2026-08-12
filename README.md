@@ -40,6 +40,17 @@ uv tool install 'moldenViz[gui]'
 
 This makes the ``moldenViz`` command available on your ``PATH``.
 
+If the tool is already installed, update it separately and verify the installed
+version:
+
+```console
+uv tool upgrade moldenViz
+moldenViz --version
+```
+
+Running ``uv tool install`` again does not automatically keep an existing tool
+in sync with new releases.
+
 The GUI extra uses PySide6 as its only GUI toolkit. The standalone CLI creates
 and runs the Qt application for you; applications that embed the viewer keep
 ownership of their existing Qt event loop.
