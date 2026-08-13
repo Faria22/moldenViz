@@ -68,6 +68,7 @@ class NullInteractor(QWidget):
         self.saved_graphic: Path | None = None
         self.saved_screenshot: tuple[Path, bool] | None = None
         self.reset_count = 0
+        self.isometric_count = 0
 
     def set_background(self, color: str) -> None:
         """Record the requested background color."""
@@ -116,6 +117,10 @@ class NullInteractor(QWidget):
     def reset_camera(self) -> None:
         """Record a camera-reset request."""
         self.reset_count += 1
+
+    def view_isometric(self) -> None:
+        """Record a default-view request."""
+        self.isometric_count += 1
 
 
 _INTERACTOR_OVERRIDE: ContextVar[type[QWidget] | None] = ContextVar('moldenviz_interactor_override', default=None)
