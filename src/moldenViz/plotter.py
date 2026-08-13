@@ -197,9 +197,6 @@ class Plotter(QMainWindow):
         clear_action.setEnabled(not only_molecule)
         clear_action.triggered.connect(lambda: self.viewer.show_orbital(-1))
         view_menu.addAction(clear_action)
-        reset_camera = QAction('Reset camera', self)
-        reset_camera.triggered.connect(self.viewer.interactor.reset_camera)
-        view_menu.addAction(reset_camera)
 
         settings_menu = self.menuBar().addMenu('Settings')
         appearance_tab = self.viewer.controls.tabs.indexOf(self.viewer.controls.appearance_tab)

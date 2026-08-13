@@ -80,6 +80,25 @@ def test_viewer_can_hide_and_restore_builtin_controls() -> None:
     viewer.close()
 
 
+def test_reset_camera_button_remains_below_tabs() -> None:
+    viewer = OrbitalViewer()
+    layout = viewer.controls.layout()
+
+    assert layout is not None
+    tabs_item = layout.itemAt(0)
+    reset_camera_item = layout.itemAt(1)
+    assert tabs_item is not None
+    assert reset_camera_item is not None
+    assert tabs_item.widget() is viewer.controls.tabs
+    assert reset_camera_item.widget() is viewer.controls.reset_camera_button
+
+    viewer.controls.tabs.setCurrentIndex(viewer.controls.tabs.count() - 1)
+    viewer.controls.reset_camera_button.click()
+
+    assert viewer.interactor.reset_count == 1
+    viewer.close()
+
+
 @pytest.mark.parametrize('initially_visible', [True, False])
 def test_viewer_axes_follow_config_and_public_api(initially_visible: bool) -> None:
     viewer = OrbitalViewer(config={'show_axes': initially_visible})
@@ -552,6 +571,7 @@ def test_plotter_rejects_conflicting_inputs() -> None:
 def test_plotter_menus_follow_reordered_tabs_and_export_values(monkeypatch: pytest.MonkeyPatch) -> None:
     window = Plotter(filename=str(MOLDEN_PATH), only_molecule=True)
     actions = {action.text(): action for action in window.findChildren(QAction)}
+    assert 'Reset camera' not in actions
 
     actions['Grid'].setEnabled(True)
     actions['Grid'].trigger()
