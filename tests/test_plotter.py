@@ -81,8 +81,8 @@ def test_viewer_can_hide_and_restore_builtin_controls() -> None:
 
 
 def test_reset_camera_button_remains_below_tabs(monkeypatch: pytest.MonkeyPatch) -> None:
-    reset_camera = Mock()
-    monkeypatch.setattr(NullInteractor, 'reset_camera', reset_camera)
+    view_isometric = Mock()
+    monkeypatch.setattr(NullInteractor, 'view_isometric', view_isometric)
     viewer = OrbitalViewer()
     layout = viewer.controls.layout()
 
@@ -97,7 +97,7 @@ def test_reset_camera_button_remains_below_tabs(monkeypatch: pytest.MonkeyPatch)
     viewer.controls.tabs.setCurrentIndex(viewer.controls.tabs.count() - 1)
     viewer.controls.reset_camera_button.click()
 
-    reset_camera.assert_called_once_with()
+    view_isometric.assert_called_once_with()
     viewer.close()
 
 

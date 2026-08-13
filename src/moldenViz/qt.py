@@ -204,8 +204,8 @@ class OrbitalControlPanel(QWidget):
         layout.addWidget(self.reset_camera_button)
 
     def _reset_camera(self) -> None:
-        """Reset the camera and render the updated view."""
-        self._viewer.interactor.reset_camera()
+        """Restore the viewer's default camera orientation and framing."""
+        self._viewer.reset_camera()
 
     def _build_orbitals_tab(self) -> None:
         tab = QWidget(self)
@@ -820,6 +820,10 @@ class OrbitalViewer(QWidget, _PlotterRendering):
             self.interactor.hide_axes()
         if hasattr(self, 'controls'):
             self.controls.show_axes.setChecked(visible)
+
+    def reset_camera(self) -> None:
+        """Restore the default isometric view and fit all visible actors."""
+        self.interactor.view_isometric()
 
     @property
     def controls_visible(self) -> bool:
