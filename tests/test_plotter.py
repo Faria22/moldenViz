@@ -13,6 +13,7 @@ from unittest.mock import Mock
 
 import numpy as np
 import pytest
+from PySide6.QtCore import QEvent
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QAbstractSpinBox, QApplication, QCheckBox, QWidget
 
@@ -64,6 +65,41 @@ def test_viewer_is_parentable_and_does_not_show_itself(qapplication: QApplicatio
     assert QApplication.instance() is qapplication
     assert isinstance(viewer.interactor, NullInteractor)
 
+    viewer.close()
+
+
+def test_dpr_change_repaints_native_widgets_after_repeated_shows(qapplication: QApplication) -> None:
+    viewer = OrbitalViewer()
+    viewer.winId()
+    handle = viewer.window().windowHandle()
+    assert handle is not None
+    install_event_filter = Mock(wraps=handle.installEventFilter)
+    handle.installEventFilter = install_event_filter  # type: ignore[method-assign]
+
+    viewer.show()
+    qapplication.processEvents()
+    viewer.hide()
+    qapplication.processEvents()
+    viewer.show()
+    qapplication.processEvents()
+
+    install_event_filter.assert_called_once_with(viewer)
+
+    viewer_repaint = Mock()
+    controls_repaint = Mock()
+    handle_repaints = [Mock() for _index in range(1, viewer._splitter.count())]  # ruff:ignore[private-member-access]
+    viewer.repaint = viewer_repaint  # type: ignore[method-assign]
+    viewer.controls.repaint = controls_repaint  # type: ignore[method-assign]
+    for index, repaint in enumerate(handle_repaints, start=1):
+        viewer._splitter.handle(index).repaint = repaint  # type: ignore[method-assign]  # ruff:ignore[private-member-access]
+
+    QApplication.sendEvent(handle, QEvent(QEvent.Type.DevicePixelRatioChange))
+    qapplication.processEvents()
+
+    viewer_repaint.assert_called_once_with()
+    controls_repaint.assert_called_once_with()
+    for repaint in handle_repaints:
+        repaint.assert_called_once_with()
     viewer.close()
 
 
