@@ -200,8 +200,12 @@ class OrbitalControlPanel(QWidget):
         self._build_grid_tab()
         self._build_export_tab()
         self.reset_camera_button = QPushButton('Reset camera', self)
-        self.reset_camera_button.clicked.connect(self._viewer.interactor.reset_camera)
+        self.reset_camera_button.clicked.connect(self._reset_camera)
         layout.addWidget(self.reset_camera_button)
+
+    def _reset_camera(self) -> None:
+        """Reset the camera and render the updated view."""
+        self._viewer.interactor.reset_camera()
 
     def _build_orbitals_tab(self) -> None:
         tab = QWidget(self)

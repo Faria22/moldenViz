@@ -80,7 +80,9 @@ def test_viewer_can_hide_and_restore_builtin_controls() -> None:
     viewer.close()
 
 
-def test_reset_camera_button_remains_below_tabs() -> None:
+def test_reset_camera_button_remains_below_tabs(monkeypatch: pytest.MonkeyPatch) -> None:
+    reset_camera = Mock()
+    monkeypatch.setattr(NullInteractor, 'reset_camera', reset_camera)
     viewer = OrbitalViewer()
     layout = viewer.controls.layout()
 
@@ -95,7 +97,7 @@ def test_reset_camera_button_remains_below_tabs() -> None:
     viewer.controls.tabs.setCurrentIndex(viewer.controls.tabs.count() - 1)
     viewer.controls.reset_camera_button.click()
 
-    assert viewer.interactor.reset_count == 1
+    reset_camera.assert_called_once_with()
     viewer.close()
 
 
@@ -572,6 +574,8 @@ def test_plotter_menus_follow_reordered_tabs_and_export_values(monkeypatch: pyte
     window = Plotter(filename=str(MOLDEN_PATH), only_molecule=True)
     actions = {action.text(): action for action in window.findChildren(QAction)}
     assert 'Reset camera' not in actions
+    assert 'Clear orbital' not in actions
+    assert 'View' not in {action.text() for action in window.menuBar().actions()}
 
     actions['Grid'].setEnabled(True)
     actions['Grid'].trigger()

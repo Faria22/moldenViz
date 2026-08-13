@@ -192,12 +192,6 @@ class Plotter(QMainWindow):
         return self.viewer._gto_future  # ruff:ignore[private-member-access]
 
     def _build_menus(self, only_molecule: bool) -> None:
-        view_menu = self.menuBar().addMenu('View')
-        clear_action = QAction('Clear orbital', self)
-        clear_action.setEnabled(not only_molecule)
-        clear_action.triggered.connect(lambda: self.viewer.show_orbital(-1))
-        view_menu.addAction(clear_action)
-
         settings_menu = self.menuBar().addMenu('Settings')
         appearance_tab = self.viewer.controls.tabs.indexOf(self.viewer.controls.appearance_tab)
         settings_tabs = (
