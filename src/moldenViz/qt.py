@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
-from PySide6.QtCore import QObject, Qt, Signal, Slot
+from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal, Slot
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QAbstractSpinBox,
@@ -54,7 +54,7 @@ if TYPE_CHECKING:
 
     import pyvista as pv
     from numpy.typing import NDArray
-    from PySide6.QtGui import QCloseEvent
+    from PySide6.QtGui import QCloseEvent, QShowEvent
     from pyvistaqt import QtInteractor
 
     from ._config_module import Config, MainConfig
@@ -739,6 +739,7 @@ class OrbitalViewer(QWidget, _PlotterRendering):
 
         self._on_screen = True
         self._closed = False
+        self._screen_watch = False
         self._only_molecule = only_molecule
         self._gtos_ready = only_molecule
         self._grid_mode = self._config.grid.default_type
@@ -769,6 +770,7 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         splitter.addWidget(self.interactor)
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
+        self._splitter = splitter
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(splitter)
@@ -813,6 +815,35 @@ class OrbitalViewer(QWidget, _PlotterRendering):
             self.interactor.hide_axes()
         if hasattr(self, 'controls'):
             self.controls.show_axes.setChecked(visible)
+
+    def showEvent(self, event: QShowEvent) -> None:  # ruff: ignore[invalid-function-name]
+        """Watch for screen changes once the native window exists."""
+        super().showEvent(event)
+        if self._screen_watch:
+            return
+        handle = self.window().windowHandle()
+        if handle is not None:
+            handle.installEventFilter(self)
+            self._screen_watch = True
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # ruff: ignore[invalid-function-name]
+        """Repaint native widgets after a device-pixel-ratio change.
+
+        Returns
+        -------
+        bool
+            Whether the event should stop propagating.
+        """
+        if event.type() == QEvent.Type.DevicePixelRatioChange:
+            QTimer.singleShot(0, self._repaint_screen_widgets)
+        return super().eventFilter(watched, event)
+
+    def _repaint_screen_widgets(self) -> None:
+        """Repaint widgets promoted to native windows."""
+        self.repaint()
+        self.controls.repaint()
+        for index in range(1, self._splitter.count()):
+            self._splitter.handle(index).repaint()
 
     @property
     def controls_visible(self) -> bool:
