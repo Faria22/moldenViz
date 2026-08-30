@@ -80,7 +80,7 @@ def test_mo_energies_are_sorted(parser_obj: Parser) -> None:
 
 def test_mo_order_can_preserve_file_order() -> None:
     """The public constructor option should control molecular-orbital order."""
-    lines = MOLDEN_PATH.read_text().splitlines(True)
+    lines = MOLDEN_PATH.read_text().splitlines(keepends=True)
     mo_start = next(index for index, line in enumerate(lines) if line.strip() == '[MO]')
     prefix = lines[: mo_start + 1]
     mo_lines = lines[mo_start + 1 :]

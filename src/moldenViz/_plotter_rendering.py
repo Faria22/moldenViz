@@ -137,7 +137,7 @@ class _PlotterRendering:
         """Clear all molecule and orbital actors."""
         if self._molecule_actors:
             for actor in self._molecule_actors:
-                actor.SetVisibility(False)
+                actor.SetVisibility(False)  # ruff: ignore[boolean-positional-value-in-call]
 
         if self._orb_actor:
             self._pv_plotter.remove_actor(self._orb_actor)
@@ -245,8 +245,8 @@ class _PlotterRendering:
         self._gtos_ready = False
         if self._selection_screen:
             self._selection_screen.set_loading_state(
-                True,
-                'Updating grid...',
+                loading=True,
+                message='Updating grid...',
             )
         dimensions = 'x'.join(str(len(points)) for points in (i_points, j_points, k_points))
         num_points = len(i_points) * len(j_points) * len(k_points)

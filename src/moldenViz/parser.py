@@ -277,7 +277,7 @@ class Parser:
         logger.info('Parsed %s GTOs.', len(shells))
         return shells
 
-    def _parse_mos(self, sort: bool = True) -> tuple[list[MolecularOrbital], NDArray[np.floating]]:
+    def _parse_mos(self, *, sort: bool = True) -> tuple[list[MolecularOrbital], NDArray[np.floating]]:
         """Parse the molecular orbitals (MOs) from the molden file.
 
         Parameters

@@ -376,6 +376,7 @@ class Tabulator:
         y: NDArray[np.floating],
         z: NDArray[np.floating],
         grid_type: GridType,
+        *,
         tabulate_gtos: bool = True,
     ) -> None:
         r"""Create grid from x, y, z (or r, theta, phi) arrays and tabulate GTOs.
@@ -424,6 +425,7 @@ class Tabulator:
         x: NDArray[np.floating],
         y: NDArray[np.floating],
         z: NDArray[np.floating],
+        *,
         tabulate_gtos: bool = True,
     ) -> None:
         r"""Create cartesian grid from x, y, z arrays and tabulate GTOs.
@@ -441,13 +443,14 @@ class Tabulator:
             Defaults to True.
         """
         logger.debug('Setting cartesian grid axes with lengths x=%d, y=%d, z=%d.', len(x), len(y), len(z))
-        self._set_grid(x, y, z, GridType.CARTESIAN, tabulate_gtos)
+        self._set_grid(x, y, z, GridType.CARTESIAN, tabulate_gtos=tabulate_gtos)
 
     def spherical_grid(
         self,
         r: NDArray[np.floating],
         theta: NDArray[np.floating],
         phi: NDArray[np.floating],
+        *,
         tabulate_gtos: bool = True,
     ) -> None:
         r"""Create spherical grid from r, theta, phi arrays and tabulate GTOs.
@@ -470,7 +473,7 @@ class Tabulator:
 
         """
         logger.debug('Setting spherical grid axes with lengths r=%d, theta=%d, phi=%d.', len(r), len(theta), len(phi))
-        self._set_grid(r, theta, phi, GridType.SPHERICAL, tabulate_gtos)
+        self._set_grid(r, theta, phi, GridType.SPHERICAL, tabulate_gtos=tabulate_gtos)
 
     def compute_gtos(
         self,

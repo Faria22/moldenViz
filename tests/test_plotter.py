@@ -109,7 +109,7 @@ def test_viewer_can_hide_and_restore_builtin_controls() -> None:
     assert not viewer.controls_visible
     assert viewer.controls.isHidden()
 
-    viewer.set_controls_visible(True)
+    viewer.set_controls_visible(visible=True)
 
     assert viewer.controls_visible
     assert not viewer.controls.isHidden()
@@ -138,14 +138,16 @@ def test_reset_camera_button_remains_below_tabs(monkeypatch: pytest.MonkeyPatch)
 
 
 @pytest.mark.parametrize('initially_visible', [True, False])
-def test_viewer_axes_follow_config_and_public_api(initially_visible: bool) -> None:
+def test_viewer_axes_follow_config_and_public_api(
+    initially_visible: bool,  # ruff: ignore[boolean-type-hint-positional-argument]
+) -> None:
     viewer = OrbitalViewer(config={'show_axes': initially_visible})
 
     assert viewer.axes_visible is initially_visible
     assert viewer.interactor.axes_visible is initially_visible
     assert viewer.controls.show_axes.isChecked() is initially_visible
 
-    viewer.set_axes_visible(not initially_visible)
+    viewer.set_axes_visible(visible=not initially_visible)
 
     assert viewer.axes_visible is not initially_visible
     assert viewer.interactor.axes_visible is not initially_visible

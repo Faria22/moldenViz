@@ -105,16 +105,22 @@ class Plotter(QMainWindow):
             self.show()
             initialize = partial(
                 self._initialize_owned_viewer,
-                filename,
-                content,
-                only_molecule,
-                tabulator,
-                config,
+                filename=filename,
+                content=content,
+                only_molecule=only_molecule,
+                tabulator=tabulator,
+                config=config,
             )
             QTimer.singleShot(_LOADING_DELAY_MS, initialize)
             self._application.exec()
         else:
-            self._initialize_viewer(filename, content, only_molecule, tabulator, config)
+            self._initialize_viewer(
+                filename=filename,
+                content=content,
+                only_molecule=only_molecule,
+                tabulator=tabulator,
+                config=config,
+            )
             self.show()
 
     def _create_loading_placeholder(self) -> QWidget:
@@ -142,6 +148,7 @@ class Plotter(QMainWindow):
 
     def _initialize_owned_viewer(
         self,
+        *,
         filename: str | PathLike[str] | None,
         content: str | None,
         only_molecule: bool,
@@ -152,7 +159,13 @@ class Plotter(QMainWindow):
         if self._closing:
             return
         try:
-            self._initialize_viewer(filename, content, only_molecule, tabulator, config)
+            self._initialize_viewer(
+                filename=filename,
+                content=content,
+                only_molecule=only_molecule,
+                tabulator=tabulator,
+                config=config,
+            )
         except Exception as exc:
             logger.exception('Unable to initialize the molecular viewer.')
             self._show_error('Unable to launch moldenViz', exc)
@@ -160,6 +173,7 @@ class Plotter(QMainWindow):
 
     def _initialize_viewer(
         self,
+        *,
         filename: str | PathLike[str] | None,
         content: str | None,
         only_molecule: bool,
@@ -179,7 +193,7 @@ class Plotter(QMainWindow):
         self._pv_plotter = self.viewer.interactor
         self.viewer.error_occurred.connect(self._show_error)
         self.viewer.export_requested.connect(self._handle_export_request)
-        self._build_menus(only_molecule)
+        self._build_menus(only_molecule=only_molecule)
 
     @property
     def tabulator(self) -> Tabulator:
@@ -191,7 +205,7 @@ class Plotter(QMainWindow):
         """Compatibility view of pending GTO computation."""
         return self.viewer._gto_future  # ruff:ignore[private-member-access]
 
-    def _build_menus(self, only_molecule: bool) -> None:
+    def _build_menus(self, *, only_molecule: bool) -> None:
         settings_menu = self.menuBar().addMenu('Settings')
         appearance_tab = self.viewer.controls.tabs.indexOf(self.viewer.controls.appearance_tab)
         settings_tabs = (

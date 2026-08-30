@@ -32,7 +32,10 @@ class _NullActor:
         """
         return self.visible
 
-    def SetVisibility(self, visible: bool) -> None:  # ruff: ignore[invalid-function-name]
+    def SetVisibility(  # ruff: ignore[invalid-function-name]
+        self,
+        visible: bool,  # ruff: ignore[boolean-type-hint-positional-argument]
+    ) -> None:
         """Record a visibility change."""
         self.visible = visible
 

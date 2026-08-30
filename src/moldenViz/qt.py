@@ -333,7 +333,7 @@ class OrbitalControlPanel(QWidget):
         self.show_atoms = QCheckBox('Show atoms', tab)
         self.show_bonds = QCheckBox('Show bonds', tab)
         self.show_axes = QCheckBox('Show axes', tab)
-        self.show_axes.toggled.connect(self._viewer.set_axes_visible)
+        self.show_axes.toggled.connect(lambda visible: self._viewer.set_axes_visible(visible=visible))
         self.bond_max_length = self._double_spin(0.001, 1_000.0, 4.0)
         self.bond_radius = self._double_spin(0.001, 100.0, 0.15, step=0.05)
         self.bond_color_type = QComboBox(tab)
@@ -433,13 +433,13 @@ class OrbitalControlPanel(QWidget):
 
     def set_molecular_orbitals(self, orbitals: list[MolecularOrbital]) -> None:
         """Populate the orbital table from parsed orbitals."""
-        self.orbital_table.blockSignals(True)
+        self.orbital_table.blockSignals(True)  # ruff: ignore[boolean-positional-value-in-call]
         self.orbital_table.setRowCount(len(orbitals))
         for row, orbital in enumerate(orbitals):
             values = (str(row + 1), orbital.sym, orbital.spin, f'{orbital.occ:g}', f'{orbital.energy:.6f}')
             for column, value in enumerate(values):
                 self.orbital_table.setItem(row, column, QTableWidgetItem(value))
-        self.orbital_table.blockSignals(False)
+        self.orbital_table.blockSignals(False)  # ruff: ignore[boolean-positional-value-in-call]
         self._fit_orbital_columns()
         self.current_mo_ind = -1
         self.update_nav_button_states()
@@ -483,7 +483,7 @@ class OrbitalControlPanel(QWidget):
         self._update_custom_color_visibility(self.color_scheme.currentText())
         self._update_bond_color_visibility(self.bond_color_type.currentText())
 
-    def set_molecule_only(self, only_molecule: bool) -> None:
+    def set_molecule_only(self, *, only_molecule: bool) -> None:
         """Hide controls that require molecular orbitals."""
         self.tabs.setTabVisible(self.tabs.indexOf(self.orbitals_tab), not only_molecule)
         self.tabs.setTabVisible(self.tabs.indexOf(self.grid_tab), not only_molecule)
@@ -508,21 +508,21 @@ class OrbitalControlPanel(QWidget):
             self._viewer.show_orbital(self.current_mo_ind - 1)
 
     def highlight_orbital(self, index: int) -> None:
-        self.orbital_table.blockSignals(True)
+        self.orbital_table.blockSignals(True)  # ruff: ignore[boolean-positional-value-in-call]
         if index < 0:
             self.orbital_table.clearSelection()
         else:
             self.orbital_table.selectRow(index)
-        self.orbital_table.blockSignals(False)
+        self.orbital_table.blockSignals(False)  # ruff: ignore[boolean-positional-value-in-call]
 
-    def set_loading_state(self, loading: bool, message: str = 'Tabulating orbitals…') -> None:
+    def set_loading_state(self, *, loading: bool, message: str = 'Tabulating orbitals…') -> None:
         self.loading_label.setText(message)
         self.loading_label.setVisible(loading)
         self.orbital_table.setEnabled(not loading)
         self.update_nav_button_states()
 
     def on_gtos_ready(self) -> None:
-        self.set_loading_state(False)
+        self.set_loading_state(loading=False)
 
     def update_nav_button_states(self) -> None:
         ready = self._viewer.gtos_ready if hasattr(self, '_viewer') else False
@@ -769,7 +769,7 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         self.interactor = interactor_class(self, auto_update=5.0)
         self._pv_plotter = self.interactor
         self.interactor.set_background(self._config.background_color)
-        self.set_axes_visible(self._config.show_axes)
+        self.set_axes_visible(visible=self._config.show_axes)
         self.controls = OrbitalControlPanel(self)
         self._selection_screen = self.controls
         splitter = QSplitter(Qt.Orientation.Horizontal, self)
@@ -782,7 +782,7 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(splitter)
         self.controls.sync_from_viewer()
-        self.set_controls_visible(show_controls)
+        self.set_controls_visible(visible=show_controls)
 
         if filename is not None or content is not None or tabulator is not None:
             self.set_input(
@@ -807,7 +807,7 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         """Whether the orientation axes are visible."""
         return bool(self._config.show_axes)
 
-    def set_axes_visible(self, visible: bool) -> None:
+    def set_axes_visible(self, *, visible: bool) -> None:
         """Show or hide the orientation axes.
 
         Parameters
@@ -946,8 +946,8 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         else:
             self.controls.set_molecular_orbitals([])
 
-        self.controls.set_molecule_only(self._only_molecule)
-        self.controls.set_loading_state(not self._gtos_ready)
+        self.controls.set_molecule_only(only_molecule=self._only_molecule)
+        self.controls.set_loading_state(loading=not self._gtos_ready)
         if not self._gtos_ready:
             self._schedule_gto_tabulation()
         self.input_ready.emit()
@@ -996,7 +996,7 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         self.controls.update_nav_button_states()
         self.orbital_changed.emit(index)
 
-    def set_controls_visible(self, visible: bool) -> None:
+    def set_controls_visible(self, *, visible: bool) -> None:
         """Show or hide the built-in control panel."""
         self._controls_visible = visible
         self.controls.setVisible(visible)
@@ -1411,7 +1411,7 @@ class OrbitalViewer(QWidget, _PlotterRendering):
                 gtos=tabulator.compute_gtos(grid),
             )
 
-        self.loading_changed.emit(True)
+        self.loading_changed.emit(True)  # ruff: ignore[boolean-positional-value-in-call]
         self._gto_job.start(build_and_tabulate, on_success=self._apply_gtos_ready, on_error=self._handle_gto_error)
 
     def _apply_gtos_ready(self, result: _GTOResult, elapsed: float) -> None:
@@ -1428,7 +1428,7 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         self.controls.on_gtos_ready()
         if self._current_orbital_index >= 0:
             self.plot_orbital(self._current_orbital_index)
-        self.loading_changed.emit(False)
+        self.loading_changed.emit(False)  # ruff: ignore[boolean-positional-value-in-call]
 
     def _schedule_adaptive_tabulation(self) -> None:
         """Build the union of all coarse MO contours and tabulate it once."""
@@ -1452,8 +1452,8 @@ class OrbitalViewer(QWidget, _PlotterRendering):
             return _AdaptiveResult(mesh=mesh, gtos=gtos, crossed_cells=len(cell_ids))
 
         self._adaptive_ready = False
-        self.controls.set_loading_state(True, 'Refining contour grid…')
-        self.loading_changed.emit(True)
+        self.controls.set_loading_state(loading=True, message='Refining contour grid…')
+        self.loading_changed.emit(True)  # ruff: ignore[boolean-positional-value-in-call]
         logger.info('Starting adaptive-grid tabulation for all molecular orbitals...')
         self._adaptive_job.start(
             build_and_tabulate,
@@ -1477,13 +1477,13 @@ class OrbitalViewer(QWidget, _PlotterRendering):
         self.controls.on_gtos_ready()
         if self._current_orbital_index >= 0:
             self.plot_orbital(self._current_orbital_index)
-        self.loading_changed.emit(False)
+        self.loading_changed.emit(False)  # ruff: ignore[boolean-positional-value-in-call]
 
     def _handle_adaptive_error(self, exc: Exception) -> None:
         """Keep the previous actor and report failed adaptive tabulation."""
         self._adaptive_ready = False
         self.controls.on_gtos_ready()
-        self.loading_changed.emit(False)
+        self.loading_changed.emit(False)  # ruff: ignore[boolean-positional-value-in-call]
         self.report_error('Adaptive grid failed', exc)
 
     def _invalidate_adaptive_grid(self, *, rebuild: bool = False) -> None:
@@ -1498,7 +1498,7 @@ class OrbitalViewer(QWidget, _PlotterRendering):
     def _handle_gto_error(self, exc: Exception) -> None:
         self._gtos_ready = self.tabulator.has_gtos
         self.controls.on_gtos_ready()
-        self.loading_changed.emit(False)
+        self.loading_changed.emit(False)  # ruff: ignore[boolean-positional-value-in-call]
         self.report_error('Orbital tabulation failed', exc)
 
     def _dispatch_gto_completion(self, callback: Callable[[], None]) -> None:

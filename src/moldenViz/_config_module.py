@@ -159,13 +159,13 @@ class MOConfig(BaseModel):
 class AtomDisplayConfig(BaseModel):
     """Configuration for atom display."""
 
-    show: bool = Field(True, description='Whether to show atoms')
+    show: bool = Field(default=True, description='Whether to show atoms')
 
 
 class BondConfig(BaseModel):
     """Configuration for bond display."""
 
-    show: bool = Field(True, description='Whether to show bonds')
+    show: bool = Field(default=True, description='Whether to show bonds')
     max_length: float = Field(4.0, gt=0, description='Maximum bond length')
     color_type: Literal['uniform', 'split'] = Field('uniform', description='Bond color type')
     color: str = Field('grey', description='Bond color (hex code or common name)')
@@ -199,9 +199,9 @@ class MainConfig(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    smooth_shading: bool = Field(True, description='Enable smooth shading')
+    smooth_shading: bool = Field(default=True, description='Enable smooth shading')
     background_color: str = Field('white', description='Background color for 3D visualization')
-    show_axes: bool = Field(True, description='Show the orientation axes')
+    show_axes: bool = Field(default=True, description='Show the orientation axes')
     grid: GridConfig = Field(default_factory=GridConfig)
     mo: MOConfig = Field(default_factory=MOConfig, alias='MO')
     molecule: MoleculeConfig = Field(default_factory=MoleculeConfig)
