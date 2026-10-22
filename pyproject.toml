@@ -48,7 +48,8 @@ dev = [
     "pyvistaqt>=0.11.4",
     "pytest>=9.0.3",
     "pytest-cov>=5.0",
-    "ruff>=0.15.22",
+    # Upgrade deliberately: preview rules can require code changes in the same PR.
+    "ruff==0.16.0",
     "toml>=0.10",
 ]
 docs = [
