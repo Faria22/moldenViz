@@ -123,7 +123,20 @@ Backdrop 11.66, Shadow 10, Inset 0, and zero outer and inner radius) with
 Shottr's ``K`` shortcut. Save lossless PNG files under
 ``docs/source/_static/`` using the filenames above. On the reference Retina
 display, the orbital and Appearance images are 3376 by 2236 pixels and the
-molecule-only image is 3288 by 2148 pixels.
+molecule-only image is 3288 by 2148 pixels. Keep these full-resolution captures
+locally, then resize the committed copies to 1600 pixels wide while preserving
+their aspect ratios (1600 by 1060 for the orbital and Appearance images,
+1600 by 1045 for the molecule-only image). Use a high-quality resampling filter
+such as Lanczos, then compress the resized PNGs with:
+
+.. code-block:: bash
+
+   pngquant --quality=90-100 --speed 1 --strip --force --ext=.png docs/source/_static/viewer-*.png
+
+``pngquant`` reduces the color palette, so this step is lossy. Inspect the
+resulting text, molecular surfaces, and backdrop gradients before committing.
+Keep each committed screenshot below 500 KB and retain the existing filenames
+so README and Sphinx image references continue to work.
 
 Before committing refreshed images, verify that all three use the same camera
 angle, window geometry, backdrop, and crop; contain no desktop content or
