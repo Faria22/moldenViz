@@ -1153,7 +1153,7 @@ dev = [
     { name = "pytest-cov", specifier = ">=5.0" },
     { name = "pyvista" },
     { name = "pyvistaqt", specifier = ">=0.11.4" },
-    { name = "ruff", specifier = ">=0.15.22" },
+    { name = "ruff", specifier = "==0.16.0" },
     { name = "toml", specifier = ">=0.10" },
 ]
 docs = [

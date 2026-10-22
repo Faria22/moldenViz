@@ -42,6 +42,11 @@ documentation build in sequence. To invoke an individual stage, use:
 Linting auto-fixes are available with ``just lint --fix``. All Python commands
 run through uv with the committed lockfile.
 
+Ruff is pinned to an exact version in ``pyproject.toml`` because preview rules
+are enabled. Upgrade the pin and lockfile deliberately in a dedicated pull
+request, include any fixes required by new rules, and run ``just format`` and
+``just all`` before requesting review.
+
 Build Documentation
 -------------------
 
