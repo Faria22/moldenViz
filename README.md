@@ -6,7 +6,7 @@
 
 -----
 
-![moldenViz viewer displaying the highest occupied molecular orbital of benzene with the orbital table visible](docs/source/_static/viewer-orbital.png)
+![moldenViz viewer displaying the highest occupied molecular orbital of benzene with the orbital table visible](https://raw.githubusercontent.com/Faria22/moldenViz/main/docs/source/_static/viewer-orbital.png)
 
 *Explore bundled molecules and their orbitals in the standalone viewer.*
 
@@ -23,6 +23,9 @@ Or add it to a project with uv:
 ```console
 uv add moldenViz
 ```
+
+The core parser and tabulator are tested on CPython and PyPy 3.10/3.11.
+The interactive viewer requires CPython because PySide6 is unavailable on PyPy.
 
 Install the interactive viewer and CLI dependencies with the GUI extra:
 

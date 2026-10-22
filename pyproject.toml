@@ -5,12 +5,12 @@ build-backend = "uv_build"
 [project]
 name = "moldenViz"
 version = "2.3.1"
-description = ''
+description = "Parse, tabulate, and visualize molecular orbitals from Molden files."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
-keywords = []
+keywords = ["molden", "molecular orbitals", "quantum chemistry", "visualization", "gaussian basis", "pyvista"]
 authors = [{ name = "Faria22", email = "fariafelipe22@hotmail.com" }]
 classifiers = [
     "Development Status :: 5 - Production/Stable",

@@ -13,9 +13,11 @@ permissions:
 jobs:
   core-install:
     runs-on: ubuntu-latest
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
     strategy:
       matrix:
-        python-version: ["3.10", "3.14"]
+        python-version: ["3.10", "3.14", "pypy3.10", "pypy3.11"]
 
     steps:
     - uses: actions/checkout@v5
@@ -48,6 +50,13 @@ jobs:
 
     - name: Verify core CLI metadata
       run: uv run --locked --no-default-groups moldenViz --version
+
+    - name: Test PyPy core without GUI dependencies
+      if: startsWith(matrix.python-version, 'pypy')
+      run: >-
+        uv run --locked --no-default-groups --with pytest==9.0.3
+        python -m pytest tests/test_parser.py tests/test_tabulator.py
+        tests/test_plotter_jobs.py tests/test_cli.py -q -rs
 
   test:
     runs-on: ubuntu-latest
