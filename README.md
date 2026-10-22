@@ -104,12 +104,7 @@ Latest docs: https://moldenviz.readthedocs.io/en/latest/
 
 ## Roadmap
 
-GitHub milestones are the source of truth for release scope and progress:
-
-- [v2.0](https://github.com/Faria22/moldenViz/milestone/1) is the next release, bringing together the recent performance, responsiveness, reliability, API, packaging, and developer-tooling improvements.
-- [v3.0](https://github.com/Faria22/moldenViz/milestone/2) is planned to add reading and tabulation of Cartesian-basis Molden files.
-
-See the [documentation roadmap](https://moldenviz.readthedocs.io/en/latest/roadmap.html) for a high-level summary.
+See the [documentation roadmap](https://moldenviz.readthedocs.io/en/latest/roadmap.html) for shipped releases, maintenance plans, and scope decisions.
 
 ## Contributing
 

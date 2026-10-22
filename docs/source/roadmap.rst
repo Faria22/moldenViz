@@ -1,44 +1,48 @@
 Roadmap
 =======
 
-This page summarises the major themes planned for upcoming releases. GitHub
-milestones are the source of truth for issue-level scope and progress.
+GitHub `milestones <https://github.com/Faria22/moldenViz/milestones>`_ are the
+source of truth for issue-level scope and progress. The latest published
+release is `v2.3.1
+<https://github.com/Faria22/moldenViz/releases/tag/v2.3.1>`_.
 
-Next Release
-------------
+Maintenance Plans
+-----------------
 
-`v2.0 <https://github.com/Faria22/moldenViz/milestone/1>`_ brings together the
-substantial improvements completed since v1.11:
+The next two patch releases preserve the supported public API, CLI, and Python
+support floor. No release dates are committed.
 
-- Faster, more memory-conscious GTO and MO tabulation through matrix
-  multiplication, bounded work, primitive-exponential reuse, and direct
-  solid-harmonic evaluation in Cartesian coordinates.
-- Responsive and safer background grid and orbital computation, with stronger
-  lifecycle and concurrency coverage.
-- Clearer public APIs and more focused plotter implementation boundaries.
-- A lightweight core installation and fewer required runtime dependencies.
-- ``uv``-based packaging and development workflows, dedicated ASV benchmarks,
-  expanded performance and peak-memory coverage, and Python 3.14 support.
-- Recent parser, configuration, plotting, documentation, and CI fixes.
+- `v2.3.2 <https://github.com/Faria22/moldenViz/milestone/5>`_ comes first:
+  refresh the roadmap, fix PyPI metadata and README rendering, clean up CI and
+  release-milestone automation, compress documentation screenshots, report test
+  coverage in CI, and define a deliberate Ruff update policy.
+- `v2.3.3 <https://github.com/Faria22/moldenViz/milestone/6>`_ follows that
+  coverage and CI baseline: split the Qt viewer into focused modules and create
+  the GTO thread pool lazily. These internal refactors must preserve supported
+  imports, viewer lifecycle behaviour, tabulation results, and performance;
+  they must not delay v2.3.2.
 
-The remaining release work is tracked in `issue #118
-<https://github.com/Faria22/moldenViz/issues/118>`_.
-
-Future
-------
-
-`v3.0 <https://github.com/Faria22/moldenViz/milestone/2>`_ is planned to add
-reading and tabulation of Molden files that contain Cartesian Gaussian basis
-functions. This work is tracked in `issue #117
-<https://github.com/Faria22/moldenViz/issues/117>`_.
-
-This is separate from v2.0's solid-harmonic performance work: evaluating the
-currently supported spherical basis on Cartesian coordinates does not add
-support for Cartesian-basis coefficient layouts in Molden files.
+New public APIs and other feature work require separate planning for a future
+minor release, outside these maintenance patches.
 
 Shipped
 -------
 
+- `v2.3.1 <https://github.com/Faria22/moldenViz/releases/tag/v2.3.1>`_ – Viewer
+  screenshots and control-panel improvements, including repainting native
+  controls after display-scale changes.
+- `v2.3.0 <https://github.com/Faria22/moldenViz/releases/tag/v2.3.0>`_ – Axes
+  visibility toggle.
+- `v2.2.0 <https://github.com/Faria22/moldenViz/releases/tag/v2.2.0>`_ – Atom-only
+  molecule parsing.
+- `v2.1.0 <https://github.com/Faria22/moldenViz/releases/tag/v2.1.0>`_ – Adaptive
+  contour grids.
+- `v2.0.0 <https://github.com/Faria22/moldenViz/releases/tag/v2.0.0>`_ – Embeddable
+  PySide6 viewer replacing the Tk viewer; NumPy-only core installation with a
+  ``[gui]`` extra; matrix-multiplication MO tabulation and chunked GTO tabulation;
+  generated solid-harmonic fast paths through g shells; safer asynchronous grid
+  and orbital computation; public API and semantic-versioning policy; ``uv``
+  packaging and development workflows, ASV benchmarks, and Python 3.14 support.
 - **v1.11** – Public format-specific tabulator exporters, lazy plotter imports, and hardened spherical-coordinate conversion.
 - **v1.10** – Background orbital tabulation for a more responsive plotter, broader plotter regression coverage, and tabulation improvements.
 - **v1.9** – CLI version and logging controls, coloured progress messages, and automated release workflows.
@@ -48,6 +52,25 @@ Shipped
 - **v0.3** – CLI for interactive viewing of Molden files and bundled examples.
 - **v0.2** – PyVista-based 3D plotter with Tkinter controls.
 - **v0.1** – Initial parser and Python API.
+
+Not Planned
+-----------
+
+The following proposals were closed as not planned and are outside the current
+roadmap:
+
+- Cartesian-basis Molden reading and tabulation (`#117
+  <https://github.com/Faria22/moldenViz/issues/117>`_).
+- h and higher angular-momentum shells (`#119
+  <https://github.com/Faria22/moldenViz/issues/119>`_).
+- Rust acceleration for orbital tabulation (`#104
+  <https://github.com/Faria22/moldenViz/issues/104>`_).
+- Periodic systems and CP2K crystal-orbital support (`#67
+  <https://github.com/Faria22/moldenViz/issues/67>`_).
+
+The shipped solid-harmonic optimizations evaluate the supported spherical basis
+on Cartesian coordinates; they do not add Cartesian-basis coefficient layouts
+or support for shells above g.
 
 How to Influence the Roadmap
 ----------------------------
