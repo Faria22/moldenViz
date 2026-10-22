@@ -79,14 +79,14 @@ jobs:
         version: "0.11.29"
 
     - name: Install just
-      uses: extractions/setup-just@v3
+      uses: extractions/setup-just@v4
       with:
         just-version: "1.57.0"
 
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libegl1 python3-tk
+        sudo apt-get install -y libegl1
 
     - name: Sync locked development environment
       run: uv sync --locked --group dev
@@ -117,7 +117,7 @@ jobs:
         version: "0.11.29"
 
     - name: Install just
-      uses: extractions/setup-just@v3
+      uses: extractions/setup-just@v4
       with:
         just-version: "1.57.0"
 
@@ -146,7 +146,7 @@ jobs:
         version: "0.11.29"
 
     - name: Install just
-      uses: extractions/setup-just@v3
+      uses: extractions/setup-just@v4
       with:
         just-version: "1.57.0"
 
