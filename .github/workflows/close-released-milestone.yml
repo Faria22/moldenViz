@@ -19,25 +19,39 @@ jobs:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
           REPOSITORY: ${{ github.repository }}
         run: |
+          set -euo pipefail
+
           version="${RELEASE_TAG#v}"
           if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Skipping non-semantic release tag ${RELEASE_TAG}."
             exit 0
           fi
 
-          milestone_title="v${version%.*}"
-          milestone_number="$(
+          milestone="$(
             gh api --paginate \
-              "repos/${REPOSITORY}/milestones?state=open&per_page=100" |
-              jq --slurp --raw-output --arg title "$milestone_title" \
-                'add | map(select(.title == $title)) | first | .number // empty'
+              "repos/${REPOSITORY}/milestones?state=all&per_page=100" |
+              jq --slurp --compact-output \
+                --arg exact "v${version}" --arg legacy "v${version%.*}" \
+                'add | (map(select(.title == $exact)) | first) //
+                  (map(select(.title == $legacy)) | first) // empty'
           )"
 
-          if [[ -z "$milestone_number" ]]; then
-            echo "No open milestone named ${milestone_title}; nothing to close."
+          if [[ -z "$milestone" ]]; then
+            echo "No milestone for ${RELEASE_TAG}; nothing to close."
             exit 0
           fi
 
+          milestone_title="$(jq --raw-output '.title' <<< "$milestone")"
+          if [[ "$(jq --raw-output '.state' <<< "$milestone")" != "open" ]]; then
+            echo "Milestone ${milestone_title} is already closed."
+            exit 0
+          fi
+          if [[ "$(jq --raw-output '.open_issues' <<< "$milestone")" != "0" ]]; then
+            echo "Milestone ${milestone_title} still has open issues or PRs; leaving it open."
+            exit 0
+          fi
+
+          milestone_number="$(jq --raw-output '.number' <<< "$milestone")"
           gh api --method PATCH \
             "repos/${REPOSITORY}/milestones/${milestone_number}" \
             -f state=closed
