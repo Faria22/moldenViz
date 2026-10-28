@@ -98,7 +98,18 @@ jobs:
       run: just typecheck
 
     - name: Run tests
+      if: matrix.python-version != '3.13'
       run: just test
+
+    - name: Run tests with coverage
+      if: matrix.python-version == '3.13'
+      run: just cov
+
+    - name: Summarize coverage
+      if: matrix.python-version == '3.13'
+      run: |
+        echo '## Test coverage (Python 3.13)' >> "$GITHUB_STEP_SUMMARY"
+        uv run --locked --group dev coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
 
   docs:
     runs-on: ubuntu-latest
