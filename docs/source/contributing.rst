@@ -63,13 +63,21 @@ Plotter Architecture
 
 Keep changes to the interactive plotter within these boundaries:
 
-- ``qt.py`` owns the embeddable ``OrbitalViewer``, Qt controls, queued result
-  delivery, per-viewer state, and explicit render-window teardown. It must not
+- ``qt/viewer.py`` owns the embeddable ``OrbitalViewer``, per-viewer state,
+  background-job orchestration, and explicit render-window teardown. It must not
   create ``QApplication``, start an event loop, show itself, or open dialogs.
   Viewer state and operations must remain usable when the built-in control
   panel is hidden; the panel mirrors the viewer rather than owning selection.
+- ``qt/panels.py`` owns the orbital table and grid, appearance, and export
+  controls. It mirrors viewer state and emits export requests to the host.
+- ``qt/workers.py`` owns grid-computation functions, immutable result records,
+  the shared executor, and queued completion delivery to the GUI thread.
+- ``qt/export.py`` owns native image and volume export dialogs, invoked only
+  by the standalone window. Explicit-path exports remain on the viewer API.
+- ``qt/__init__.py`` preserves the supported ``OrbitalViewer`` and lazy
+  ``ViewerConfig`` imports.
 - ``plotter.py`` owns the free-floating ``QMainWindow``, application/event-loop
-  ownership, native file dialogs, message boxes, and menu shortcuts.
+  ownership, dialog invocation, message boxes, and menu shortcuts.
 - ``_plotter_rendering.py`` owns PyVista scene and orbital rendering.
   Keep PyVista, PyVistaQt, Matplotlib, and visualization configuration imports
   behind viewer construction so importing ``Plotter`` does not initialize the
