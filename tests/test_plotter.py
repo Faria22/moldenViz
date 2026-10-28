@@ -17,7 +17,7 @@ from PySide6.QtCore import QEvent
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QAbstractSpinBox, QApplication, QCheckBox, QWidget
 
-import moldenViz.qt as qt_module
+import moldenViz.qt.viewer as qt_module
 from moldenViz.plotter import Plotter
 from moldenViz.qt import OrbitalViewer
 from moldenViz.testing import NullInteractor, without_rendering

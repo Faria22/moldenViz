@@ -6,14 +6,12 @@ import logging
 import sys
 from collections.abc import Mapping
 from functools import partial
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction, QCloseEvent
 from PySide6.QtWidgets import (
     QApplication,
-    QFileDialog,
     QLabel,
     QMainWindow,
     QMessageBox,
@@ -24,13 +22,14 @@ from PySide6.QtWidgets import (
 
 from .parser import _validate_molden_input
 from .qt import OrbitalViewer
+from .qt.export import export_data_dialog, export_image_dialog
 
 if TYPE_CHECKING:
     from concurrent.futures import Future
     from os import PathLike
 
     from ._config_module import Config, MainConfig
-    from .qt import _GTOResult
+    from .qt.workers import _GTOResult
     from .tabulator import Tabulator
 
 logger = logging.getLogger(__name__)
@@ -266,48 +265,10 @@ class Plotter(QMainWindow):
             self._show_error('Export failed', ValueError(f'Unknown export kind: {kind}'))
 
     def _export_data(self, options: Mapping[str, Any]) -> None:
-        file_format = str(options.get('format', 'vtk'))
-        scope = str(options.get('scope', 'current'))
-        if scope == 'current' and self.viewer.current_orbital_index < 0:
-            self._show_error('Export failed', ValueError('No orbital is currently selected.'))
-            return
-        suffix = f'.{file_format}'
-        default_name = f'orbital{suffix}' if scope == 'current' else f'orbitals_all{suffix}'
-        filters = 'VTK files (*.vtk)' if file_format == 'vtk' else 'Gaussian Cube files (*.cube)'
-        destination, _selected = QFileDialog.getSaveFileName(self, 'Export orbital data', default_name, filters)
-        if not destination:
-            return
-        try:
-            self.viewer.export_data(destination, file_format=file_format, scope=scope)
-        except (OSError, RuntimeError, ValueError) as exc:
-            self._show_error('Export failed', exc)
+        export_data_dialog(self, self.viewer, options, self._show_error)
 
     def _export_image(self, options: Mapping[str, Any]) -> None:
-        file_format = str(options.get('format', 'png'))
-        transparent = bool(options.get('transparent', False))
-        suffix = '.jpg' if file_format == 'jpeg' else f'.{file_format}'
-        filters = {
-            'png': 'PNG files (*.png)',
-            'jpeg': 'JPEG files (*.jpg *.jpeg)',
-            'svg': 'SVG files (*.svg)',
-            'pdf': 'PDF files (*.pdf)',
-        }
-        destination, _selected = QFileDialog.getSaveFileName(
-            self,
-            'Export image',
-            f'moldenviz_export{suffix}',
-            filters[file_format],
-        )
-        if not destination:
-            return
-        try:
-            self.viewer.export_image(
-                Path(destination),
-                file_format=file_format,
-                transparent=transparent,
-            )
-        except (OSError, RuntimeError, ValueError) as exc:
-            self._show_error('Export failed', exc)
+        export_image_dialog(self, self.viewer, options, self._show_error)
 
     def _show_error(self, title: str, exc: object) -> None:
         QMessageBox.critical(self, title, str(exc))

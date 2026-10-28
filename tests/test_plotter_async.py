@@ -9,7 +9,7 @@ from threading import get_ident
 from PySide6.QtCore import QCoreApplication
 from PySide6.QtWidgets import QApplication
 
-from moldenViz.qt import _CompletionDispatcher
+from moldenViz.qt.workers import _CompletionDispatcher
 
 
 def test_completion_dispatcher_delivers_on_qt_thread() -> None:
