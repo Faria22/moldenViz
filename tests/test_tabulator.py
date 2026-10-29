@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import warnings
+from concurrent.futures import ThreadPoolExecutor
 from math import factorial
 from pathlib import Path
+from threading import Barrier
+from time import sleep
 
 import numpy as np
 import pytest
@@ -276,6 +279,7 @@ def test_gto_calls_reuse_process_executor(monkeypatch: pytest.MonkeyPatch) -> No
     def fail_executor_creation(*_args: object, **_kwargs: object) -> None:
         raise AssertionError('GTO tabulation created a new executor.')
 
+    tabulator_module._gto_executor()  # ruff:ignore[private-member-access]
     monkeypatch.setattr(tabulator_module, 'ThreadPoolExecutor', fail_executor_creation)
     tabulator = Tabulator(filename=str(MOLDEN_PATH), max_workers=2)
     axis = np.linspace(-1.0, 1.0, 3)
@@ -283,6 +287,33 @@ def test_gto_calls_reuse_process_executor(monkeypatch: pytest.MonkeyPatch) -> No
 
     tabulator.tabulate_gtos()
     tabulator.tabulate_gtos()
+
+
+def test_concurrent_first_gto_calls_share_executor(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Concurrent first users should create exactly one shared pool."""
+    monkeypatch.setattr(tabulator_module, '_GTO_EXECUTOR', None)
+    created: list[ThreadPoolExecutor] = []
+    barrier = Barrier(8)
+
+    def create_executor(*, max_workers: int, thread_name_prefix: str) -> ThreadPoolExecutor:
+        sleep(0.01)  # Allow competing callers to reach initialization.
+        executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix=thread_name_prefix)
+        created.append(executor)
+        return executor
+
+    def get_executor(_index: int) -> ThreadPoolExecutor:
+        barrier.wait(timeout=10)
+        return tabulator_module._gto_executor()  # ruff:ignore[private-member-access]
+
+    monkeypatch.setattr(tabulator_module, 'ThreadPoolExecutor', create_executor)
+    try:
+        with ThreadPoolExecutor(max_workers=8) as callers:
+            executors = list(callers.map(get_executor, range(8)))
+        assert len(created) == 1
+        assert all(executor is created[0] for executor in executors)
+    finally:
+        for executor in created:
+            executor.shutdown()
 
 
 def test_tabulate_atom_reuses_exponentials_for_compatible_shells(monkeypatch: pytest.MonkeyPatch) -> None:

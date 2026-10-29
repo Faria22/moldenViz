@@ -51,6 +51,22 @@ assert 'PySide6' not in sys.modules
     subprocess.run([sys.executable, '-c', script], check=True)
 
 
+def test_tabulator_import_and_sequential_work_do_not_create_executor() -> None:
+    """A fresh import and sequential tabulation should leave the pool uncreated."""
+    script = """
+from unittest.mock import patch
+import numpy as np
+
+with patch('concurrent.futures.ThreadPoolExecutor', side_effect=AssertionError('Pool created')):
+    from moldenViz import Tabulator
+    from moldenViz.examples import h2o
+
+    tabulator = Tabulator(content=h2o, max_workers=1)
+    tabulator.compute_gtos(np.zeros((2, 3)))
+"""
+    subprocess.run([sys.executable, '-c', script], check=True)
+
+
 def test_plotter_import_defers_rendering_backend() -> None:
     """Importing the GUI class should not initialize VTK before construction."""
     script = """
