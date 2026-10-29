@@ -7,6 +7,7 @@ from enum import Enum
 from math import factorial
 from os import PathLike
 from pathlib import Path
+from threading import Lock
 from typing import Any
 
 import numpy as np
@@ -28,10 +29,26 @@ _PARALLEL_GTO_POINT_LIMIT = 125_000
 _S_HARMONIC_SCALE = np.sqrt(1.0 / (4.0 * np.pi))
 _P_HARMONIC_SCALE = np.sqrt(3.0 / (4.0 * np.pi))
 _GENERATED_SOLID_HARMONIC_LMAX = 4
-_GTO_EXECUTOR = ThreadPoolExecutor(
-    max_workers=min(_MAX_GTO_WORKERS, os.cpu_count() or 1),
-    thread_name_prefix='moldenViz-gto',
-)
+_GTO_EXECUTOR: ThreadPoolExecutor | None = None
+_GTO_EXECUTOR_LOCK = Lock()
+
+
+def _gto_executor() -> ThreadPoolExecutor:
+    """Return the shared pool, creating it on the first parallel tabulation.
+
+    Returns
+    -------
+    ThreadPoolExecutor
+        Process-wide pool shared by concurrent tabulation calls.
+    """
+    global _GTO_EXECUTOR  # ruff: ignore[global-statement]
+    with _GTO_EXECUTOR_LOCK:
+        if _GTO_EXECUTOR is None:
+            _GTO_EXECUTOR = ThreadPoolExecutor(
+                max_workers=min(_MAX_GTO_WORKERS, os.cpu_count() or 1),
+                thread_name_prefix='moldenViz-gto',
+            )
+        return _GTO_EXECUTOR
 
 
 def _grid_creation_with_only_molecule_error() -> RuntimeError:
@@ -553,9 +570,9 @@ class Tabulator:
                 )
         else:
             task_batches = [chunk_tasks[index::max_workers] for index in range(max_workers)]
+            executor = _gto_executor()
             futures = [
-                _GTO_EXECUTOR.submit(self._tabulate_atom_batch, grid, task_batch, gto_data)
-                for task_batch in task_batches
+                executor.submit(self._tabulate_atom_batch, grid, task_batch, gto_data) for task_batch in task_batches
             ]
             wait(futures)
             for future in futures:
